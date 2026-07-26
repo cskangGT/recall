@@ -1,0 +1,69 @@
+{
+  "source": {
+    "id": "src_demo",
+    "type": "screenshot",
+    "title": "Thread on eval harnesses",
+    "raw_content": "Everyone reaches for tracing first but tracing only tells you what happened. Offline eval suites are what actually catch regressions. Braintrust has been better than Langfuse for this in practice.",
+    "scene_description": "A screenshot of a social thread comparing eval tooling for agent products.",
+    "url": null,
+    "image_path": "/seed/demo-screenshot.png",
+    "created_at": "2026-07-25T09:00:00Z"
+  },
+  "memories": [
+    {
+      "id": "mem_demo_1",
+      "source_id": "src_demo",
+      "text": "Braintrust is the current front-runner for eval tooling over Langfuse",
+      "kind": "opinion",
+      "confidence": 0.88,
+      "category_id": "cat_ai_tooling",
+      "category_locked": false,
+      "entity_ids": [
+        "ent_2",
+        "ent_3",
+        "ent_6"
+      ],
+      "vector": [
+        0.238828,
+        0.862639,
+        -0.206541,
+        -0.144171,
+        -0.172141,
+        -0.079222,
+        -0.178844,
+        -0.259765
+      ],
+      "x": null,
+      "y": null,
+      "pinned": false,
+      "created_at": "2026-07-25T09:00:00Z"
+    },
+    {
+      "id": "mem_demo_2",
+      "source_id": "src_demo",
+      "text": "Offline eval suites catch agent regressions that production tracing misses entirely",
+      "kind": "fact",
+      "confidence": 0.8200000000000001,
+      "category_id": "cat_ai_tooling",
+      "category_locked": false,
+      "entity_ids": [
+        "ent_6",
+        "ent_10"
+      ],
+      "vector": [
+        0.673886,
+        0.604576,
+        -0.086773,
+        -0.158793,
+        -0.164601,
+        0.025339,
+        -0.312593,
+        0.148899
+      ],
+      "x": null,
+      "y": null,
+      "pinned": false,
+      "created_at": "2026-07-25T09:00:00Z"
+    }
+  ]
+}
