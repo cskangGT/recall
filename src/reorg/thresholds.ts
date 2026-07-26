@@ -3,7 +3,8 @@
  *
  * These are what make the demo safe: geometry decides whether to restructure,
  * the model only names the result. Phase 4 re-measures them against real
- * 1536-dimensional embeddings, which is why they are overridable by env.
+ * real embeddings, which is why they are overridable by env. Measure with
+ * scripts/validate_thresholds.py before trusting them on a real model.
  *
  * Values are spec 8.3 and 8.4.2 verbatim.
  */

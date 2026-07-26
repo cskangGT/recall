@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "seed": "python3 scripts/generate_seed.py"
+    "seed": "python3 scripts/generate_seed.py",
+    "thresholds": "python3 scripts/validate_thresholds.py",
+    "thresholds:selfcheck": "python3 scripts/validate_thresholds.py --provider seed"
   },
   "dependencies": {
     "d3-force": "^3.0.0",

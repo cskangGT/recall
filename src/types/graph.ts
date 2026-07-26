@@ -40,7 +40,7 @@ export interface Memory {
   entity_ids: string[];
   /**
    * Phase 1 ships 8-dimensional hand-generated unit vectors so the restructuring
-   * gates run real geometry. Phase 4 swaps these for 1536-dimensional embeddings
+   * gates run real geometry. Phase 4 swaps these for real embeddings
    * and the gate code does not change.
    */
   vector: number[];

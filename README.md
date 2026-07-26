@@ -60,6 +60,27 @@ The 7/2 imbalance is load-bearing. With a balanced seed, adding memories to the 
 that does not satisfy the condition, and `tests/unit/seedCondition.test.ts` re-checks it on
 every commit.
 
+### The threshold is not yet verified against a real model
+
+`0.62` was fitted to the seed's hand-generated 8-dimensional vectors. Cosine distributions
+differ enormously between embedding models, so **the number almost certainly does not transfer**.
+Before building the Phase 3 backend, measure it:
+
+```bash
+pip install voyageai && export VOYAGE_API_KEY=...
+npm run thresholds              # embeds the 47 memories, re-runs the gates, suggests a threshold
+npm run thresholds:selfcheck    # no API key: replays the seed vectors to prove the harness agrees
+                                # with src/reorg/vectorMath.ts
+```
+
+The harness reports three things, and the third is the one that matters: whether cohesion still
+*drops* when the demo item lands, what `MAX_MEAN_COHESION` should become, and whether that value
+would also fire on some other category — which would break "at most one structural operation per
+ingest" and take the demo with it.
+
+Anthropic offers no embedding endpoint; its docs recommend Voyage AI (`voyage-4`, 1024-dim by
+default). The harness is dimension-agnostic and also supports OpenAI via `--provider openai`.
+
 ## Layout
 
 | Path | What |

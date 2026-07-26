@@ -4,7 +4,7 @@
 
 **Goal:** Ship the complete 60-second YC demo — populated map, capture, deterministic SPLIT with full animation, and cited Ask — running entirely on committed seed data with zero backend code.
 
-**Architecture:** A Vite + React + TypeScript SPA. All data comes from JSON files in `seed/` loaded through a single `DataSource` interface, so Phase 4 swaps the implementation and nothing else changes. The map is drawn on a 2D canvas with a `d3-force` layout that seeds from persisted positions and re-settles for only 30 ticks, guaranteeing identical layout across loads. The restructuring gates are **real geometry over real vectors** — the seed ships 8-dimensional hand-generated unit vectors instead of a similarity matrix, so `meanPairwiseCosine`, `twoMeans`, and `centroid` are genuine computations that Phase 4 will run unchanged on 1536-dimensional embeddings.
+**Architecture:** A Vite + React + TypeScript SPA. All data comes from JSON files in `seed/` loaded through a single `DataSource` interface, so Phase 4 swaps the implementation and nothing else changes. The map is drawn on a 2D canvas with a `d3-force` layout that seeds from persisted positions and re-settles for only 30 ticks, guaranteeing identical layout across loads. The restructuring gates are **real geometry over real vectors** — the seed ships 8-dimensional hand-generated unit vectors instead of a similarity matrix, so `meanPairwiseCosine`, `twoMeans`, and `centroid` are genuine computations that Phase 4 will run unchanged on real embeddings.
 
 **Tech Stack:** Vite · React 18 · TypeScript (strict) · Zustand · d3-force · Canvas 2D · Vitest + Testing Library · Playwright
 

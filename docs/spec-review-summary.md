@@ -138,7 +138,7 @@ Honest self-assessment. The spec was written as a complete product spec, and sev
 
 | Over-built | What a seeded frontend actually needs |
 |---|---|
-| pgvector, HNSW indexes, 1536-dim embeddings, centroid recomputation | Nothing. Seed ships a small precomputed `similarity.json`. |
+| pgvector, HNSW indexes, real embeddings, centroid recomputation | Nothing. Seed ships hand-generated 8-dim unit vectors, so the gate math is real. |
 | The full four-call AI schema (§10) | Nothing. `demo-item.json` ships pre-extracted memories. |
 | `reorg_events.before_state` / `after_state` full jsonb snapshots | One recorded event in `reorg-preview.json` to replay |
 | Denormalized `memory_count` with maintenance triggers | An array length |
