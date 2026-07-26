@@ -27,10 +27,128 @@ export function applyReorg(
 ): { payload: GraphPayload; event: ReorgEvent } {
   const before: GraphPayload = structuredClone(payload);
 
-  if (candidate.operation !== 'split') {
-    throw new Error(`Phase 1 applies split only; got ${candidate.operation}`);
+  switch (candidate.operation) {
+    case 'split':
+      return applySplit(payload, before, candidate, names);
+    case 'merge':
+      return applyMerge(payload, before, candidate, names);
+    case 'promote':
+      return applyPromote(payload, before, candidate);
   }
+}
 
+/**
+ * Two siblings said the same thing. Their memories consolidate into one
+ * category and the other is removed.
+ *
+ * The larger category survives — it keeps its id, so its position, its history,
+ * and any pins on it survive too. Only its name changes, and the caller is
+ * expected to have preferred the larger category's existing name if it still
+ * fits (spec 8.4.2), in which case nothing visibly moves except the smaller
+ * category disappearing.
+ */
+function applyMerge(
+  payload: GraphPayload,
+  before: GraphPayload,
+  candidate: ReorgCandidate,
+  names: string[],
+): { payload: GraphPayload; event: ReorgEvent } {
+  const [firstId, secondId] = candidate.categoryIds;
+  const first = payload.categories.find((c) => c.id === firstId);
+  const second = payload.categories.find((c) => c.id === secondId);
+  if (!first || !second) throw new Error('merge needs two known categories');
+
+  const count = (id: string) => payload.memories.filter((m) => m.category_id === id).length;
+  const [survivor, absorbed] =
+    count(first.id) >= count(second.id) ? [first, second] : [second, first];
+
+  const resultName = names[0] ?? survivor.name;
+
+  const memories = payload.memories.map((m) => {
+    if (m.category_id !== absorbed.id) return m;
+    if (m.category_locked) return m; // a user assignment is a fact
+    return { ...m, category_id: survivor.id, x: m.pinned ? m.x : null, y: m.pinned ? m.y : null };
+  });
+
+  // A locked memory left behind would dangle off a deleted category. Keep the
+  // absorbed category alive in that case rather than orphaning the row.
+  const strandedLocked = memories.some((m) => m.category_id === absorbed.id);
+
+  const categories = payload.categories
+    .filter((c) => strandedLocked || c.id !== absorbed.id)
+    .map((c) => (c.id === survivor.id ? { ...c, name: resultName } : c));
+
+  return {
+    payload: { ...payload, categories, memories },
+    event: {
+      id: nextId('reorg'),
+      operation: 'merge',
+      affected_category_ids: [first.id, second.id],
+      created_category_ids: [],
+      banner_text: `Merged **${first.name}** and **${second.name}** into **${resultName}**`,
+      before_state: before,
+      created_at: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * A child outgrew its parent and becomes a root category.
+ *
+ * No naming call: the category keeps the name it already has, which is what the
+ * spec's banner template says out loud ("X grew into its own category"). It
+ * moves outward on the map so it reads as having left the cluster.
+ */
+function applyPromote(
+  payload: GraphPayload,
+  before: GraphPayload,
+  candidate: ReorgCandidate,
+): { payload: GraphPayload; event: ReorgEvent } {
+  const targetId = candidate.categoryIds[0]!;
+  const target = payload.categories.find((c) => c.id === targetId);
+  if (!target) throw new Error(`unknown category ${targetId}`);
+  if (target.parent_id === null) throw new Error(`${target.name} is already a root category`);
+
+  const parent = payload.categories.find((c) => c.id === target.parent_id);
+
+  // Push it away from the parent it is leaving, along the line between them, so
+  // the promotion reads as separation rather than as a node twitching.
+  const dx = (target.x ?? 0) - (parent?.x ?? 0);
+  const dy = (target.y ?? 0) - (parent?.y ?? 0);
+  const length = Math.hypot(dx, dy) || 1;
+  const PROMOTE_DISTANCE = 320;
+
+  const categories = payload.categories.map((c) =>
+    c.id === targetId
+      ? {
+          ...c,
+          parent_id: null,
+          x: c.pinned ? c.x : (parent?.x ?? 0) + (dx / length) * PROMOTE_DISTANCE,
+          y: c.pinned ? c.y : (parent?.y ?? 0) + (dy / length) * PROMOTE_DISTANCE,
+        }
+      : c,
+  );
+
+  return {
+    payload: { ...payload, categories },
+    event: {
+      id: nextId('reorg'),
+      operation: 'promote',
+      affected_category_ids: [targetId],
+      created_category_ids: [],
+      banner_text: `**${target.name}** grew into its own category`,
+      before_state: before,
+      created_at: new Date().toISOString(),
+    },
+  };
+}
+
+function applySplit(
+  payload: GraphPayload,
+  before: GraphPayload,
+  candidate: ReorgCandidate,
+  names: string[],
+): { payload: GraphPayload; event: ReorgEvent } {
   const targetId = candidate.categoryIds[0]!;
   const target = payload.categories.find((c) => c.id === targetId);
   if (!target) throw new Error(`unknown category ${targetId}`);

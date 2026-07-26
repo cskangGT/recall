@@ -81,9 +81,14 @@ describe('applyReorg — parent split', () => {
     expect(out.memories.find((m) => m.id === lockedId)!.category_id).toBe(aiTooling.id);
   });
 
-  it('refuses a non-split operation in Phase 1', () => {
-    expect(() =>
-      applyReorg(withDemo, { ...candidate, operation: 'merge' }, names),
-    ).toThrow(/split only/);
+  it('applies every operation the gates can produce, not just split', () => {
+    // This used to throw "Phase 1 applies split only". That was worse than it
+    // looked: evaluateReorg returns the single highest-scoring candidate, so a
+    // merge outscoring a split meant the split was discarded and nothing at all
+    // happened. See tests/unit/mergePromote.test.ts for the merge and promote
+    // behaviour itself.
+    const merge = { ...candidate, operation: 'merge' as const, categoryIds: [aiTooling.id] };
+    expect(() => applyReorg(withDemo, merge, names)).toThrow(/two known categories/);
+    expect(() => applyReorg(withDemo, merge, names)).not.toThrow(/split only/);
   });
 });

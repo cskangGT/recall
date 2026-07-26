@@ -88,20 +88,24 @@ export class FixtureProvider implements AiProvider {
     };
   }
 
-  /** The names the demo expects, with the same validation a real namer faces. */
+  /**
+   * The names the demo expects for a split; TF-IDF for anything else. Both go
+   * through the same validation a real namer faces, so a fixture run exercises
+   * the fallback path rather than sidestepping it.
+   */
   async nameClusters(input: {
+    operation?: 'split' | 'merge' | 'promote';
     clusters: NameCluster[];
     forbiddenNames: string[];
   }): Promise<NamedCluster[]> {
-    const canned = ['Agent Frameworks', 'Evals & Observability'];
+    const allTexts = input.clusters.map((x) => x.sample_texts);
+    const canned = input.operation === 'merge' ? [] : ['Agent Frameworks', 'Evals & Observability'];
     return input.clusters.map((c, i) => {
-      const proposed = canned[i] ?? fallbackName(c.sample_texts, input.clusters.map((x) => x.sample_texts));
+      const proposed = canned[i] ?? fallbackName(c.sample_texts, allTexts);
       const check = validateName(proposed, input.forbiddenNames);
       return {
         cluster_id: c.cluster_id,
-        name: check.ok
-          ? proposed
-          : fallbackName(c.sample_texts, input.clusters.map((x) => x.sample_texts)),
+        name: check.ok ? proposed : fallbackName(c.sample_texts, allTexts),
         rationale: check.ok ? 'fixture' : `fell back: ${check.reason}`,
       };
     });

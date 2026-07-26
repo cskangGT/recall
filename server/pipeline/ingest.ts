@@ -265,33 +265,48 @@ export class IngestPipeline {
     const candidate = evaluateReorg(before, touchedCategoryIds);
 
     if (!candidate) return null;
-    // Only SPLIT is applied so far — MERGE and PROMOTE gates fire and are
-    // tested, but applyReorg has no branch for them yet.
-    if (candidate.operation !== 'split') return null;
 
     const target = before.categories.find((c) => c.id === candidate.categoryIds[0])!;
     const textOf = (ids: string[]) =>
       ids.slice(0, 12).map((mid) => before.memories.find((m) => m.id === mid)?.text ?? '');
+    const memoryTextsIn = (categoryId: string) =>
+      before.memories.filter((m) => m.category_id === categoryId).slice(0, 12).map((m) => m.text);
 
-    const siblings = before.categories
-      .filter((c) => c.parent_id === (target.parent_id ?? target.id) && c.id !== target.id)
-      .map((c) => c.name);
-    const named = await this.ai.nameClusters({
-      operation: 'split',
-      clusters: [
-        { cluster_id: 'a', sample_texts: textOf(candidate.clusters!.a) },
-        { cluster_id: 'b', sample_texts: textOf(candidate.clusters!.b) },
-      ],
-      forbiddenNames: [...siblings, ...this.repo.listTombstones(workspaceId), target.name],
-    });
+    // PROMOTE keeps the name it already has — the banner says "X grew into its
+    // own category", so there is nothing to name and no reason to spend a call.
+    let names: string[] = [];
+    if (candidate.operation !== 'promote') {
+      const siblings = before.categories
+        .filter((c) => c.parent_id === (target.parent_id ?? target.id))
+        .filter((c) => !candidate.categoryIds.includes(c.id))
+        .map((c) => c.name);
+      const forbidden = [...siblings, ...this.repo.listTombstones(workspaceId)];
 
-    const names = ['a', 'b'].map((cid) => named.find((n) => n.cluster_id === cid)?.name ?? '');
+      const clusters =
+        candidate.operation === 'split'
+          ? [
+              { cluster_id: 'a', sample_texts: textOf(candidate.clusters!.a) },
+              { cluster_id: 'b', sample_texts: textOf(candidate.clusters!.b) },
+            ]
+          : [{ cluster_id: 'merged', sample_texts: candidate.categoryIds.flatMap(memoryTextsIn) }];
+
+      const named = await this.ai.nameClusters({
+        operation: candidate.operation,
+        clusters,
+        // A split must not reuse the name it is dividing; a merge may keep the
+        // surviving category's name, so those names stay allowed.
+        forbiddenNames:
+          candidate.operation === 'split' ? [...forbidden, target.name] : forbidden,
+      });
+      names = clusters.map((c) => named.find((n) => n.cluster_id === c.cluster_id)?.name ?? '');
+    }
+
     const { payload: after, event } = applyReorg(before, candidate, names);
 
     const row: ReorgEventRow = {
       id: id('reorg'),
       trigger_source_id: sourceId,
-      operation: 'split',
+      operation: candidate.operation,
       status: 'applied',
       affected_category_ids: event.affected_category_ids,
       created_category_ids: event.created_category_ids,
@@ -301,11 +316,33 @@ export class IngestPipeline {
       created_at: now(),
     };
 
+    // A general category diff rather than insert-only: SPLIT creates, MERGE
+    // removes and renames, PROMOTE re-parents and moves. Diffing covers all
+    // three without the pipeline knowing which one ran.
     this.repo.transaction(() => {
       for (const created of after.categories.filter(
         (c) => !before.categories.some((b) => b.id === c.id),
       )) {
         this.repo.insertCategory(workspaceId, created);
+      }
+      for (const c of after.categories) {
+        const previous = before.categories.find((b) => b.id === c.id);
+        if (!previous) continue;
+        if (
+          previous.name === c.name && previous.parent_id === c.parent_id &&
+          previous.x === c.x && previous.y === c.y
+        ) continue;
+        this.repo.updateCategory(c.id, {
+          name: c.name, parent_id: c.parent_id, x: c.x, y: c.y,
+        });
+      }
+      for (const removed of before.categories.filter(
+        (b) => !after.categories.some((c) => c.id === b.id),
+      )) {
+        // Tombstone before deleting, so the same clustering signal cannot
+        // resurrect the name on a later pass (spec §11.4).
+        this.repo.addTombstone(workspaceId, removed.name);
+        this.repo.deleteCategory(removed.id);
       }
       for (const m of after.memories) {
         const previous = before.memories.find((b) => b.id === m.id);

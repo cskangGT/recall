@@ -555,6 +555,8 @@ Result depends on the category's level. The two cases are structurally and visua
 
 The AI names both new groups (§10.4). In the parent case it names only the two children; the parent's existing name is never changed by a split.
 
+> **All three operations are applied, not just SPLIT.** Phase 1 implemented the three gates but only ever applied a split, which was worse than omitting the other two: §8.4.3 returns the *single highest-scoring* candidate, so a merge or promote that outscored a split meant the split was discarded and nothing happened at all — a silent no-op where the user expected a reorganization. Closed in Phase 3; `applyReorg` now has a branch per operation.
+
 **MERGE** — two siblings say the same thing.
 
 Fires when all hold:
