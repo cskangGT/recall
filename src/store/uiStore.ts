@@ -17,7 +17,17 @@ export interface Toast {
   text: string;
 }
 
+export type View = 'map' | 'tree';
+
 interface UiState {
+  view: View;
+  /** Category ids whose children are shown in the tree. */
+  expandedIds: string[];
+  /**
+   * Set when the tree hands a selection back to the map, so the canvas knows to
+   * centre on it. Cleared by the canvas once consumed.
+   */
+  centerOnId: string | null;
   hoveredId: string | null;
   selectedId: string | null;
   highlightedIds: string[];
@@ -29,6 +39,10 @@ interface UiState {
   answer: (ScriptedAnswer & { question: string }) | null;
   toasts: Toast[];
 
+  setView: (view: View) => void;
+  toggleExpanded: (id: string) => void;
+  setExpanded: (id: string, open: boolean) => void;
+  consumeCenterOn: () => string | null;
   setHovered: (id: string | null) => void;
   select: (id: string | null) => void;
   clearSelection: () => void;
@@ -49,6 +63,9 @@ interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
+  view: 'map',
+  expandedIds: [],
+  centerOnId: null,
   hoveredId: null,
   selectedId: null,
   highlightedIds: [],
@@ -59,6 +76,36 @@ export const useUiStore = create<UiState>((set, get) => ({
   reorgHistory: [],
   answer: null,
   toasts: [],
+
+  // Switching back to the map carries the selection with it and asks the canvas
+  // to centre on it, so the two views never lose each other.
+  setView: (view) =>
+    set((s) => ({
+      view,
+      centerOnId: view === 'map' ? s.selectedId : null,
+    })),
+
+  toggleExpanded: (id) =>
+    set((s) => ({
+      expandedIds: s.expandedIds.includes(id)
+        ? s.expandedIds.filter((x) => x !== id)
+        : [...s.expandedIds, id],
+    })),
+
+  setExpanded: (id, open) =>
+    set((s) => ({
+      expandedIds: open
+        ? s.expandedIds.includes(id)
+          ? s.expandedIds
+          : [...s.expandedIds, id]
+        : s.expandedIds.filter((x) => x !== id),
+    })),
+
+  consumeCenterOn: () => {
+    const id = get().centerOnId;
+    if (id !== null) set({ centerOnId: null });
+    return id;
+  },
 
   setHovered: (hoveredId) => set({ hoveredId }),
   select: (selectedId) => set({ selectedId }),

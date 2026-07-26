@@ -54,6 +54,8 @@ export function MapCanvas({
   useEffect(() => {
     bannerFired.current = false;
     panStart.current = null;
+    panFrom.current = null;
+    panTo.current = null;
   }, [animation?.startedAt]);
 
   useEffect(() => {
@@ -95,13 +97,29 @@ export function MapCanvas({
 
       let camera = ui.camera ?? cameraRef.current ?? target;
 
-      // ---- reorganization camera pan (AC-20): pan only, never zoom
-      if (animation && panStart.current !== null && panFrom.current && panTo.current) {
+      // ---- the tree handed us a selection: centre on it
+      const centerId = ui.consumeCenterOn();
+      if (centerId) {
+        const node = current.nodes.find((n) => n.id === centerId);
+        if (node) {
+          panFrom.current = camera;
+          panTo.current = panToNode(node, camera);
+          panStart.current = now;
+        }
+      }
+
+      // ---- camera pan: pan only, never zoom (AC-20).
+      // Drives both the reorganization pan and a centre-on from the tree.
+      if (panStart.current !== null && panFrom.current && panTo.current) {
         const t = Math.min(1, (now - panStart.current) / PAN_MS);
         camera = lerpCamera(panFrom.current, panTo.current, easeInOutCubic(t));
         cameraRef.current = camera;
         if (t >= 1) {
           panStart.current = null;
+          if (!animation) {
+            panFrom.current = null;
+            panTo.current = null;
+          }
           useUiStore.getState().setCamera(camera);
         }
       }

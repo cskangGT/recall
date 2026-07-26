@@ -23,6 +23,15 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
 | `⌘/` | Ask. Try *"What did we decide about our eval stack?"* — the answer cites three memories and the map dims everything else. |
 | `⌘Z` | Undo the reorganization. |
+| `T` / `G` | Tree view / Map view. Selection carries across, and the map centres on it. |
+
+## Tree view
+
+The map shows you the shape of your knowledge; the tree is where you correct it.
+Expand with `▸` or `→`, walk rows with `↑` `↓`, and **drag a memory onto any category
+to re-file it**. A hand-moved memory locks: no reorganization pass will ever reclaim it.
+A child category can be dragged onto a different parent, but not onto another child —
+the taxonomy is exactly two levels, and the attempt is refused with a shake.
 
 ## Verify
 
@@ -61,11 +70,11 @@ every commit.
 | `src/data/dataSource.ts` | **The Phase 4 swap point** |
 | `src/reorg/` | Thresholds, vector math, gates, apply/undo, the 2.4s timeline |
 | `src/graph/` | Build, layout, camera, renderer, hit test |
+| `src/tree/` | Flatten the taxonomy into rows; drop validation |
 | `src/components/` | React surfaces |
 | `docs/` | Product spec, review summary, Phase 1 plan |
 
-## Not in Phase 1
+## Not built yet
 
-Tree view, Sources screen, Settings, instant Search, MERGE/PROMOTE animations (their gates are
-built and tested), proposal mode, drag-to-recategorize, offline mode. See
-`docs/spec-review-summary.md`.
+Sources screen, Settings, instant Search, MERGE/PROMOTE animations (their gates are built and
+tested), proposal mode, category renaming, offline mode. See `docs/spec-review-summary.md`.

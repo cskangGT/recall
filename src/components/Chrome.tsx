@@ -4,17 +4,29 @@ import { useUiStore, STAGE_LABEL } from '../store/uiStore';
 export function LeftRail() {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const setAskOpen = useUiStore((s) => s.setAskOpen);
+  const view = useUiStore((s) => s.view);
+  const setView = useUiStore((s) => s.setView);
 
   return (
     <nav className="rail">
       <div className="rail__mark">R</div>
-      <button className="rail__btn rail__btn--active" title="Map" data-testid="rail-map">
+      <button
+        className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
+        title="Map (G)"
+        data-testid="rail-map"
+        onClick={() => setView('map')}
+      >
         ◍
       </button>
-      <button className="rail__btn" disabled title="Tree — coming in Phase 2">
+      <button
+        className={`rail__btn${view === 'tree' ? ' rail__btn--active' : ''}`}
+        title="Tree (T)"
+        data-testid="rail-tree"
+        onClick={() => setView('tree')}
+      >
         ⋮
       </button>
-      <button className="rail__btn" disabled title="Sources — coming in Phase 2">
+      <button className="rail__btn" disabled title="Sources — not built yet">
         ▤
       </button>
       <button

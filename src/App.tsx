@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
+import { TreeView } from './components/TreeView';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -18,6 +19,7 @@ export function App() {
   const nodes = useWorkspaceStore((s) => s.nodes);
   const captureOpen = useUiStore((s) => s.captureOpen);
   const askOpen = useUiStore((s) => s.askOpen);
+  const view = useUiStore((s) => s.view);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
   const [wide, setWide] = useState(
@@ -106,6 +108,14 @@ export function App() {
         return;
       }
       if (typing) return;
+      if (e.key === 'g' || e.key === 'G') {
+        ui.setView('map');
+        return;
+      }
+      if (e.key === 't' || e.key === 'T') {
+        ui.setView('tree');
+        return;
+      }
       if (e.key === ' ') {
         e.preventDefault();
         const ws = useWorkspaceStore.getState();
@@ -123,8 +133,12 @@ export function App() {
     <div className="shell">
       <LeftRail />
       <div className="canvas-wrap">
-        <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
-        {nodes.length === 0 && (
+        {view === 'tree' ? (
+          <TreeView />
+        ) : (
+          <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
+        )}
+        {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
             <h2>Nothing saved yet.</h2>
             <p>Add a note, a link, or a screenshot and Recall will start building your map.</p>
