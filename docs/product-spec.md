@@ -646,7 +646,9 @@ Both views read the same graph payload. A change in either is immediately reflec
 3. Drop any memory below a relevance floor of **0.35** cosine.
 4. **If fewer than 2 memories survive → refuse.** Return exactly: *"I don't have anything saved about that yet."*
 5. Expand context: for each surviving memory, include its category name and its source title/type.
-6. Rerank to the top 8 by an LLM relevance pass.
+6. Take the top 8 by fused rank.
+
+> **The LLM rerank pass is deliberately not built.** At a corpus this size, retrieval returns 20 candidates from 47 memories and the fused top 8 is already the whole plausible answer set — a model call to reorder them buys accuracy that cannot be measured against latency and cost that can. `docs/spec-review-summary.md` flagged it as over-engineering and that judgment held. Revisit when the corpus is large enough that the top 20 and the top 8 genuinely differ in quality.
 7. Generate the answer with the citation contract below.
 
 **Citation contract — non-negotiable:**

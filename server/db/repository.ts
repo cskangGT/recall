@@ -80,6 +80,13 @@ export interface Repository {
   linkMemoryEntity(memoryId: string, entityId: string): void;
   listEntities(workspaceId: string): Entity[];
 
+  /**
+   * Keyword half of hybrid retrieval, best first. Implementation-specific by
+   * design: SQLite uses FTS5/bm25, Postgres would use tsvector — the fusion in
+   * `server/search/retrieve.ts` only needs an ordered list of ids.
+   */
+  keywordSearch(workspaceId: string, query: string, limit: number): { memoryId: string; rank: number }[];
+
   replaceRelatesToEdges(workspaceId: string, edges: RelatesToEdge[]): void;
   listEdges(workspaceId: string): RelatesToEdge[];
 

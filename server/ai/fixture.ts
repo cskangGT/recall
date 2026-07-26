@@ -41,6 +41,17 @@ function hashVector(text: string, dim: number): number[] {
   return out.map((x) => x / norm);
 }
 
+const textById = new Map([...seedMemories, ...demoMemories].map((m) => [m.id, m.text]));
+
+/** Componentwise mean, normalized — the direction a set of memories points in. */
+function meanDirection(vectors: number[][]): number[] {
+  const dim = vectors[0]!.length;
+  const out = new Array<number>(dim).fill(0);
+  for (const v of vectors) for (let i = 0; i < dim; i++) out[i]! += v[i]! / vectors.length;
+  const norm = Math.hypot(...out) || 1;
+  return out.map((x) => x / norm);
+}
+
 export class FixtureEmbeddings implements EmbeddingProvider {
   readonly dimensions = VECTOR_DIM;
   private readonly byText = new Map<string, number[]>();
@@ -51,7 +62,31 @@ export class FixtureEmbeddings implements EmbeddingProvider {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
-    return texts.map((t) => this.byText.get(t) ?? hashVector(t, this.dimensions));
+    return texts.map((t) => this.byText.get(t) ?? this.derive(t));
+  }
+
+  /**
+   * A question is never a seed text, so it would otherwise get a hash vector —
+   * a direction unrelated to the corpus, which puts every memory under the
+   * relevance floor and makes Ask refuse everything. That would test nothing.
+   *
+   * Instead, a question that matches a scripted answer embeds to the mean
+   * direction of the memories that answer it, which is what a real embedding
+   * model does: it puts a question near its answers. Anything else still falls
+   * back to a hash, so an unanswerable question is still genuinely far away and
+   * the refusal path stays real.
+   */
+  private derive(text: string): number[] {
+    const q = text.toLowerCase();
+    const entry = answers.find((a) => a.match.every((kw) => q.includes(kw)));
+    if (!entry) return hashVector(text, this.dimensions);
+
+    const vectors = entry.citations
+      .map((c) => textById.get(c.memory_id))
+      .map((t) => (t === undefined ? undefined : this.byText.get(t)))
+      .filter((v): v is number[] => v !== undefined);
+
+    return vectors.length > 0 ? meanDirection(vectors) : hashVector(text, this.dimensions);
   }
 }
 
@@ -121,10 +156,20 @@ export class FixtureProvider implements AiProvider {
         refused: true,
       };
     }
-    // Only cite memories retrieval actually surfaced — the same contract the
-    // real provider is held to, so a retrieval regression shows up here too.
-    const available = new Set(input.retrieved.map((r) => r.memory_id));
-    const citations = entry.citations.filter((c) => available.has(c.memory_id));
+    // Citations are resolved by *text*, not by id. The scripted answers name
+    // seed ids, but the ingest pipeline mints fresh ids for anything it
+    // captures — so `mem_demo_1` never exists once the demo item has actually
+    // been ingested. Matching on text keeps the fixture faithful to the demo
+    // narrative, where the third citation is the screenshot captured thirty
+    // seconds earlier.
+    const idByText = new Map(input.retrieved.map((r) => [r.text, r]));
+    const citations = entry.citations
+      .map((c) => {
+        const text = textById.get(c.memory_id);
+        const surfaced = text === undefined ? undefined : idByText.get(text);
+        return surfaced ? { ...c, memory_id: surfaced.memory_id, source_id: surfaced.source_id } : null;
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null);
     if (citations.length < 2) {
       return {
         answer: "I don't have anything saved about that yet.",

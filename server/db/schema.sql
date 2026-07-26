@@ -65,6 +65,29 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS memories_workspace ON memories(workspace_id);
 CREATE INDEX IF NOT EXISTS memories_source ON memories(source_id);
 
+-- Keyword half of the hybrid retrieval in spec 9.1. `content=memories` makes
+-- this an external-content index: the text is not duplicated, FTS5 reads it
+-- back from `memories` by rowid. The triggers below keep it in sync, which an
+-- external-content table does not do on its own.
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+  text,
+  content = 'memories',
+  content_rowid = 'rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS memories_fts_insert AFTER INSERT ON memories BEGIN
+  INSERT INTO memories_fts (rowid, text) VALUES (NEW.rowid, NEW.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories BEGIN
+  INSERT INTO memories_fts (memories_fts, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE OF text ON memories BEGIN
+  INSERT INTO memories_fts (memories_fts, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);
+  INSERT INTO memories_fts (rowid, text) VALUES (NEW.rowid, NEW.text);
+END;
+
 CREATE TABLE IF NOT EXISTS categories (
   id            TEXT PRIMARY KEY,
   workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

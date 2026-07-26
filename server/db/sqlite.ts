@@ -359,6 +359,44 @@ export class SqliteRepository implements Repository {
     }));
   }
 
+  // ---------------------------------------------------------------- search
+
+  keywordSearch(
+    workspaceId: string,
+    query: string,
+    limit: number,
+  ): { memoryId: string; rank: number }[] {
+    // FTS5 MATCH takes a query language, so raw user input is a syntax hazard,
+    // not just a relevance one: an apostrophe or a bare `AND` throws. Reduce
+    // the question to bare terms and OR them — recall matters more than
+    // precision here because RRF and the relevance floor do the filtering.
+    const terms = query
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2);
+    if (terms.length === 0) return [];
+    const match = terms.map((t) => `"${t}"`).join(' OR ');
+
+    try {
+      const rows = this.db
+        .prepare(
+          `SELECT m.id AS id, bm25(memories_fts) AS score
+           FROM memories_fts
+           JOIN memories m ON m.rowid = memories_fts.rowid
+           WHERE memories_fts MATCH ? AND m.workspace_id = ?
+           ORDER BY score
+           LIMIT ?`,
+        )
+        .all(match, workspaceId, limit) as { id: string; score: number }[];
+      return rows.map((r) => ({ memoryId: r.id, rank: r.score }));
+    } catch {
+      // A malformed query must not take the whole Ask down — the vector half
+      // still produces a usable ranking on its own.
+      return [];
+    }
+  }
+
   // ---------------------------------------------------------------- edges
 
   replaceRelatesToEdges(workspaceId: string, edges: RelatesToEdge[]): void {
