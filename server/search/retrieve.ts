@@ -1,5 +1,5 @@
-import type { GraphPayload, Memory } from '../../src/core/types';
-import { cosine } from '../../src/core/vectorMath';
+import type { GraphPayload, Memory } from '../../src/core/types.ts';
+import { cosine } from '../../src/core/vectorMath.ts';
 
 /**
  * Hybrid retrieval — spec §9.1.

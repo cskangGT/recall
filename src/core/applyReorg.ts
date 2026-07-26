@@ -1,5 +1,5 @@
-import type { GraphPayload, Category, ReorgOperation } from './types';
-import type { ReorgCandidate } from './gates';
+import type { GraphPayload, Category, ReorgOperation } from './types.ts';
+import type { ReorgCandidate } from './gates.ts';
 
 export interface ReorgEvent {
   id: string;

@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { Repository, ReorgEventRow, SourceRow } from '../db/repository';
-import type { AiProvider, EmbeddingProvider } from '../ai/provider';
-import { fallbackName, validateName } from '../ai/provider';
-import type { Category, GraphPayload, Memory, SourceType } from '../../src/core/types';
-import { assignMemory, categoryProfiles } from '../../src/core/assign';
-import { evaluateReorg } from '../../src/core/gates';
-import { applyReorg } from '../../src/core/applyReorg';
-import { cosine } from '../../src/core/vectorMath';
-import { RELATES_TO_MIN_SIMILARITY } from '../../src/core/thresholds';
+import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
+import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
+import { fallbackName, validateName } from '../ai/provider.ts';
+import type { Category, GraphPayload, Memory, SourceType } from '../../src/core/types.ts';
+import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
+import { evaluateReorg } from '../../src/core/gates.ts';
+import { applyReorg } from '../../src/core/applyReorg.ts';
+import { cosine } from '../../src/core/vectorMath.ts';
+import { RELATES_TO_MIN_SIMILARITY } from '../../src/core/thresholds.ts';
 
 /**
  * The ingest pipeline — spec §5.3, §8.3, §8.4.
@@ -46,11 +46,18 @@ const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
 export class IngestPipeline {
-  constructor(
-    private readonly repo: Repository,
-    private readonly ai: AiProvider,
-    private readonly embeddings: EmbeddingProvider,
-  ) {}
+  // Written out rather than as constructor parameter properties: those emit
+  // code, not just types, so Node's strip-only TypeScript loader rejects them —
+  // and `node server/http/main.ts` with no build step is worth the four lines.
+  private readonly repo: Repository;
+  private readonly ai: AiProvider;
+  private readonly embeddings: EmbeddingProvider;
+
+  constructor(repo: Repository, ai: AiProvider, embeddings: EmbeddingProvider) {
+    this.repo = repo;
+    this.ai = ai;
+    this.embeddings = embeddings;
+  }
 
   async ingest(input: IngestInput): Promise<IngestResult> {
     const sourceId = id('src');

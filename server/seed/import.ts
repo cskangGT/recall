@@ -1,5 +1,5 @@
-import type { Repository } from '../db/repository';
-import type { GraphPayload, Memory } from '../../src/core/types';
+import type { Repository } from '../db/repository.ts';
+import type { GraphPayload, Memory } from '../../src/core/types.ts';
 import workspaceJson from '../../seed/workspace.json' with { type: 'json' };
 
 /**
@@ -29,11 +29,17 @@ export function importSeed(
       });
     }
 
-    // Parents before children: the depth trigger reads the parent row, and a
-    // child inserted first would have nothing to check against.
-    const parents = payload.categories.filter((c) => c.parent_id === null);
-    const children = payload.categories.filter((c) => c.parent_id !== null);
-    for (const c of [...parents, ...children]) repo.insertCategory(workspaceId, c);
+    // Payload order, not parents-then-children. The seed lists each parent
+    // immediately before its own children, so the depth trigger is satisfied
+    // anyway — and reordering here would make the taxonomy render differently
+    // through the API than through the seed file.
+    for (const c of payload.categories) {
+      const parent = c.parent_id
+        ? payload.categories.find((x) => x.id === c.parent_id)
+        : null;
+      if (c.parent_id && !parent) throw new Error(`${c.id} names a parent that is not in the seed`);
+      repo.insertCategory(workspaceId, c);
+    }
 
     for (const e of payload.entities) {
       repo.upsertEntity(workspaceId, {

@@ -13,7 +13,8 @@
     "seed": "python3 scripts/generate_seed.py",
     "rehearse": "node scripts/rehearse.mjs",
     "thresholds": "python3 scripts/validate_thresholds.py",
-    "thresholds:selfcheck": "python3 scripts/validate_thresholds.py --provider seed"
+    "thresholds:selfcheck": "python3 scripts/validate_thresholds.py --provider seed",
+    "dev:api": "node server/http/main.ts"
   },
   "dependencies": {
     "d3-force": "^3.0.0",

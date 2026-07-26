@@ -100,7 +100,13 @@ CREATE TABLE IF NOT EXISTS categories (
   y             REAL,
   pinned        INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL,
-  created_by    TEXT NOT NULL CHECK (created_by IN ('ai', 'user'))
+  created_by    TEXT NOT NULL CHECK (created_by IN ('ai', 'user')),
+  -- Insertion order, preserved explicitly. `created_at` is not enough: a bulk
+  -- import writes many rows in the same millisecond, so ties fall back to id
+  -- and the taxonomy comes out alphabetical. The seed's authored order is the
+  -- map's mental model, and it must be identical whether the payload came from
+  -- the JSON file or from here.
+  sort_order    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS categories_workspace ON categories(workspace_id);

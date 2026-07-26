@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import type {
   AiProvider, AnswerResult, EmbeddingProvider, ExtractResult,
   NameCluster, NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
-} from './provider';
-import { fallbackName, validateName } from './provider';
-import type { Memory, Source } from '../../src/core/types';
+} from './provider.ts';
+import { fallbackName, validateName } from './provider.ts';
+import type { Memory, Source } from '../../src/core/types.ts';
 import workspaceJson from '../../seed/workspace.json' with { type: 'json' };
 import demoItem from '../../seed/demo-item.json' with { type: 'json' };
 import answers from '../../seed/answers.json' with { type: 'json' };

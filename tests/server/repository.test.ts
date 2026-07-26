@@ -35,6 +35,19 @@ describe('SqliteRepository — seed round-trip', () => {
     expect(validated.edges).toHaveLength((workspaceJson as GraphPayload).edges.length);
   });
 
+  it('preserves the authored category order, not alphabetical or insertion-batched', () => {
+    importSeed(repo, WS);
+    const fromFile = (workspaceJson as unknown as GraphPayload).categories.map((c) => c.name);
+    const fromDb = repo.getGraphPayload(WS).categories.map((c) => c.name);
+
+    // The claim the architecture rests on is that swapping the data source
+    // changes nothing above it. Order is part of "nothing": buildTree and the
+    // map both read payload order, so a differently-sorted payload renders a
+    // differently-shaped app.
+    expect(fromDb).toEqual(fromFile);
+    expect(fromDb[0]).toBe('Fundraising');
+  });
+
   it('round-trips vectors without precision loss', () => {
     importSeed(repo, WS);
     const original = (workspaceJson as unknown as GraphPayload).memories;

@@ -1,6 +1,6 @@
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge, Source,
-} from '../../src/core/types';
+} from '../../src/core/types.ts';
 
 /**
  * The storage seam.
@@ -44,6 +44,8 @@ export interface Repository {
   migrate(): void;
 
   createWorkspace(input: { id: string; name: string; isDemo?: boolean }): void;
+  /** Drops a workspace and everything under it. Used to reset the demo. */
+  deleteWorkspace(id: string): void;
   getWorkspace(id: string): { id: string; name: string; auto_reorganize: boolean } | null;
 
   /**

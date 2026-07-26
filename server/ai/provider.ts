@@ -1,4 +1,4 @@
-import type { EntityKind, MemoryKind, SourceType } from '../../src/core/types';
+import type { EntityKind, MemoryKind, SourceType } from '../../src/core/types.ts';
 
 /**
  * The four model calls of spec §10, plus embeddings, behind one interface.

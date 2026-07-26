@@ -1,6 +1,6 @@
-import type { GraphPayload, Category, Memory } from './types';
-import { cosine, centroid, meanPairwiseCosine, twoMeans } from './vectorMath';
-import { SPLIT, MERGE, PROMOTE } from './thresholds';
+import type { GraphPayload, Category, Memory } from './types.ts';
+import { cosine, centroid, meanPairwiseCosine, twoMeans } from './vectorMath.ts';
+import { SPLIT, MERGE, PROMOTE } from './thresholds.ts';
 
 export interface ReorgCandidate {
   operation: 'split' | 'merge' | 'promote';

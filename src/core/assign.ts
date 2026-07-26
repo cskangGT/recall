@@ -1,6 +1,6 @@
-import type { Category, Memory } from './types';
-import { cosine, centroid } from './vectorMath';
-import { ASSIGN } from './thresholds';
+import type { Category, Memory } from './types.ts';
+import { cosine, centroid } from './vectorMath.ts';
+import { ASSIGN } from './thresholds.ts';
 
 /**
  * Category assignment — spec 8.3.

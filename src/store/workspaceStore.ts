@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { GraphPayload, GraphNode, GraphEdge } from '../core/types';
-import { SeedDataSource } from '../data/dataSource';
+import { selectDataSource, type DataSource } from '../data/dataSource';
 import { buildGraph } from '../graph/buildGraph';
 import { runLayout } from '../graph/layout';
 
@@ -9,6 +9,7 @@ interface WorkspaceState {
   nodes: GraphNode[];
   edges: GraphEdge[];
   loading: boolean;
+  source: DataSource;
   load: () => Promise<void>;
   applyPayload: (payload: GraphPayload) => void;
   /** User re-categorizes a memory. The assignment locks — see spec 6.3. */
@@ -22,9 +23,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   nodes: [],
   edges: [],
   loading: true,
+  source: selectDataSource(),
 
   load: async () => {
-    const payload = await SeedDataSource.load();
+    const payload = await get().source.load();
     const { nodes, edges } = buildGraph(payload);
     set({ payload, nodes: runLayout(nodes, edges), edges, loading: false });
   },
@@ -54,7 +56,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           : m,
       ),
     };
+    // Optimistic either way: the map should move under the user's hand, not a
+    // round trip later. In API mode the server's payload replaces this one, and
+    // a rejection surfaces as the graph snapping back to server truth.
     get().applyPayload(next);
+    const { source } = get();
+    void source.moveMemory?.(memoryId, categoryId)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
   },
 
   moveCategory: (categoryId, parentId) => {
@@ -70,5 +79,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ),
     };
     get().applyPayload(next);
+    const { source } = get();
+    void source.updateCategory?.(categoryId, { parentId })
+      .then(get().applyPayload)
+      .catch(() => void get().load());
   },
 }));

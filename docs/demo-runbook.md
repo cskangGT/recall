@@ -36,6 +36,17 @@ npm run dev            # http://localhost:5173
 **Reset between runs is just a page reload.** Nothing persists: no localStorage, no backend, no
 database. Every run starts from the identical 47-memory seed with the identical hand-tuned layout.
 
+> **Unless you are running API mode** (`?api=1`, with `npm run dev:api`). Then the corpus lives in
+> a database and a reload no longer resets anything — captures and corrections accumulate across
+> runs. Reset explicitly:
+>
+> ```bash
+> curl -X POST http://localhost:5173/api/workspaces/ws_demo/reset
+> ```
+>
+> **Demo on the default seed mode.** API mode exists to prove the backend works, not to present
+> from. It has one more moving part, no rehearsal history, and a reset you have to remember.
+
 ---
 
 ## The path

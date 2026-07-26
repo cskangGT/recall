@@ -29,10 +29,10 @@ const { DatabaseSync } = nodeRequire('node:sqlite') as {
 };
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge,
-} from '../../src/core/types';
+} from '../../src/core/types.ts';
 import type {
   MemoryAssignment, ReorgEventRow, Repository, SourceRow,
-} from './repository';
+} from './repository.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -62,6 +62,13 @@ export class SqliteRepository implements Repository {
          ON CONFLICT(id) DO NOTHING`,
       )
       .run(input.id, input.name, int(input.isDemo ?? false), new Date().toISOString());
+  }
+
+  deleteWorkspace(id: string): void {
+    // Every table cascades from workspaces, but SQLite only honours that with
+    // foreign_keys ON — which schema.sql sets per connection, not per database.
+    this.db.exec('PRAGMA foreign_keys = ON');
+    this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
   }
 
   getWorkspace(id: string) {
@@ -231,12 +238,14 @@ export class SqliteRepository implements Repository {
     this.db
       .prepare(
         `INSERT INTO categories (id, workspace_id, parent_id, name, rationale, name_locked,
-                                 user_created, x, y, pinned, created_at, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                 user_created, x, y, pinned, created_at, created_by, sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,
+                 (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories WHERE workspace_id = ?))`,
       )
       .run(
         c.id, workspaceId, c.parent_id, c.name, c.rationale, int(c.name_locked),
         int(c.user_created), c.x, c.y, int(c.pinned), new Date().toISOString(), c.created_by,
+        workspaceId,
       );
   }
 
@@ -269,7 +278,7 @@ export class SqliteRepository implements Repository {
 
   listCategories(workspaceId: string): Category[] {
     const rows = this.db
-      .prepare('SELECT * FROM categories WHERE workspace_id = ? ORDER BY created_at, id')
+      .prepare('SELECT * FROM categories WHERE workspace_id = ? ORDER BY sort_order, id')
       .all(workspaceId) as Record<string, unknown>[];
     return rows.map((r) => ({
       id: r.id as string,

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { Repository } from '../db/repository';
-import type { AiProvider, EmbeddingProvider, RetrievedMemory } from '../ai/provider';
-import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve';
+import type { Repository } from '../db/repository.ts';
+import type { AiProvider, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
+import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
 
 /**
  * Ask — spec §9.2.
@@ -36,11 +36,18 @@ const refusal = (retrievedCount: number): AskResult => ({
 });
 
 export class AskPipeline {
-  constructor(
-    private readonly repo: Repository,
-    private readonly ai: AiProvider,
-    private readonly embeddings: EmbeddingProvider,
-  ) {}
+  // Written out rather than as constructor parameter properties: those emit
+  // code, not just types, so Node's strip-only TypeScript loader rejects them —
+  // and `node server/http/main.ts` with no build step is worth the four lines.
+  private readonly repo: Repository;
+  private readonly ai: AiProvider;
+  private readonly embeddings: EmbeddingProvider;
+
+  constructor(repo: Repository, ai: AiProvider, embeddings: EmbeddingProvider) {
+    this.repo = repo;
+    this.ai = ai;
+    this.embeddings = embeddings;
+  }
 
   async ask(workspaceId: string, question: string): Promise<AskResult> {
     const payload = this.repo.getGraphPayload(workspaceId);
