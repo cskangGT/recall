@@ -88,7 +88,10 @@ export const useUiStore = create<UiState>((set, get) => ({
       set({ captureOpen: false, askOpen: false });
       return;
     }
-    if (s.highlightedIds.length > 0) {
+    // An answer and its highlight are one surface, so they clear together. The
+    // answer has to be checked independently: a refusal cites nothing and
+    // therefore highlights nothing, and it must still be dismissable.
+    if (s.highlightedIds.length > 0 || s.answer !== null) {
       set({ highlightedIds: [], answer: null });
       return;
     }
