@@ -1,8 +1,8 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore, type CaptureStage } from '../store/uiStore';
-import { evaluateReorg } from '../reorg/gates';
-import { applyReorg, type ReorgEvent } from '../reorg/applyReorg';
-import type { GraphPayload, Memory, Source } from '../types/graph';
+import { evaluateReorg } from '../core/gates';
+import { applyReorg, type ReorgEvent } from '../core/applyReorg';
+import type { GraphPayload, Memory, Source } from '../core/types';
 import demoItem from '../../seed/demo-item.json';
 
 /**

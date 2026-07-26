@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GraphPayload, GraphNode, GraphEdge } from '../types/graph';
+import type { GraphPayload, GraphNode, GraphEdge } from '../core/types';
 import { SeedDataSource } from '../data/dataSource';
 import { buildGraph } from '../graph/buildGraph';
 import { runLayout } from '../graph/layout';

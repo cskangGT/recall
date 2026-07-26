@@ -14,9 +14,9 @@ import {
 import { hitTest } from '../graph/hitTest';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
-import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../reorg/choreography';
-import type { GraphNode } from '../types/graph';
-import type { ReorgEvent } from '../reorg/applyReorg';
+import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
+import type { GraphNode } from '../core/types';
+import type { ReorgEvent } from '../core/applyReorg';
 
 export interface RunningAnimation {
   startedAt: number;

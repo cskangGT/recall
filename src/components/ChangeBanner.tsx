@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import { undoReorg } from '../reorg/applyReorg';
+import { undoReorg } from '../core/applyReorg';
 
 const AUTO_DISMISS_MS = 12_000;
 

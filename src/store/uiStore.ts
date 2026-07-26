@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Camera } from '../graph/camera';
-import type { ReorgEvent } from '../reorg/applyReorg';
+import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';

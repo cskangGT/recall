@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge } from '../types/graph';
+import type { GraphNode, GraphEdge } from '../core/types';
 import {
   COLORS,
   MEMORY_ZOOM_CUTOFF,

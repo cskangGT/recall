@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { validateSeed } from '../../src/data/validateSeed';
-import { meanPairwiseCosine, twoMeans } from '../../src/reorg/vectorMath';
-import { SPLIT } from '../../src/reorg/thresholds';
+import { meanPairwiseCosine, twoMeans } from '../../src/core/vectorMath';
+import { SPLIT } from '../../src/core/thresholds';
 import workspaceJson from '../../seed/workspace.json';
 import demoItem from '../../seed/demo-item.json';
-import type { Memory } from '../../src/types/graph';
+import type { Memory } from '../../src/core/types';
 
 const payload = validateSeed(workspaceJson);
 const aiTooling = payload.categories.find((c) => c.name === 'AI Tooling')!;

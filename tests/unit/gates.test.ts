@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateReorg } from '../../src/reorg/gates';
+import { evaluateReorg } from '../../src/core/gates';
 import { validateSeed } from '../../src/data/validateSeed';
 import workspaceJson from '../../seed/workspace.json';
 import demoItem from '../../seed/demo-item.json';
-import type { GraphPayload, Memory, Source } from '../../src/types/graph';
+import type { GraphPayload, Memory, Source } from '../../src/core/types';
 
 const base = validateSeed(workspaceJson);
 const aiTooling = base.categories.find((c) => c.name === 'AI Tooling')!;

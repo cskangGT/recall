@@ -505,10 +505,22 @@ The `relates_to` cap is load-bearing. Without it the graph becomes a hairball at
 For each newly extracted memory:
 
 1. Embed the memory text.
-2. Compute cosine similarity against every category centroid (centroid = mean of member memory embeddings).
+2. Score every category by its **nearest member** — the highest cosine similarity between the new memory and any single memory already filed there.
 3. **If best match ≥ 0.55** → assign to that category.
 4. **If best match is 0.40 – 0.55** → create a new child category under the best-matching *parent* category. The AI names it (§10.4).
 5. **If best match < 0.40** → create a new parent category with one child. The AI names both.
+
+> **Scored by nearest member, not by centroid — and this correction is load-bearing.**
+>
+> Earlier drafts compared the new memory against each category's *centroid*. That fails in exactly the situation this product is built around. A centroid stops representing its category the moment the category has become two things, and detecting that moment is the entire purpose of the SPLIT gate in §8.4.
+>
+> Measured on the seed corpus: `AI Tooling` holds 7 memories about agent frameworks and 2 about evals. Its centroid sits near the frameworks cluster (0.88) and away from the evals one (0.77). A new evals memory scores **0.41** against that centroid — inside the "create a new category" band — while scoring **0.72** against an evals memory already filed there.
+>
+> Centroid scoring therefore siphons off precisely the memories that would have made a category incoherent enough to split. §8.3 and §8.4 fight, §8.3 wins, and SPLIT can essentially never fire in production. On the demo corpus it breaks the demo outright: the two demo memories land in two different categories and `AI Tooling` never reaches the gate.
+>
+> Nearest-member scoring is robust to bimodal categories by construction, and asks the question the product actually asks — *is this like something I already saved?* rather than *is this like the average of everything I saved?* Centroids remain correct for MERGE and PROMOTE, which compare two whole categories rather than a memory against a category.
+>
+> Verified by `tests/server/pipeline.test.ts` → *"files an evals memory into AI Tooling despite the bimodal centroid"*.
 
 Thresholds are configuration constants, tuned once against the seed corpus, and must be exposed as environment variables.
 

@@ -1,4 +1,4 @@
-import type { GraphPayload, GraphNode, GraphEdge, NodeKind } from '../types/graph';
+import type { GraphPayload, GraphNode, GraphEdge, NodeKind } from '../core/types';
 import { radiusFor } from './nodeStyles';
 
 /**

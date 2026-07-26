@@ -1,4 +1,4 @@
-import type { GraphNode } from '../types/graph';
+import type { GraphNode } from '../core/types';
 import { worldToScreen, type Camera, type Viewport } from './camera';
 
 /** Minimum clickable radius in screen pixels — 6px memory dots need a forgiving target. */

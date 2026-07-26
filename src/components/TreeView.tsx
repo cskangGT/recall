@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, visibleRows, validateDrop, type TreeRow } from '../tree/buildTree';
-import type { SourceType } from '../types/graph';
+import type { SourceType } from '../core/types';
 
 const SOURCE_ICON: Record<SourceType, string> = {
   text: '✎',

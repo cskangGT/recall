@@ -1,4 +1,4 @@
-import type { GraphPayload, Category, Memory } from '../types/graph';
+import type { GraphPayload, Category, Memory } from './types';
 import { cosine, centroid, meanPairwiseCosine, twoMeans } from './vectorMath';
 import { SPLIT, MERGE, PROMOTE } from './thresholds';
 

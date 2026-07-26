@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { validateSeed, SeedValidationError } from '../../src/data/validateSeed';
-import { cosine, centroid, meanPairwiseCosine, twoMeans } from '../../src/reorg/vectorMath';
-import { buildTimeline, TOTAL_WITH_STRUCTURE, TOTAL_ATTACH_ONLY } from '../../src/reorg/choreography';
+import { cosine, centroid, meanPairwiseCosine, twoMeans } from '../../src/core/vectorMath';
+import { buildTimeline, TOTAL_WITH_STRUCTURE, TOTAL_ATTACH_ONLY } from '../../src/core/choreography';
 import { detectCaptureType } from '../../src/capture/detectType';
 import { buildGraph } from '../../src/graph/buildGraph';
 import { runLayout } from '../../src/graph/layout';
@@ -11,7 +11,7 @@ import { answerQuestion, isQuestion, REFUSAL } from '../../src/ask/scriptedAsk';
 import workspaceJson from '../../seed/workspace.json';
 import demoItem from '../../seed/demo-item.json';
 import answers from '../../seed/answers.json';
-import type { GraphNode, GraphPayload, Memory, Source } from '../../src/types/graph';
+import type { GraphNode, GraphPayload, Memory, Source } from '../../src/core/types';
 
 const payload = validateSeed(workspaceJson);
 const graph = buildGraph(payload);

@@ -1,4 +1,4 @@
-import type { GraphPayload, SourceType } from '../types/graph';
+import type { GraphPayload, SourceType } from '../core/types';
 
 export type TreeRowKind = 'parent_category' | 'child_category' | 'memory';
 

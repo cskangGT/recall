@@ -1,4 +1,4 @@
-import type { SourceType } from '../types/graph';
+import type { SourceType } from '../core/types';
 
 const URL_RE = /https?:\/\/[^\s]+/g;
 

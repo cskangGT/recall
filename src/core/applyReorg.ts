@@ -1,4 +1,4 @@
-import type { GraphPayload, Category, ReorgOperation } from '../types/graph';
+import type { GraphPayload, Category, ReorgOperation } from './types';
 import type { ReorgCandidate } from './gates';
 
 export interface ReorgEvent {

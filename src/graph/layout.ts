@@ -1,5 +1,5 @@
 import { forceSimulation, forceLink, forceCollide, forceX, forceY } from 'd3-force';
-import type { GraphNode, GraphEdge } from '../types/graph';
+import type { GraphNode, GraphEdge } from '../core/types';
 
 /**
  * Short re-settle only, and deliberately anchored.

@@ -8,7 +8,7 @@ import { LeftRail, StatusTicker, Toasts, TooSmall, Loading } from './components/
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
-import { undoReorg, type ReorgEvent } from './reorg/applyReorg';
+import { undoReorg, type ReorgEvent } from './core/applyReorg';
 import { fitToBounds } from './graph/camera';
 
 const MIN_VIEWPORT_WIDTH = 1280;

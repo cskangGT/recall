@@ -1,4 +1,4 @@
-import type { GraphPayload } from '../types/graph';
+import type { GraphPayload } from '../core/types';
 import { validateSeed } from './validateSeed';
 import workspaceJson from '../../seed/workspace.json';
 

@@ -1,4 +1,4 @@
-import type { GraphPayload } from '../types/graph';
+import type { GraphPayload } from '../core/types';
 
 export const VECTOR_DIM = 8;
 

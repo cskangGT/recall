@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useWorkspaceStore } from '../../src/store/workspaceStore';
 import { useUiStore } from '../../src/store/uiStore';
 import { buildTree } from '../../src/tree/buildTree';
-import { evaluateReorg } from '../../src/reorg/gates';
-import type { GraphPayload, Memory, Source } from '../../src/types/graph';
+import { evaluateReorg } from '../../src/core/gates';
+import type { GraphPayload, Memory, Source } from '../../src/core/types';
 import demoItem from '../../seed/demo-item.json';
 
 const load = async () => {

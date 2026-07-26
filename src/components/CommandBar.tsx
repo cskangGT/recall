@@ -3,7 +3,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
 import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
-import type { SourceType } from '../types/graph';
+import type { SourceType } from '../core/types';
 
 export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);

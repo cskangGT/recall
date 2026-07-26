@@ -1,6 +1,6 @@
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import type { Category, Memory, Source, GraphPayload } from '../types/graph';
+import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
 const SOURCE_LABEL: Record<Source['type'], string> = {
   text: 'Note',

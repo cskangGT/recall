@@ -1,4 +1,4 @@
-import type { NodeKind } from '../types/graph';
+import type { NodeKind } from '../core/types';
 
 /**
  * Dark, spatial ground with one warm accent. The map is a field you look into,

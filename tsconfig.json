@@ -20,7 +20,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+    "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts", "playwright.config.ts"]
+  "include": ["src", "server", "tests", "scripts", "vite.config.ts", "playwright.config.ts"]
 }
