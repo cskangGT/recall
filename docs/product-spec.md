@@ -1248,7 +1248,11 @@ Three beats: **recognition** → **the magic** → **the payoff**. One idea per 
 | Presenter clicks something unrecoverable | `⌘Z` undoes the reorganization; a full workspace reset is one item in Settings |
 | Answer cites nothing / refuses | AC-33/34 enforced; demo question is fixed and rehearsed against the seed |
 
-**Rehearsal requirement:** the full click path must be run end-to-end at least 20 consecutive times without deviation before demo day, on the demo machine, on both online and offline paths.
+**Rehearsal requirement:** the full click path must be run end-to-end at least 20 consecutive times without deviation before demo day, **on the demo machine**. Automated as `npm run rehearse` — see `docs/demo-runbook.md` for the operational procedure, failure recovery, and measured timings.
+
+> **On the offline path.** The `?offline=1` control above is a Phase 4 item, not a Phase 1 one. Phase 1 makes zero network requests — the rehearsal harness fails a run if any request leaves the page — so an offline flag would be a no-op flag today. It becomes a real risk control when a live backend is introduced.
+>
+> **Measured over 20 clean runs** (development machine): first paint 0.06s median against a 1.5s budget; submit-to-banner 7.44s median with 0.02s spread; whole path 8.21s median with 0.16s spread. The demo is therefore **narration-paced, not machine-paced** — the 60-second target is roughly 47 seconds of speaking, and the only enforced wait is the processing beat, which exists to be talked over.
 
 ---
 

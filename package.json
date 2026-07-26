@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "seed": "python3 scripts/generate_seed.py",
+    "rehearse": "node scripts/rehearse.mjs",
     "thresholds": "python3 scripts/validate_thresholds.py",
     "thresholds:selfcheck": "python3 scripts/validate_thresholds.py --provider seed"
   },

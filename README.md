@@ -36,13 +36,31 @@ the taxonomy is exactly two levels, and the attempt is refused with a shake.
 ## Verify
 
 ```bash
-npm test             # 72 unit tests
-npm run test:e2e     # 4 Playwright tests, including the full spec 15.3 click path
+npm test             # 108 unit tests
+npm run test:e2e     # 13 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
+npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
 
 `npm run test:e2e` fails if any request touches an `/api/` path — "zero backend" is a
-checked condition, not a promise.
+checked condition, not a promise. `npm run rehearse` is stricter still: it fails the run
+if *any* request leaves the page.
+
+## Demo day
+
+Read `docs/demo-runbook.md`. The headline: **the demo is narration-paced, not machine-paced.**
+Measured over 20 clean runs the machine work takes **8.2 seconds** — the 60-second target is
+about 47 seconds of talking. The only wait is the ~7.4s processing beat, which is scripted with
+four labelled stages so there's something to talk over.
+
+```
+first paint        median 0.06s   (budget 1.5s)
+submit -> banner   median 7.44s   spread 0.02s across 20 runs
+ask -> answer      median 0.01s
+whole path         median 8.21s   spread 0.16s
+```
+
+Requires a browser window ≥ 1280px. Reset between runs is a page reload — nothing persists.
 
 ## How the magic works
 
