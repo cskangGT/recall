@@ -141,6 +141,7 @@ export function MapCanvas({
       const scaleOverrides = new Map<string, number>();
       const desaturatedIds: string[] = [];
       let ghost: { x: number; y: number; pulse: number } | null = null;
+      let bloom: { x: number; y: number; progress: number } | null = null;
 
       if (ui.captureStage !== 'idle' && !animation) {
         // Ghost node sits at the canvas edge nearest the camera centre.
@@ -216,6 +217,16 @@ export function MapCanvas({
           scaleOverrides.set(animation.targetCategoryId, back);
         }
 
+        // The bloom rides the `transform` window (1400–1900ms) — the same beat
+        // the children emerge in, so the light has a cause.
+        if (animation.hasStructure && animation.targetCategoryId) {
+          const target = allNodes.find((n) => n.id === animation.targetCategoryId);
+          const progress = (t - 1400) / 900;
+          if (target && progress > 0 && progress < 1) {
+            bloom = { x: target.x, y: target.y, progress };
+          }
+        }
+
         const total = animation.hasStructure ? 2400 : 1800;
         if (t >= total && !bannerFired.current) {
           bannerFired.current = true;
@@ -235,6 +246,7 @@ export function MapCanvas({
         scaleOverrides,
         desaturatedIds,
         ghost,
+        bloom,
       });
     };
 

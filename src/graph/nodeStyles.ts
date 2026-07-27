@@ -12,6 +12,8 @@ export const COLORS = {
   memory: '#C9C9CE',
   entity: '#5B8FB0',
   edge: '#26262A',
+  /** The lit end of a `contains` edge, where it leaves its category. */
+  edgeBright: '#5A4A32',
   edgeActive: '#E8A33D',
   label: '#E8E8EC',
   labelDim: '#7A7A82',

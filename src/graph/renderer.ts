@@ -26,11 +26,25 @@ export interface FrameState {
   desaturatedIds?: string[];
   /** Ghost node position while an item is processing. */
   ghost?: { x: number; y: number; pulse: number } | null;
+  /**
+   * A category being restructured, with 0→1 progress. Drives the bloom that
+   * makes the split read as an event rather than two circles sliding apart.
+   */
+  bloom?: { x: number; y: number; progress: number } | null;
 }
 
 const withAlpha = (hex: string, alpha: number): string => {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
+/** Pulls a colour toward white, for the lit side of a node. */
+const lighten = (hex: string, amount: number): string => {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    .map((c) => mix(c).toString(16).padStart(2, '0'))
+    .join('')}`;
 };
 
 const desaturate = (hex: string): string => {
@@ -65,23 +79,63 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
   const alphaFor = (id: string): number => (!highlighting || highlighted.has(id) ? 1 : s.dimOpacity);
 
   // Edges first so labels are never occluded.
+  //
+  // Drawn as a gradient along their own length rather than a flat grey line.
+  // The relationships are the whole point of a graph, and a uniform hairline
+  // reads as noise: fading from the category end toward the memory end gives
+  // each edge a direction, so the structure reads as "these belong to that"
+  // instead of "these are near that".
   for (const e of s.edges) {
     const a = byId.get(e.source);
     const b = byId.get(e.target);
     if (!a || !b || !visible(a) || !visible(b)) continue;
     const active = s.hoveredId === a.id || s.hoveredId === b.id;
-    const alpha = Math.min(alphaFor(a.id), alphaFor(b.id)) * (active ? 1 : 0.45);
-    ctx.strokeStyle = withAlpha(active ? COLORS.edgeActive : COLORS.edge, alpha);
-    ctx.lineWidth = e.kind === 'relates_to' ? 1.5 : 1;
-    ctx.setLineDash(e.kind === 'mentions' ? [3, 3] : []);
+    const alpha = Math.min(alphaFor(a.id), alphaFor(b.id)) * (active ? 1 : 0.5);
     const p1 = worldToScreen(a, camera, viewport);
     const p2 = worldToScreen(b, camera, viewport);
+
+    const base = active ? COLORS.edgeActive : COLORS.edge;
+    if (e.kind === 'contains') {
+      // `contains` runs category -> member, so the bright end is the source.
+      const gradient = ctx.createLinearGradient(p1.sx, p1.sy, p2.sx, p2.sy);
+      gradient.addColorStop(0, withAlpha(active ? base : COLORS.edgeBright, alpha));
+      gradient.addColorStop(1, withAlpha(base, alpha * 0.15));
+      ctx.strokeStyle = gradient;
+    } else {
+      ctx.strokeStyle = withAlpha(base, alpha * (e.kind === 'mentions' ? 0.7 : 1));
+    }
+
+    ctx.lineWidth = e.kind === 'relates_to' ? 1.5 : 1;
+    ctx.setLineDash(e.kind === 'mentions' ? [3, 3] : []);
     ctx.beginPath();
     ctx.moveTo(p1.sx, p1.sy);
     ctx.lineTo(p2.sx, p2.sy);
     ctx.stroke();
   }
   ctx.setLineDash([]);
+
+  // Glow, behind everything. Categories are light sources, not discs — that is
+  // the difference between a field you look *into* and a scatter plot you look
+  // *at*. Drawn as its own pass so a glow never washes out a neighbouring node.
+  ctx.globalCompositeOperation = 'lighter';
+  for (const n of s.nodes) {
+    if (n.kind === 'memory' || n.kind === 'entity') continue;
+    if (!visible(n) || desaturated.has(n.id)) continue;
+    const { sx, sy } = worldToScreen(n, camera, viewport);
+    const scale = s.scaleOverrides?.get(n.id) ?? 1;
+    const r = n.radius * camera.zoom * scale;
+    if (r <= 0) continue;
+
+    const reach = r * (s.hoveredId === n.id ? 4.2 : 3.2);
+    const glow = ctx.createRadialGradient(sx, sy, r * 0.5, sx, sy, reach);
+    glow.addColorStop(0, withAlpha(colorFor(n.kind), 0.16 * alphaFor(n.id)));
+    glow.addColorStop(1, withAlpha(colorFor(n.kind), 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sx, sy, reach, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
 
   // Nodes.
   for (const n of s.nodes) {
@@ -93,11 +147,19 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     if (r <= 0) continue;
 
     const base = colorFor(n.kind);
-    ctx.fillStyle = withAlpha(
-      desaturated.has(n.id) ? '#000000' : base,
-      alphaFor(n.id),
-    );
-    if (desaturated.has(n.id)) ctx.fillStyle = desaturate(base);
+    if (desaturated.has(n.id)) {
+      ctx.fillStyle = desaturate(base);
+    } else if (r > 4) {
+      // Lit from the upper left, so a node reads as a sphere rather than a
+      // sticker. Below ~4px the gradient is invisible and costs a paint, so
+      // memory dots stay flat.
+      const lit = ctx.createRadialGradient(sx - r * 0.35, sy - r * 0.4, r * 0.1, sx, sy, r);
+      lit.addColorStop(0, withAlpha(lighten(base, 0.3), alphaFor(n.id)));
+      lit.addColorStop(1, withAlpha(base, alphaFor(n.id)));
+      ctx.fillStyle = lit;
+    } else {
+      ctx.fillStyle = withAlpha(base, alphaFor(n.id));
+    }
 
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
@@ -130,7 +192,43 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     ctx.fill();
   }
 
-  // Labels last.
+  // The split, as a light event.
+  //
+  // This is the product's signature moment and it was two circles sliding
+  // apart. An expanding ring costs nothing and gives the reorganization a
+  // physical cause. Timing is untouched — the choreography in spec 8.4.5 still
+  // owns when this runs, so the rehearsal numbers do not move.
+  if (s.bloom && s.bloom.progress > 0 && s.bloom.progress < 1) {
+    const { sx, sy } = worldToScreen(s.bloom, camera, viewport);
+    const t = s.bloom.progress;
+    const eased = 1 - Math.pow(1 - t, 3);
+    const radius = 30 * camera.zoom + eased * 260 * camera.zoom;
+    const fade = (1 - t) ** 2;
+
+    ctx.globalCompositeOperation = 'lighter';
+    const ring = ctx.createRadialGradient(sx, sy, radius * 0.72, sx, sy, radius);
+    ring.addColorStop(0, withAlpha(COLORS.parentCategory, 0));
+    ring.addColorStop(0.7, withAlpha(COLORS.parentCategory, 0.22 * fade));
+    ring.addColorStop(1, withAlpha(COLORS.parentCategory, 0));
+    ctx.fillStyle = ring;
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Vignette, so the canvas reads as a space with edges rather than a plane
+  // that happens to stop at the viewport.
+  const vignette = ctx.createRadialGradient(
+    viewport.w / 2, viewport.h / 2, Math.min(viewport.w, viewport.h) * 0.42,
+    viewport.w / 2, viewport.h / 2, Math.max(viewport.w, viewport.h) * 0.78,
+  );
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, viewport.w, viewport.h);
+
+  // Labels last — above the vignette, so they never dim at the edges.
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const n of s.nodes) {
