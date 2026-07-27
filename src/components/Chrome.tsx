@@ -19,10 +19,10 @@ export function LeftRail() {
         ◍
       </button>
       <button
-        className={`rail__btn${view === 'tree' ? ' rail__btn--active' : ''}`}
+        className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
         title="Browse (T)"
         data-testid="rail-tree"
-        onClick={() => setView('tree')}
+        onClick={() => setView('browse')}
       >
         ⊞
       </button>

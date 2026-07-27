@@ -9,8 +9,8 @@ import { test, expect } from '@playwright/test';
  */
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.keyboard.press('Meta+/');

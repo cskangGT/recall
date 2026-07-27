@@ -120,7 +120,7 @@ describe('view switching', () => {
 
   it('carries the selection to the map and asks it to centre', () => {
     const ui = useUiStore.getState();
-    ui.setView('tree');
+    ui.setView('browse');
     ui.select('mem_11');
     useUiStore.getState().setView('map');
 
@@ -136,25 +136,28 @@ describe('view switching', () => {
   it('does not ask the map to centre when moving into the tree', () => {
     const ui = useUiStore.getState();
     ui.select('mem_11');
-    ui.setView('tree');
+    ui.setView('browse');
     expect(useUiStore.getState().centerOnId).toBeNull();
   });
 });
 
-describe('expansion state', () => {
-  beforeEach(() => useUiStore.setState({ expandedIds: [] }));
+describe('arc navigation state', () => {
+  beforeEach(() => useUiStore.setState({ arcLevelId: null, openCategoryId: null }));
 
-  it('toggles and sets idempotently', () => {
-    const ui = useUiStore.getState();
-    ui.toggleExpanded('cat_a');
-    expect(useUiStore.getState().expandedIds).toEqual(['cat_a']);
-    useUiStore.getState().toggleExpanded('cat_a');
-    expect(useUiStore.getState().expandedIds).toEqual([]);
+  it('descends into a folder and climbs back to the top level', () => {
+    useUiStore.getState().setArcLevel('cat_fundraising');
+    expect(useUiStore.getState().arcLevelId).toBe('cat_fundraising');
+    useUiStore.getState().setArcLevel(null);
+    expect(useUiStore.getState().arcLevelId).toBeNull();
+  });
 
-    useUiStore.getState().setExpanded('cat_b', true);
-    useUiStore.getState().setExpanded('cat_b', true);
-    expect(useUiStore.getState().expandedIds).toEqual(['cat_b']);
-    useUiStore.getState().setExpanded('cat_b', false);
-    expect(useUiStore.getState().expandedIds).toEqual([]);
+  it('keeps the level you are standing in separate from the folder you are reading', () => {
+    // Standing inside Fundraising's arc while reading Investor Notes is one
+    // state, not two conflicting ones.
+    useUiStore.getState().setArcLevel('cat_fundraising');
+    useUiStore.getState().openCategory('cat_investor_notes');
+    const s = useUiStore.getState();
+    expect(s.arcLevelId).toBe('cat_fundraising');
+    expect(s.openCategoryId).toBe('cat_investor_notes');
   });
 });

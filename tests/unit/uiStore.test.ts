@@ -84,7 +84,7 @@ describe('uiStore.escape — spec 6.1 order', () => {
 
 describe('uiStore — the answer folder', () => {
   beforeEach(() =>
-    useUiStore.setState({ view: 'tree', answer: null, openCategoryId: 'cat_fundraising' }),
+    useUiStore.setState({ view: 'browse', answer: null, openCategoryId: 'cat_fundraising' }),
   );
 
   it('opens its own folder when an answer lands while browsing', () => {

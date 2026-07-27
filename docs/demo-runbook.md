@@ -57,15 +57,28 @@ Twelve steps, per spec §15.3. Timings are median across 20 measured runs.
 
 | Do | Say |
 |---|---|
-| Load the page. The **folder browser** paints in **0.07s**, first folder already open. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."* |
-| Click **Investor Notes** in the left pane. Right pane fills with 4 memories, mixed source icons. | *"Six top-level folders, fourteen sub-folders. None of them are mine."* |
-| Press `G`. Same corpus, now as the map. | *"And the same thing as a map, for when I want the shape of it rather than the list."* |
+| Load the page. The **welcome screen**: one line and a text box. | *"Recall opens by asking, not by showing you a dashboard."* |
+| Press `⏎`. The **arc browser** paints — six category orbs above a seated figure. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."* |
+| Click **Fundraising**. Its three subcategories fan out; 11 memories fill the list below. | *"Six categories, fourteen sub-categories. None of them are mine. The bigger the orb, the more is in it."* |
+| Press `G`. Same corpus as the map — and the colour comes back. | *"Grey when I'm looking something up, colour when I want to think out loud."* |
 | Hover **Fundraising** — the cluster brightens, everything unconnected dims. | |
 | `Esc` | |
 
-The opening frame is deliberately the browser, not the map: "already organised" reads
-faster as folders than as a graph. The map is the surface Beat 2 reorganizes, so you must
-be on it (`G`) before the capture — the split animation only plays there.
+Two things to know here. The opening frame is deliberately the arc, not the map:
+"already organised" reads faster as six labelled clouds than as a graph. And the map is
+the surface Beat 2 reorganizes, so you must be on it (`G`) before the capture — the split
+animation only plays there.
+
+The welcome box is live: anything typed into it is answered for real before the arc
+appears. Good improvisation if the room asks a question early; risky if you have not
+rehearsed the answer. `npm run rehearse` measures the `?skipWelcome=1` path, so its
+timings start from the arc.
+
+**If you want the capture story instead of the map split**, stay on the arc for Beat 2:
+dropping a screenshot there produces a panel reading *"What Recall saw"*, each extracted
+memory tagged **New to Recall** or **You already saved something close to this**, and
+*"Filed under AI Tooling"* with that orb lit on the arc. That is the user story in one
+frame — but the split animation only plays on the map, so pick one and rehearse it.
 
 ### Beat 2 — the magic (~0:15–0:38)
 

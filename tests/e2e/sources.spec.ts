@@ -9,8 +9,8 @@ import { test, expect } from '@playwright/test';
  */
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });
@@ -73,7 +73,7 @@ test('navigation between the three views keeps working', async ({ page }) => {
   await page.keyboard.press('s');
   await expect(page.getByTestId('sources-view')).toBeVisible();
   await page.keyboard.press('t');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });

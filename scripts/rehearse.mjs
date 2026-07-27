@@ -21,7 +21,10 @@ import pw from '@playwright/test';
 
 const { chromium } = pw;
 const RUNS = Number(process.argv[2] ?? 20);
-const BASE = process.env.REHEARSAL_URL ?? 'http://localhost:5173';
+const RAW_BASE = process.env.REHEARSAL_URL ?? 'http://localhost:5173';
+// The welcome screen is a conversation, not something to automate through: the
+// rehearsal measures the demo from the arc onward.
+const BASE = `${RAW_BASE}${RAW_BASE.includes('?') ? '&' : '?'}skipWelcome=1`;
 
 /** Spec 15.2: the whole path must land between these with narration. */
 const TARGET_TOTAL_MIN_MS = 55_000;
@@ -78,7 +81,9 @@ async function runOnce(browser, index) {
   });
   page.on('request', (r) => {
     const u = r.url();
-    if (!u.startsWith(BASE) && !u.startsWith('data:') && !u.startsWith('blob:')) {
+    // Checked against the origin, not BASE — BASE carries a query string, and
+    // matching on it would flag every asset request as egress.
+    if (!u.startsWith(RAW_BASE) && !u.startsWith('data:') && !u.startsWith('blob:')) {
       problems.push(`network egress: ${u}`);
     }
   });
@@ -88,10 +93,10 @@ async function runOnce(browser, index) {
 
   try {
     // ---- Beat 1: recognition
-    // The app lands in the folder browser. That is the opening frame the
-    // audience sees, so it is the one the rehearsal times.
+    // The app lands in the arc browser. That is the opening frame the audience
+    // sees once the greeting is answered, so it is the one the rehearsal times.
     await page.goto(BASE);
-    await waitFor(page, '[data-testid="tree-view"]', 8000, (t) => t !== null);
+    await waitFor(page, '[data-testid="arc-browser"]', 8000, (t) => t !== null);
     beats.paint = Date.now() - t0;
 
     const opening = await probe(page, '[data-testid="inspector"]');

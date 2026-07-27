@@ -301,7 +301,7 @@ export function Inspector() {
 
   // In the browser the middle pane already renders the answer in full. Repeating
   // it here would be the third column saying what the second one just said.
-  const answerShownInBrowser = view === 'tree' && openCategoryId === ANSWER_FOLDER_ID;
+  const answerShownInBrowser = view === 'browse' && openCategoryId === ANSWER_FOLDER_ID;
   const showAnswerHere = answer !== null && !answerShownInBrowser;
 
   return (
@@ -312,7 +312,7 @@ export function Inspector() {
         <CategoryDetail
           category={category}
           payload={payload}
-          listMemories={view !== 'tree'}
+          listMemories={view !== 'browse'}
         />
       ) : memory ? (
         <MemoryDetail memory={memory} payload={payload} />

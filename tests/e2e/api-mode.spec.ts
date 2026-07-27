@@ -36,8 +36,8 @@ test('the map loads from the database, not the seed file', async ({ page }) => {
     if (r.url().includes('/api/')) apiCalls.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
 
-  await page.goto(API_MODE);
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto(`${API_MODE}&skipWelcome=1`);
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
@@ -53,8 +53,8 @@ test('seed mode still makes no API calls at all', async ({ page }) => {
     if (r.url().includes('/api/')) apiCalls.push(r.url());
   });
 
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.waitForTimeout(500);
@@ -70,8 +70,8 @@ test('the whole demo runs against the server, and every beat goes over HTTP', as
     if (r.url().includes('/api/')) calls.push(`${r.method()} ${new URL(r.url()).pathname.split('/').pop()}`);
   });
 
-  await page.goto(API_MODE);
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto(`${API_MODE}&skipWelcome=1`);
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
@@ -106,33 +106,31 @@ test('the whole demo runs against the server, and every beat goes over HTTP', as
 });
 
 test('a user correction persists to the server (AC-28)', async ({ page }) => {
-  await page.goto(API_MODE);
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto(`${API_MODE}&skipWelcome=1`);
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
 
-  const folder = (text: string) => page.locator('.folder').filter({ hasText: text }).first();
   const counts = () =>
     page.evaluate(() =>
-      [...document.querySelectorAll('.folder--d0:not(.folder--answer)')].map(
-        (r) =>
-          `${r.querySelector('.folder__name')?.textContent}=${r.querySelector('.folder__count')?.textContent}`,
+      [...document.querySelectorAll('.arc__node--folder')].map(
+        (n) =>
+          `${n.querySelector('.arc__label')?.textContent}=${n.querySelector('.arc__count')?.textContent}`,
       ),
     );
 
-  await folder('AI Tooling').click();
-  await folder('Hiring').locator('.folder__twisty').click();
+  await page.getByTestId('arc-node-cat_ai_tooling').click();
 
-  const from = await page.locator('.browser__contents .item').first().boundingBox();
-  const to = await folder('Interview Loops').boundingBox();
-  await page.mouse.move(from!.x + 40, from!.y + from!.height / 2);
+  const from = (await page.locator('.reading .item').first().boundingBox())!;
+  const to = (await page.locator('.arc__node').filter({ hasText: 'Hiring' }).first().boundingBox())!;
+  await page.mouse.move(from.x + 40, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(to!.x + 40, to!.y + to!.height / 2, { steps: 12 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 14 });
   await page.mouse.up();
 
   await expect(page.getByTestId('toast')).toContainText("Moved. Recall won't change this again.");
 
   // Reload: if the move only happened in the store, it is gone now.
   await page.reload();
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
 
   const after = await counts();
   expect(after).toContain('Hiring=8');

@@ -106,7 +106,7 @@ export function AskBar() {
   const openResult = (memoryId: string) => {
     setHovered(null);
     const memory = payload?.memories.find((m) => m.id === memoryId);
-    if (useUiStore.getState().view === 'tree' && memory) {
+    if (useUiStore.getState().view === 'browse' && memory) {
       openCategory(memory.category_id);
     } else {
       setView('map');

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
+import type { CaptureStory } from '../capture/story';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
 
@@ -17,16 +18,16 @@ export interface Toast {
   text: string;
 }
 
-export type View = 'map' | 'tree' | 'sources';
+export type View = 'map' | 'browse' | 'sources';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
 /**
  * A pseudo-folder holding the memories an answer cited.
  *
- * Ask is the product — the folder browser is how you read what it pulled. Rather
- * than bolting a second answer surface onto the browser, the answer just becomes
- * a folder: same rows, same click-to-inspect, same drag-to-re-file. It is not a
- * real category, so it carries a sentinel id no category can collide with.
+ * Ask is the product — the arc is how you read what it pulled. Rather than
+ * bolting a second answer surface onto the browser, the answer just becomes a
+ * folder on the arc: same rows, same click-to-inspect, same drag-to-re-file. It
+ * is not a real category, so it carries a sentinel id nothing can collide with.
  */
 export const ANSWER_FOLDER_ID = '__answer__';
 
@@ -34,15 +35,21 @@ interface UiState {
   view: View;
   sourceFilter: SourceFilter;
   /**
-   * Which folder the browser has open. Separate from `selectedId` because
-   * clicking a memory in the right pane must not close the folder you are
-   * standing in — that is the whole point of a two-pane browser.
+   * Which folder's memories the reading list is showing. Separate from
+   * `selectedId` because clicking a memory in the list must not close the
+   * folder you are standing in.
    */
   openCategoryId: string | null;
-  /** Category ids whose children are shown in the tree. */
-  expandedIds: string[];
   /**
-   * Set when the tree hands a selection back to the map, so the canvas knows to
+   * Which folder's children the arc is currently showing. `null` is the top
+   * level. Distinct from `openCategoryId`: standing inside Fundraising's arc
+   * and reading Investor Notes are two different facts.
+   */
+  arcLevelId: string | null;
+  /** False until the welcome screen has been dismissed for this session. */
+  welcomeDismissed: boolean;
+  /**
+   * Set when the arc hands a selection back to the map, so the canvas knows to
    * centre on it. Cleared by the canvas once consumed.
    */
   centerOnId: string | null;
@@ -55,13 +62,17 @@ interface UiState {
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
   answer: (ScriptedAnswer & { question: string }) | null;
+  /** The account of the last capture — what was read, what was new, where it went. */
+  lastCapture: CaptureStory | null;
+  /** True while a file is being dragged over the window. */
+  dropActive: boolean;
   toasts: Toast[];
 
   setView: (view: View) => void;
   setSourceFilter: (filter: SourceFilter) => void;
   openCategory: (id: string | null) => void;
-  toggleExpanded: (id: string) => void;
-  setExpanded: (id: string, open: boolean) => void;
+  setArcLevel: (id: string | null) => void;
+  dismissWelcome: () => void;
   consumeCenterOn: () => string | null;
   setHovered: (id: string | null) => void;
   select: (id: string | null) => void;
@@ -74,6 +85,8 @@ interface UiState {
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  setLastCapture: (s: CaptureStory | null) => void;
+  setDropActive: (active: boolean) => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -83,10 +96,11 @@ interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
-  view: 'tree',
+  view: 'browse',
   sourceFilter: 'all',
   openCategoryId: null,
-  expandedIds: [],
+  arcLevelId: null,
+  welcomeDismissed: false,
   centerOnId: null,
   hoveredId: null,
   selectedId: null,
@@ -97,6 +111,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   captureStage: 'idle',
   reorgHistory: [],
   answer: null,
+  lastCapture: null,
+  dropActive: false,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -110,21 +126,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
-  toggleExpanded: (id) =>
-    set((s) => ({
-      expandedIds: s.expandedIds.includes(id)
-        ? s.expandedIds.filter((x) => x !== id)
-        : [...s.expandedIds, id],
-    })),
-
-  setExpanded: (id, open) =>
-    set((s) => ({
-      expandedIds: open
-        ? s.expandedIds.includes(id)
-          ? s.expandedIds
-          : [...s.expandedIds, id]
-        : s.expandedIds.filter((x) => x !== id),
-    })),
+  setArcLevel: (arcLevelId) => set({ arcLevelId }),
+  dismissWelcome: () => set({ welcomeDismissed: true }),
 
   consumeCenterOn: () => {
     const id = get().centerOnId;
@@ -156,12 +159,14 @@ export const useUiStore = create<UiState>((set, get) => ({
     set((s) => ({
       answer,
       openCategoryId:
-        answer !== null && s.view === 'tree'
+        answer !== null && s.view === 'browse'
           ? ANSWER_FOLDER_ID
           : s.openCategoryId === ANSWER_FOLDER_ID
             ? null
             : s.openCategoryId,
     })),
+  setLastCapture: (lastCapture) => set({ lastCapture }),
+  setDropActive: (dropActive) => set({ dropActive }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -183,6 +188,12 @@ export const useUiStore = create<UiState>((set, get) => ({
       });
       return;
     }
-    set({ selectedId: null });
+    if (s.selectedId !== null) {
+      set({ selectedId: null });
+      return;
+    }
+    // Last in the chain. The capture story is ambient — it must never swallow
+    // the Escape that was meant for the answer (spec 6.1 fixes that order).
+    set({ lastCapture: null });
   },
 }));

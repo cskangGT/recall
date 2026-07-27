@@ -23,8 +23,8 @@ test('the 60-second demo path runs end to end with no backend (AC-42)', async ({
   // The app opens in the folder browser — "everything you saved, already filed"
   // reads faster as folders than as a graph. G then turns the same corpus into
   // the map, which is the surface Beat 2 reorganizes.
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible({ timeout: 5000 });
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
   await expect(page.getByTestId('inspector')).toContainText('22 sources');
 
@@ -60,8 +60,8 @@ test('the 60-second demo path runs end to end with no backend (AC-42)', async ({
 });
 
 test('undo restores the map (AC-22)', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
@@ -84,8 +84,8 @@ test('undo restores the map (AC-22)', async ({ page }) => {
 });
 
 test('an unsupported question is refused verbatim (AC-35, AC-37)', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
@@ -101,7 +101,7 @@ test('an unsupported question is refused verbatim (AC-35, AC-37)', async ({ page
 
 test('below 1280px it refuses to render the app (AC-41)', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.goto('/');
+  await page.goto('/?skipWelcome=1');
   await expect(
     page.getByText('Recall is desktop-first. Please open on a larger screen.'),
   ).toBeVisible();

@@ -58,6 +58,21 @@ button {
   height: 100%;
 }
 
+/*
+ * The browsing screen is monochrome and the map is not.
+ *
+ * Done by re-pointing the accent tokens on the shell rather than desaturating
+ * with a filter: a filter would also flatten the figure's gradient and the
+ * clouds, and it would catch the capture bar and the change banner, which are
+ * floating surfaces shared with the map. Pressing G brings the colour back,
+ * which is the point — the calm mode is for looking, the warm one for thinking
+ * out loud.
+ */
+.shell--mono {
+  --accent: #cfcfd8;
+  --accent-dim: #8b8b96;
+}
+
 .too-small {
   display: grid;
   place-items: center;
@@ -166,245 +181,649 @@ button {
   color: var(--accent);
 }
 
-/* ---------------------------------------------------------- folder browser */
+/* ------------------------------------------------------------------ welcome */
 
 /*
- * Two panes: folders left, contents right. The single column that inlined
- * memories as leaves buried the taxonomy under its own contents the moment you
- * opened anything — the split keeps the shape readable at any size.
+ * The first frame. No rail, no inspector — a welcome screen framed by the app
+ * it is welcoming you into is just a modal.
  */
-.browser {
-  display: grid;
-  grid-template-columns: 296px 1fr;
+.welcome {
+  --accent: #cfcfd8;
+  --accent-dim: #8b8b96;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   height: 100%;
-  min-height: 0;
+  padding-bottom: 4vh;
+  background: radial-gradient(ellipse at 50% 38%, #16161c 0%, var(--bg) 64%);
 }
 
-.browser__folders,
-.browser__contents {
-  height: 100%;
-  overflow-y: auto;
-  padding: 24px 20px 120px;
+.welcome__stage {
+  margin-bottom: 4px;
+}
+
+.welcome__chat {
+  width: min(560px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* A spoken line, not a heading. Left-aligned and unboxed so it reads as the
+   figure talking rather than as a page title. */
+.welcome__bubble {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.welcome__aside {
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  line-height: 1.55;
+  max-width: 46ch;
+  margin: 0 auto;
+}
+
+/* ----------------------------------------------------------------- composer */
+
+/*
+ * One component, two placements: centred under the greeting, then docked to the
+ * bottom of the browsing screen. Shared styling so the box the user typed into
+ * on the first frame is visibly the same box afterwards.
+ */
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 14px;
+  background: #131318;
+  box-shadow: inset 0 0 0 1px #222228, 0 24px 60px -30px #000;
+}
+
+.composer--docked {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 140px));
+  z-index: 4;
+}
+
+.composer input {
+  flex: 1;
   min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 0;
 }
 
-.browser__folders {
-  /* The one hairline in the app. Two scrollable panes that move independently
-     need a seam, or the eye reads them as one broken column. */
-  border-right: 1px solid #17171b;
-  padding-right: 14px;
+.composer input::placeholder {
+  color: var(--text-faint);
 }
 
-.browser__contents {
-  --contents-width: 720px;
-  padding-left: 28px;
+.composer__send {
+  flex: none;
+  padding: 9px 15px;
+  border-radius: 10px;
+  background: #22222a;
+  color: var(--text);
+  font-size: 12.5px;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-.browser__contents > * {
-  max-width: var(--contents-width);
+.composer__send:hover:not(:disabled) {
+  background: var(--accent);
+  color: #14141a;
 }
 
-.browser__head {
+.composer__send:disabled {
+  cursor: default;
+  color: var(--text-faint);
+}
+
+/* ------------------------------------------------------------------ thinker */
+
+.thinker {
+  overflow: visible;
+}
+
+/*
+ * One shared tone across every limb: where they cross they simply become one
+ * mass, which is what a silhouette does.
+ *
+ * Only inheritable properties are set here — the figure is drawn through <use>,
+ * and a descendant selector would never reach inside the clone.
+ */
+.thinker__shape {
+  fill: url(#thinker-tone);
+}
+
+.thinker__reflection {
+  opacity: 0.34;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+}
+
+.thinker__water {
+  fill: #d8d8e2;
+  opacity: 0.07;
+}
+
+/* One slow breath. The only decorative motion in the app, and the reason the
+   figure reads as thinking rather than as a pictogram. */
+@media (prefers-reduced-motion: no-preference) {
+  .thinker__body {
+    animation: breathe 6.5s ease-in-out infinite;
+    transform-origin: 60px 126px;
+  }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.6px) rotate(-0.4deg); }
+}
+
+/* ---------------------------------------------------------------- arc browser */
+
+.arc {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.arc__head {
+  position: absolute;
+  top: 20px;
+  left: 28px;
+  right: 28px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 16px;
   color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  padding-bottom: 12px;
-  margin-bottom: 6px;
+  z-index: 3;
 }
 
-.browser__contents .browser__head span:first-child {
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 550;
-  letter-spacing: -0.012em;
-  text-transform: none;
+.arc__actions {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
 }
 
-.browser__hint {
-  flex: none;
-  letter-spacing: 0.02em;
-  text-transform: none;
+.arc__ask--map {
+  color: var(--accent);
 }
 
-.browser__empty {
-  color: var(--text-dim);
-  padding: 8px 10px;
-}
-
-.browser__ask {
-  flex: none;
+.arc__ask {
   color: var(--text-faint);
   letter-spacing: 0.04em;
   text-transform: none;
   transition: color 90ms ease;
 }
 
-.browser__ask:hover {
+.arc__ask:hover {
   color: var(--accent);
 }
 
-/* The answer reads as prose, not as a row — it is the one thing on this screen
-   Recall wrote rather than filed. */
-.browser__answer {
+/* Appears during a subcategory drag, alongside the arc rather than replacing
+   it — see the comment in ArcBrowser for why replacing it is fatal. */
+.reparent {
+  transition: opacity 140ms ease, box-shadow 140ms ease;
+  /*
+   * Bottom-left. Centred at the top it sat over the category nodes and
+   * swallowed the pointer press that starts a drag, which looked exactly like
+   * the browser hanging. Narrow enough to clear the reading list beside it.
+   */
+  position: absolute;
+  left: 16px;
+  bottom: 92px;
+  opacity: 0.5;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 158px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: #131318;
+  box-shadow: inset 0 0 0 1px #26262e, 0 24px 60px -30px #000;
+}
+
+.reparent--active {
+  opacity: 1;
+  background: #17171d;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 24px 60px -30px #000;
+}
+
+.reparent__label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.reparent__targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reparent__target {
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: #1d1d24;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.reparent__target--drop {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The fan is positioned at the arc's focus; every node offsets from there. */
+.arc__fan {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.arc__fan > * {
+  pointer-events: auto;
+}
+
+.arc__node {
+  position: absolute;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  /* No wider than the shortest chord the arc produces at six nodes in the open
+     state — any wider and adjacent labels overlap. Enforced by a unit test. */
+  width: 88px;
+  margin-left: -44px;
+  margin-top: -30px;
+  padding: 6px 4px 8px;
+  border-radius: 12px;
+  text-align: center;
+  transition: background 110ms ease, transform 110ms ease;
+  animation: fan-out 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: calc(var(--i) * 45ms);
+}
+
+/* Going back reverses the stagger, so the arc collapses inward the way it
+   fanned outward. */
+.arc__fan--back .arc__node {
+  animation-name: fan-back;
+}
+
+@keyframes fan-out {
+  from { opacity: 0; transform: scale(0.4) translateY(46px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes fan-back {
+  from { opacity: 0; transform: scale(1.25) translateY(-30px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.arc__node:hover {
+  background: var(--bg-panel);
+}
+
+/* A generous, solid hit area — the orb alone is a small target. */
+.arc__form {
+  display: grid;
+  place-items: center;
+  min-width: 62px;
+  min-height: 46px;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), filter 200ms ease;
+}
+
+.arc__orb {
+  position: relative;
+  width: var(--orb);
+  height: var(--orb);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #F2F2F8 0%, #B9B9C6 38%, #6E6E7C 72%, #2C2C34 100%);
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* The halo, so an orb sits in the dark rather than on it. */
+.arc__orb::after {
+  content: '';
+  position: absolute;
+  inset: -46%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(210, 210, 226, 0.16) 0%, rgba(210, 210, 226, 0) 68%);
+  pointer-events: none;
+}
+
+.arc__node:hover .arc__form {
+  transform: translateY(-5px);
+  filter: brightness(1.22);
+}
+
+.arc__node--active .arc__form {
+  filter: brightness(1.45) drop-shadow(0 0 18px rgba(210, 210, 226, 0.35));
+}
+
+.arc__node--drop .arc__form {
+  filter: brightness(1.7) drop-shadow(0 0 22px rgba(232, 163, 61, 0.8));
+}
+
+/* Back and answer are not categories, so they stay marks rather than orbs. */
+.arc__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.arc__label {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  /* Two lines then ellipsis: a long name must not shove its neighbours off
+     the arc. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.arc__node--active .arc__label {
+  color: var(--text);
+}
+
+.arc__node--dragging {
+  opacity: 0.4;
+}
+
+.arc__node--reject {
+  animation: shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.arc__node:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.arc__label {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  /* Two lines then ellipsis: "Evals & Observability" must not shove its
+     neighbours off the arc. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.arc__count {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.arc__thinker {
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -46%);
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+/* The invitation, only while nothing is open. Sits under the figure so it never
+   collides with the arc. */
+.arc__prompt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 92px;
+  margin: 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  z-index: 2;
+}
+
+/* --------------------------------------------------------- capture story */
+
+.capture-story {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px 16px;
+  border-radius: 14px;
+  background: #131318;
+  box-shadow: inset 0 0 0 1px #222228, 0 26px 60px -32px #000;
+  animation: rise 220ms ease;
+}
+
+.capture-story__title {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.capture-story__steps {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capture-story__step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-faint);
+  font-size: 12px;
+  transition: color 200ms ease;
+}
+
+.capture-story__step--done { color: var(--text-dim); }
+.capture-story__step--now { color: var(--text); }
+
+.capture-story__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.capture-story__step--now .capture-story__dot {
+  opacity: 1;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.capture-story__step--done .capture-story__dot { opacity: 0.8; }
+
+/* ---- the result card, once the pipeline has finished */
+
+.capture-story--result {
+  width: min(520px, calc(100% - 120px));
+  gap: 12px;
+  text-align: left;
+}
+
+.capture-story__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.capture-story__close {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.capture-story__saw {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.capture-story__label {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.capture-story__memory {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.capture-story__text {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The two verdicts read differently on purpose: "new" is a quiet fact, an echo
+   is the interesting one and gets the accent. */
+.capture-story__new {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.capture-story__echo {
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.capture-story__dest {
+  padding-top: 10px;
+  border-top: 1px solid #222228;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.capture-story__dest strong {
+  color: var(--text);
+  font-weight: 550;
+}
+
+/* The category the capture landed in, lit on the arc. */
+.arc__node--landed .arc__form {
+  filter: brightness(1.6) drop-shadow(0 0 26px rgba(210, 210, 226, 0.55));
+}
+
+/* ---------------------------------------------------------------- dropzone */
+
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 10, 11, 0.72);
+  pointer-events: none;
+}
+
+.dropzone__inner {
+  padding: 22px 30px;
+  border-radius: 16px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capture-story { animation: none; }
+  .capture-story__step--now .capture-story__dot { animation: none; }
+}
+
+/* --------------------------------------------------------- reading list */
+
+.reading {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: min(720px, 100% - 56px);
+  overflow-y: auto;
+  padding-bottom: 112px;
+  z-index: 2;
+}
+
+.reading__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 0 10px 10px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 550;
+  letter-spacing: -0.012em;
+}
+
+.reading__hint {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.reading__answer {
   margin: 2px 0 18px;
   padding: 0 10px;
   color: var(--text);
   font-size: 14.5px;
   line-height: 1.6;
   letter-spacing: -0.005em;
-  max-width: 62ch;
   text-wrap: pretty;
 }
 
-.folder--answer {
-  margin-bottom: 10px;
-}
-
-.folder--answer .folder__name {
-  color: var(--text-dim);
-  font-weight: 400;
-  font-size: 12.5px;
-}
-
-.folder--answer.folder--open .folder__name {
-  color: var(--text);
-}
-
-.folder__icon--answer {
-  color: var(--accent);
-  font-size: 11px;
-  line-height: 15px;
-  text-align: center;
-}
-
-/* -------------------------------------------------------------- folder rows */
-
-.folder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 7px;
-  cursor: default;
-  transition: background 90ms ease, color 90ms ease;
-  color: var(--text);
-}
-
-.folder--d0 {
-  font-weight: 550;
-  letter-spacing: -0.01em;
-}
-
-.folder--d1 {
-  color: var(--text-dim);
-  font-size: 12.5px;
-}
-
-.folder:hover {
-  background: var(--bg-panel);
-}
-
-.folder--open {
-  background: var(--bg-raised);
-  color: var(--text);
-}
-
-/* The open folder is where you are standing — it gets the accent, not just a
-   lighter background, so the right pane always has a visible owner. */
-.folder--open .folder__icon {
-  color: var(--accent);
-}
-
-.folder--dragging {
-  opacity: 0.4;
-}
-
-.folder--drop {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--text);
-}
-
-.folder--reject {
-  animation: shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
-}
-
-@keyframes shake {
-  10%, 90% { transform: translateX(-2px); }
-  20%, 80% { transform: translateX(4px); }
-  30%, 50%, 70% { transform: translateX(-6px); }
-  40%, 60% { transform: translateX(6px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .folder--reject { animation: none; outline: 1px solid #c2603a; }
-}
-
-/* Subfolders hang off a guide line, so containment is drawn rather than merely
-   implied by indentation. */
-.folder__children {
-  margin-left: 19px;
-  padding-left: 11px;
-  border-left: 1px solid #1c1c21;
-}
-
-.folder__twisty {
-  width: 14px;
-  /* Explicit height: an empty twisty (a folder with no subfolders) would
-     otherwise collapse to zero and become an unclickable target. */
-  height: 22px;
-  flex: none;
-  color: var(--text-faint);
-  font-size: 9px;
-  line-height: 22px;
-  text-align: left;
-}
-
-.folder__twisty:hover { color: var(--text); }
-
-.folder__twisty:focus-visible,
-.folder:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.folder__icon {
-  width: 15px;
-  height: 15px;
-  flex: none;
-  fill: currentColor;
-  color: var(--accent-dim);
-}
-
-.folder__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.folder__lock,
-.item__lock {
-  color: var(--accent);
-  font-size: 9px;
-  flex: none;
-}
-
-.folder__count {
-  flex: none;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  min-width: 22px;
-  text-align: right;
-}
-
-/* ------------------------------------------------------------ content items */
+/* -------------------------------------------------------------- list items */
 
 .item {
   display: flex;
@@ -457,6 +876,29 @@ button {
   white-space: nowrap;
 }
 
+.item__lock {
+  color: var(--accent);
+  font-size: 9px;
+  flex: none;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+
+/* The arc is playful, but nobody should be made motion-sick by a folder. */
+@media (prefers-reduced-motion: reduce) {
+  .arc__node,
+  .thinker__body {
+    animation: none;
+  }
+  .arc__node--reject { animation: none; outline: 1px solid #c2603a; }
+  .arc__orb,
+  .arc__thinker { transition: none; }
+}
 /* ------------------------------------------------------------------ sources */
 
 .sources {
@@ -576,10 +1018,10 @@ button {
 
 .fab {
   position: absolute;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 48px;
+  /* Bottom-right, not centred: centred it sat on top of the reading list. */
+  bottom: 24px;
+  right: 24px;
+  width: 44px;
   height: 48px;
   border-radius: 50%;
   background: var(--accent);

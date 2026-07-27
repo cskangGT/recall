@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 /** Captures the three demo beats for visual review. Not an assertion suite. */
 test('capture the three demo beats', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.waitForTimeout(1400);

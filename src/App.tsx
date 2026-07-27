@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
-import { TreeView } from './components/TreeView';
+import { ArcBrowser } from './components/ArcBrowser';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { SourcesView } from './components/SourcesView';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -9,6 +10,7 @@ import { LeftRail, StatusTicker, Toasts, TooSmall, Loading } from './components/
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
+import { buildCaptureStory } from './capture/story';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
@@ -22,6 +24,8 @@ export function App() {
   const captureOpen = useUiStore((s) => s.captureOpen);
   const askOpen = useUiStore((s) => s.askOpen);
   const view = useUiStore((s) => s.view);
+  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const dropActive = useUiStore((s) => s.dropActive);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
   const [wide, setWide] = useState(
@@ -32,6 +36,14 @@ export function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // `?skipWelcome=1` exists for the rehearsal script and the E2E suite, which
+  // must not spend a keystroke on a greeting to reach the thing under test.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('skipWelcome') === '1') {
+      useUiStore.getState().dismissWelcome();
+    }
+  }, []);
 
   useEffect(() => {
     const onResize = () => setWide(window.innerWidth >= MIN_VIEWPORT_WIDTH);
@@ -44,8 +56,17 @@ export function App() {
     busy.current = true;
     const ui = useUiStore.getState();
 
+    // Snapshotted before the ingest so novelty is measured against the corpus
+    // as it was, not one that already contains the new memories.
+    const before = useWorkspaceStore.getState().payload;
     const result = await ingestItem();
     const ws = useWorkspaceStore.getState();
+
+    if (before && ws.payload) {
+      ui.setLastCapture(
+        buildCaptureStory(before, ws.payload, result.addedMemoryIds, result.event !== null),
+      );
+    }
 
     if (result.addedMemoryIds.length === 0) {
       busy.current = false;
@@ -67,6 +88,18 @@ export function App() {
     });
   }, []);
 
+  // The reorganization choreography lives on the canvas, so when a capture
+  // happens anywhere else nothing is there to finish it — the app would stay
+  // busy forever and the banner would never fire. Resolve it on the timeline's
+  // own clock instead.
+  useEffect(() => {
+    if (!animation || view === 'map') return;
+    const total = animation.hasStructure ? 2400 : 1800;
+    const elapsed = performance.now() - animation.startedAt;
+    const t = setTimeout(() => onAnimationDoneRef.current(animation.event), Math.max(0, total - elapsed));
+    return () => clearTimeout(t);
+  }, [animation, view]);
+
   const onAnimationDone = useCallback((event: ReorgEvent | null) => {
     const ui = useUiStore.getState();
     if (event) {
@@ -77,6 +110,11 @@ export function App() {
     setAnimation(null);
     busy.current = false;
   }, []);
+
+  // Held in a ref so the timer above does not need to re-run when the callback
+  // identity changes.
+  const onAnimationDoneRef = useRef(onAnimationDone);
+  onAnimationDoneRef.current = onAnimationDone;
 
   // Keyboard map (spec 6.1, Phase 1 subset).
   useEffect(() => {
@@ -111,7 +149,7 @@ export function App() {
         return;
       }
       if (e.key === 't' || e.key === 'T') {
-        ui.setView('tree');
+        ui.setView('browse');
         return;
       }
       if (e.key === 's' || e.key === 'S') {
@@ -130,13 +168,42 @@ export function App() {
 
   if (!wide) return <TooSmall />;
   if (loading) return <Loading />;
+  // Before the greeting is answered there is no chrome at all — no rail, no
+  // inspector. A welcome screen framed by the app it is welcoming you into is
+  // just a modal.
+  if (!welcomeDismissed) return <WelcomeScreen />;
 
   return (
-    <div className="shell">
+    <div
+      className={`shell${view === 'browse' ? ' shell--mono' : ''}`}
+      // Dropping a screenshot on the window is the shortest path from "I saw
+      // something" to "Recall has it" — shorter than ⌘K, and the gesture people
+      // already use for files.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        useUiStore.getState().setDropActive(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        useUiStore.getState().setDropActive(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        useUiStore.getState().setDropActive(false);
+        void capture();
+      }}
+    >
+      {dropActive && (
+        <div className="dropzone" data-testid="dropzone">
+          <div className="dropzone__inner">Drop it anywhere — Recall will read it and file it</div>
+        </div>
+      )}
       <LeftRail />
       <div className="canvas-wrap">
-        {view === 'tree' ? (
-          <TreeView />
+        {view === 'browse' ? (
+          <ArcBrowser />
         ) : view === 'sources' ? (
           <SourcesView />
         ) : (

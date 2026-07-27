@@ -18,8 +18,10 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 
 | Key | What happens |
 |---|---|
-| — | The **folder browser** opens already populated: 47 memories, 22 sources, 6 parent categories |
-| `G` | The same corpus as a map. Beat 2 needs this — the split animation only plays here. |
+| — | The **welcome screen** asks if you want to think something through. Type a real question or just press `⏎`. |
+| — | The **arc browser**: 6 category orbs fanned above a seated figure, already populated with 47 memories from 22 sources. The same chat box stays docked at the bottom. |
+| drop | Drag a screenshot anywhere on the window. Recall reads it and tells you what it saw, what was new, what echoes something you already saved, and where it filed it. |
+| `G` | The same corpus as a map, and the colour comes back. Beat 2 needs this — the split animation only plays here. |
 | `⌘K` | Capture bar. Type anything and press `⏎`. |
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
 | `⌘/` | One bar, two modes. A keyword searches as you type; a question is answered. The chip tells you which, and `⏎` does what the chip says. |
@@ -31,14 +33,18 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 **Ask** (`⌘/`) is the product: a question, an answer, and every claim pointing back at
 something you actually saved. The other two are how you read what it pulled.
 
-**Browse** (`T`, and the landing view) is the manual mode — two panes, folders left,
-contents right. The left pane holds folders only, so the taxonomy stays readable however
-much is filed under it. An answer appears here as its own folder above the ones Recall
-built: the prose on top, the memories it cited below, draggable like anything else.
-Walk folders with `↑` `↓`, expand with `→`, and **drag a memory onto any folder to
-re-file it**. A hand-moved memory locks: no reorganization pass will ever reclaim it.
-A subfolder can be dragged onto a different parent, but not onto another subfolder —
-the taxonomy is exactly two levels, and the attempt is refused with a shake.
+**Browse** (`T`, and the landing view) is the manual mode — categories fanned in an arc
+above a figure who is thinking about them, with the open category's memories in a reading
+list below. Each orb is sized by how much is in it. Click one to descend into its
+subcategories; `←`, `Backspace` or `Esc` climbs back out. An answer arrives as an orb of
+its own, the prose on top and the memories it cited below, draggable like anything else.
+**Drag a memory onto any orb to re-file it** — a hand-moved memory locks, and no
+reorganization pass will ever reclaim it. A subcategory can be dragged onto the
+**Move this group under** panel to re-parent it; dropping it on a sibling is refused with
+a shake, because the taxonomy is exactly two levels.
+
+This screen is deliberately **monochrome**. Colour is a mode signal: grey while you are
+looking something up, amber the moment you press `G`.
 
 **Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
 and the only surface where a reorganization is animated.
@@ -46,8 +52,8 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 108 unit tests
-npm run test:e2e     # 13 Playwright tests, including the full spec 15.3 click path
+npm test             # 239 unit and server tests
+npm run test:e2e     # 39 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
