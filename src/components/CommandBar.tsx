@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
 import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
 
 export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
@@ -72,10 +73,34 @@ export function AskBar() {
   const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
+  const setHovered = useUiStore((s) => s.setHovered);
+  const setView = useUiStore((s) => s.setView);
   const [text, setText] = useState('');
+  const [debounced, setDebounced] = useState('');
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => ref.current?.focus(), []);
+
+  // Spec §5.6: 120ms debounce, results within 150ms of the last keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), 120);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  const searching = text.trim().length > 0 && !isQuestion(text);
+  const results = useMemo(
+    () => (payload && searching ? search(payload, debounced) : []),
+    [payload, searching, debounced],
+  );
+  const groups = useMemo(() => groupByCategory(results), [results]);
+
+  /** Select the memory, put it on the map, and get out of the way. */
+  const openResult = (memoryId: string) => {
+    setHovered(null);
+    setView('map');
+    select(memoryId);
+    setAskOpen(false);
+  };
 
   const ask = async (question: string) => {
     if (!payload || !question.trim()) return;
@@ -95,7 +120,7 @@ export function AskBar() {
     <div className="overlay" onPointerDown={() => setAskOpen(false)}>
       <div className="bar" data-testid="ask-bar" onPointerDown={(e) => e.stopPropagation()}>
         <div className="bar__head">
-          <span>{isQuestion(text) ? 'Ask' : 'Search'}</span>
+          <span data-testid="bar-mode">{searching ? 'Search' : 'Ask'}</span>
           <span>esc</span>
         </div>
         <input
@@ -105,12 +130,49 @@ export function AskBar() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              ask(text);
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            // The chip is the contract: in Search mode Enter opens the top
+            // result, it does not silently run an Ask instead.
+            if (searching) {
+              if (results[0]) openResult(results[0].memory.id);
+              return;
             }
+            void ask(text);
           }}
         />
+
+        {searching && (
+          <div className="bar__results" data-testid="search-results">
+            {results.length === 0 ? (
+              <p className="bar__no-results">No matches.</p>
+            ) : (
+              groups.map((group) => (
+                <div key={group.categoryId} className="bar__group">
+                  <div className="bar__group-name">{group.categoryName}</div>
+                  {group.results.map((result) => (
+                    <button
+                      key={result.memory.id}
+                      className="bar__result"
+                      data-testid={`search-result-${result.memory.id}`}
+                      onMouseEnter={() => setHovered(result.memory.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      onClick={() => openResult(result.memory.id)}
+                    >
+                      <span className="bar__result-text">
+                        {result.segments.map((seg, i) =>
+                          seg.matched ? <mark key={i}>{seg.text}</mark> : <span key={i}>{seg.text}</span>,
+                        )}
+                      </span>
+                      <span className="bar__result-meta">{result.sourceTitle}</span>
+                    </button>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {text.length === 0 && (
           <div className="bar__suggestions">
             {SUGGESTED_QUESTIONS.map((q) => (

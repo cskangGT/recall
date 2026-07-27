@@ -21,7 +21,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | — | The map opens already populated: 47 memories, 22 sources, 6 parent categories |
 | `⌘K` | Capture bar. Type anything and press `⏎`. |
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
-| `⌘/` | Ask. Try *"What did we decide about our eval stack?"* — the answer cites three memories and the map dims everything else. |
+| `⌘/` | One bar, two modes. A keyword searches as you type; a question is answered. The chip tells you which, and `⏎` does what the chip says. |
 | `⌘Z` | Undo the reorganization. |
 | `T` / `G` / `S` | Tree view / Map view / Sources. Selection carries across, and the map centres on it. |
 
@@ -115,7 +115,7 @@ default). The harness is dimension-agnostic and also supports OpenAI via `--prov
 
 ## Not built yet
 
-Settings, instant Search mode, MERGE/PROMOTE *animations* (both are applied and tested, but the
+Settings, MERGE/PROMOTE *animations* (both are applied and tested, but the
 map does not choreograph them), proposal mode, offline mode, and the real AI providers — the
 interfaces are ready, but there are no API keys to verify them against. See
 `docs/spec-review-summary.md`.
