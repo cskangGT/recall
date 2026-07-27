@@ -232,6 +232,33 @@ export class SqliteRepository implements Repository {
       .run(x, y, int(pinned), id);
   }
 
+  replaceMemoryVectors(workspaceId: string, vectors: Map<string, number[]>): void {
+    const dims = new Set([...vectors.values()].map((v) => v.length));
+    if (dims.size > 1) {
+      throw new Error(`re-embed produced mixed dimensions: ${[...dims].join(', ')}`);
+    }
+    const ids = this.db
+      .prepare('SELECT id FROM memories WHERE workspace_id = ?')
+      .all(workspaceId) as { id: string }[];
+    const missing = ids.filter((r) => !vectors.has(r.id));
+    if (missing.length > 0) {
+      throw new Error(
+        `re-embed covered ${vectors.size} of ${ids.length} memories — ` +
+          'a partial swap would leave two embedding spaces in one workspace',
+      );
+    }
+
+    const update = this.db.prepare('UPDATE memories SET vector = ? WHERE id = ? AND workspace_id = ?');
+    this.db.exec('BEGIN');
+    try {
+      for (const [id, vector] of vectors) update.run(JSON.stringify(vector), id, workspaceId);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   // ---------------------------------------------------------------- categories
 
   insertCategory(workspaceId: string, c: Category): void {

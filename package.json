@@ -14,9 +14,11 @@
     "rehearse": "node scripts/rehearse.mjs",
     "thresholds": "python3 scripts/validate_thresholds.py",
     "thresholds:selfcheck": "python3 scripts/validate_thresholds.py --provider seed",
-    "dev:api": "node server/http/main.ts"
+    "dev:api": "node server/http/main.ts",
+    "reembed": "node scripts/reembed.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "d3-force": "^3.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

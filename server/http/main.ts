@@ -2,7 +2,7 @@ import { SqliteRepository } from '../db/sqlite.ts';
 import { importSeed } from '../seed/import.ts';
 import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
-import { FixtureProvider, FixtureEmbeddings } from '../ai/fixture.ts';
+import { selectAi } from '../ai/select.ts';
 import { createApiServer } from './server.ts';
 
 /**
@@ -12,9 +12,10 @@ import { createApiServer } from './server.ts';
  * starts from the same 47-memory corpus the frontend has always shown and ends
  * without leaving state behind. Pass RECALL_DB=path for a durable one.
  *
- * The provider is the fixture: there are no credentials, and a server that
- * refuses to start without an API key would make the whole API layer
- * untestable. Swapping in a real provider is a constructor argument.
+ * The provider is chosen by `selectAi`: the real Anthropic and Voyage pair when
+ * both keys are present, the fixture otherwise. A server that refused to start
+ * without an API key would make the whole API layer untestable, so the fixture
+ * stays the default rather than the fallback of last resort.
  */
 
 const PORT = Number(process.env.PORT ?? 5174);
@@ -31,8 +32,14 @@ if (!repo.getWorkspace(WORKSPACE)) {
   console.log(`reusing ${WORKSPACE} (${repo.listMemories(WORKSPACE).length} memories)`);
 }
 
-const provider = new FixtureProvider();
-const embeddings = new FixtureEmbeddings();
+const { ai: provider, embeddings, live, reason } = selectAi();
+console.log(`ai provider: ${provider.name} (${reason})`);
+if (live) {
+  console.warn(
+    'live providers embed at a different dimensionality than the seeded vectors — ' +
+      're-import the seed before trusting retrieval (npm run reembed)',
+  );
+}
 
 const server = createApiServer({
   repo,

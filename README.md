@@ -94,6 +94,33 @@ The 7/2 imbalance is load-bearing. With a balanced seed, adding memories to the 
 that does not satisfy the condition, and `tests/unit/seedCondition.test.ts` re-checks it on
 every commit.
 
+## Running on real models
+
+Both providers are implemented. The server picks them up when **both** keys are
+present, and stays on the fixture otherwise — half-live (real embeddings, scripted
+names) fails in ways that are very hard to read from outside.
+
+```bash
+export ANTHROPIC_API_KEY=...      # extract / name / answer  (claude-opus-5)
+export VOYAGE_API_KEY=...         # embeddings               (voyage-4, 1024-dim)
+
+RECALL_DB=recall.db npm run reembed   # 8-dim seed vectors -> 1024-dim, atomically
+RECALL_DB=recall.db npm run dev:api
+```
+
+`RECALL_AI=fixture` forces the fixture back on even with keys set — that is what
+the demo and the E2E suite run against, and what keeps them free and deterministic.
+
+**Re-embedding is not optional before going live.** The seed ships 8-dimensional
+hand-authored vectors; Voyage returns 1024. Skipping it leaves stored memories in
+one space and every query in another, which does not fail loudly — retrieval just
+quietly stops working. `replaceMemoryVectors` is all-or-nothing for the same reason.
+
+What is *not* verified: the live calls themselves. Everything that can fail without
+a network — malformed output, hallucinated citations, illegal category names,
+mis-ordered embedding batches — is covered by `tests/server/prompts.test.ts` (29
+cases). The request round-trip needs a key.
+
 ### The threshold is not yet verified against a real model
 
 `0.62` was fitted to the seed's hand-generated 8-dimensional vectors. Cosine distributions

@@ -65,6 +65,14 @@ export interface Repository {
   insertMemories(workspaceId: string, memories: Memory[]): void;
   listMemories(workspaceId: string): Memory[];
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void;
+  /**
+   * Swaps every vector in the workspace at once.
+   *
+   * All-or-nothing because a workspace holding two embedding spaces is worse
+   * than one holding the wrong space consistently: cosine between them is
+   * meaningless, so retrieval degrades silently instead of failing.
+   */
+  replaceMemoryVectors(workspaceId: string, vectors: Map<string, number[]>): void;
 
   insertCategory(workspaceId: string, category: Category): void;
   updateCategory(id: string, fields: Partial<Pick<Category,
