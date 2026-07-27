@@ -8,7 +8,8 @@ import { LeftRail, StatusTicker, Toasts, TooSmall, Loading } from './components/
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
-import { undoReorg, type ReorgEvent } from './core/applyReorg';
+import { type ReorgEvent } from './core/applyReorg';
+import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
 
 const MIN_VIEWPORT_WIDTH = 1280;
@@ -96,11 +97,7 @@ export function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        const popped = ui.popReorg();
-        if (popped) {
-          useWorkspaceStore.getState().applyPayload(undoReorg(popped));
-          ui.toast('Reverted.');
-        }
+        undoLastReorg();
         return;
       }
       if (e.key === 'Escape') {

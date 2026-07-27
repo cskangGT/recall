@@ -60,6 +60,45 @@ test('seed mode still makes no API calls at all', async ({ page }) => {
   expect(apiCalls).toEqual([]);
 });
 
+test('the whole demo runs against the server, and every beat goes over HTTP', async ({ page }) => {
+  const calls: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/')) calls.push(`${r.method()} ${new URL(r.url()).pathname.split('/').pop()}`);
+  });
+
+  await page.goto(API_MODE);
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+
+  // Beat 2 — capture. The split must come from the server's pipeline.
+  await page.keyboard.press('Meta+k');
+  await page.getByTestId('capture-input').fill('Braintrust vs Langfuse for agent evals');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status')).toContainText(
+    'Split AI Tooling into Agent Frameworks and Evals & Observability',
+    { timeout: 30_000 },
+  );
+  await expect(page.getByTestId('inspector')).toContainText('49 memories');
+
+  // Beat 3 — ask. Citations must come from the server's retrieval.
+  await page.keyboard.press('Meta+/');
+  await page.getByTestId('ask-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('answer')).toBeVisible();
+  await expect(page.getByTestId('citation-3')).toBeVisible();
+
+  // Undo — the server owns the snapshot, so this is an id and a round trip.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+z');
+  await expect(page.getByTestId('toast')).toContainText('Reverted.');
+  await expect(page.getByTestId('inspector')).toContainText('20 categories');
+
+  // The point of the test: each beat actually left the browser. Asserting the
+  // visible outcome alone would pass with the old local-only wiring.
+  expect(calls).toContain('POST capture');
+  expect(calls).toContain('POST ask');
+  expect(calls).toContain('POST undo');
+});
+
 test('a user correction persists to the server (AC-28)', async ({ page }) => {
   await page.goto(API_MODE);
   await expect(page.getByTestId('map-canvas')).toBeVisible();

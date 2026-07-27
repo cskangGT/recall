@@ -77,13 +77,18 @@ export function AskBar() {
 
   useEffect(() => ref.current?.focus(), []);
 
-  const ask = (question: string) => {
+  const ask = async (question: string) => {
     if (!payload || !question.trim()) return;
-    const result = answerQuestion(question, payload);
+    setAskOpen(false);
+
+    const source = useWorkspaceStore.getState().source;
+    const result = source.ask
+      ? await source.ask(question).catch(() => answerQuestion(question, payload))
+      : answerQuestion(question, payload);
+
     setAnswer({ ...result, question });
     setHighlight(result.highlighted_node_ids);
     select(null);
-    setAskOpen(false);
   };
 
   return (
