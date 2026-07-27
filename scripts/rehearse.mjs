@@ -88,8 +88,10 @@ async function runOnce(browser, index) {
 
   try {
     // ---- Beat 1: recognition
+    // The app lands in the folder browser. That is the opening frame the
+    // audience sees, so it is the one the rehearsal times.
     await page.goto(BASE);
-    await waitFor(page, '[data-testid="map-canvas"]', 8000, (t) => t !== null);
+    await waitFor(page, '[data-testid="tree-view"]', 8000, (t) => t !== null);
     beats.paint = Date.now() - t0;
 
     const opening = await probe(page, '[data-testid="inspector"]');
@@ -99,8 +101,6 @@ async function runOnce(browser, index) {
       }
     }
 
-    await page.keyboard.press('t');
-    await waitFor(page, '[data-testid="tree-view"]', 3000);
     await page.keyboard.press('g');
     await waitFor(page, '[data-testid="map-canvas"]', 3000);
     beats.beat1 = Date.now() - t0;

@@ -77,16 +77,18 @@ The three compounding failures:
 
 The journey is designed so **core value is visible within 30 seconds of opening the product, before the user inputs anything.**
 
-> **Decision:** the app opens onto a populated map, never onto an empty state. A first-run user gets a seeded demo workspace they can explore or clear. Rationale: the value proposition of Recall is legible only when there is accumulated memory. An empty graph communicates nothing and kills both first-run activation and the YC demo. The empty state (§7.1) exists only for the "clear workspace" path.
+> **Decision:** the app opens onto a populated workspace, never onto an empty state. A first-run user gets a seeded demo workspace they can explore or clear. Rationale: the value proposition of Recall is legible only when there is accumulated memory. An empty workspace communicates nothing and kills both first-run activation and the YC demo. The empty state (§7.1) exists only for the "clear workspace" path.
+>
+> **Amended (Phase 1, post-implementation):** the landing surface is the **folder browser**, not the map. The original decision assumed the map was the fastest read of "already organised". It is not — a graph asks the viewer to infer structure from position, while a folder tree states it. The map remains the surface for §8.4's reorganization choreography and for big-picture work; it is one keystroke away (`G`), and §15.2 Beat 1 now spends ~4 seconds moving there. The 30-second promise is unchanged; only which surface delivers it in the first three seconds.
 
 ### 4.1 The 30-second path (no input required)
 
 | Time | What happens |
 |---|---|
-| 0–3s | Map renders, already populated. ~40 memories in 6 parent categories, gently settling into position. |
-| 3–10s | User reads category labels and recognizes their own mental model. Hover reveals memory counts. |
-| 10–20s | User clicks a node. Right panel shows the atomic memories inside, each with its source thumbnail. |
-| 20–30s | User clicks a memory. It highlights its connected entities across the map. The structure is now understood. |
+| 0–3s | Folder browser renders, already populated: 6 parent folders, 14 subfolders, first folder open with its contents listed. |
+| 3–10s | User reads folder names and recognizes their own mental model. Counts sit on every row. |
+| 10–20s | User opens a folder. Right pane shows the atomic memories inside, each with its source type. |
+| 20–30s | User presses `G`. The same corpus as a map — the shape rather than the list. The structure is now understood two ways. |
 
 By second 30 the user has understood: *this is my knowledge, organized by something other than me.*
 
@@ -1186,14 +1188,21 @@ Three beats: **recognition** → **the magic** → **the payoff**. One idea per 
 
 **Beat 1 — Recognition (0:00–0:15)**
 
-> *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and built this."*
+> *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."*
 
-`[0:03]` Hover **Fundraising** → the cluster brightens, 11 memories visible.
-`[0:07]` Click **Investor Notes** → Inspector opens, showing memories with mixed source icons — a screenshot, a link, a note.
+`[0:00]` The app opens in the **folder browser** (§4.1 amendment): six parent folders, counts on every row, the first one already open.
+`[0:04]` Click **Investor Notes** → right pane fills with 4 memories carrying mixed source icons — a screenshot, a link, a note.
 
-> *"I never tagged or filed any of this."*
+> *"None of these folders are mine."*
 
-`[0:12]` `Esc`. Camera returns to fit.
+`[0:08]` Press `G` → the same corpus as the map.
+
+> *"And the same thing as a map, for when I want the shape of it rather than the list."*
+
+`[0:11]` Hover **Fundraising** → the cluster brightens, 11 memories visible.
+`[0:14]` `Esc`. Camera returns to fit.
+
+Beat 2 must run on the map: the reorganization choreography (§8.4.5) is a canvas animation and has no folder-browser equivalent in Phase 1.
 
 ---
 

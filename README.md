@@ -18,20 +18,30 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 
 | Key | What happens |
 |---|---|
-| — | The map opens already populated: 47 memories, 22 sources, 6 parent categories |
+| — | The **folder browser** opens already populated: 47 memories, 22 sources, 6 parent categories |
+| `G` | The same corpus as a map. Beat 2 needs this — the split animation only plays here. |
 | `⌘K` | Capture bar. Type anything and press `⏎`. |
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
 | `⌘/` | One bar, two modes. A keyword searches as you type; a question is answered. The chip tells you which, and `⏎` does what the chip says. |
 | `⌘Z` | Undo the reorganization. |
-| `T` / `G` / `S` | Tree view / Map view / Sources. Selection carries across, and the map centres on it. |
+| `T` / `G` / `S` | Browse / Map / Sources. Selection carries across, and the map centres on it. |
 
-## Tree view
+## Three surfaces, one corpus
 
-The map shows you the shape of your knowledge; the tree is where you correct it.
-Expand with `▸` or `→`, walk rows with `↑` `↓`, and **drag a memory onto any category
-to re-file it**. A hand-moved memory locks: no reorganization pass will ever reclaim it.
-A child category can be dragged onto a different parent, but not onto another child —
+**Ask** (`⌘/`) is the product: a question, an answer, and every claim pointing back at
+something you actually saved. The other two are how you read what it pulled.
+
+**Browse** (`T`, and the landing view) is the manual mode — two panes, folders left,
+contents right. The left pane holds folders only, so the taxonomy stays readable however
+much is filed under it. An answer appears here as its own folder above the ones Recall
+built: the prose on top, the memories it cited below, draggable like anything else.
+Walk folders with `↑` `↓`, expand with `→`, and **drag a memory onto any folder to
+re-file it**. A hand-moved memory locks: no reorganization pass will ever reclaim it.
+A subfolder can be dragged onto a different parent, but not onto another subfolder —
 the taxonomy is exactly two levels, and the attempt is refused with a shake.
+
+**Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
+and the only surface where a reorganization is animated.
 
 ## Verify
 

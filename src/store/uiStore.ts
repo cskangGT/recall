@@ -20,9 +20,25 @@ export interface Toast {
 export type View = 'map' | 'tree' | 'sources';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
+/**
+ * A pseudo-folder holding the memories an answer cited.
+ *
+ * Ask is the product — the folder browser is how you read what it pulled. Rather
+ * than bolting a second answer surface onto the browser, the answer just becomes
+ * a folder: same rows, same click-to-inspect, same drag-to-re-file. It is not a
+ * real category, so it carries a sentinel id no category can collide with.
+ */
+export const ANSWER_FOLDER_ID = '__answer__';
+
 interface UiState {
   view: View;
   sourceFilter: SourceFilter;
+  /**
+   * Which folder the browser has open. Separate from `selectedId` because
+   * clicking a memory in the right pane must not close the folder you are
+   * standing in — that is the whole point of a two-pane browser.
+   */
+  openCategoryId: string | null;
   /** Category ids whose children are shown in the tree. */
   expandedIds: string[];
   /**
@@ -43,6 +59,7 @@ interface UiState {
 
   setView: (view: View) => void;
   setSourceFilter: (filter: SourceFilter) => void;
+  openCategory: (id: string | null) => void;
   toggleExpanded: (id: string) => void;
   setExpanded: (id: string, open: boolean) => void;
   consumeCenterOn: () => string | null;
@@ -66,8 +83,9 @@ interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
-  view: 'map',
+  view: 'tree',
   sourceFilter: 'all',
+  openCategoryId: null,
   expandedIds: [],
   centerOnId: null,
   hoveredId: null,
@@ -90,6 +108,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
 
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+  openCategory: (openCategoryId) => set({ openCategoryId }),
 
   toggleExpanded: (id) =>
     set((s) => ({
@@ -131,7 +150,18 @@ export const useUiStore = create<UiState>((set, get) => ({
     return head;
   },
 
-  setAnswer: (answer) => set({ answer }),
+  // An answer arriving while you are browsing opens its own folder, so the
+  // citations land where you are already reading instead of only on the map.
+  setAnswer: (answer) =>
+    set((s) => ({
+      answer,
+      openCategoryId:
+        answer !== null && s.view === 'tree'
+          ? ANSWER_FOLDER_ID
+          : s.openCategoryId === ANSWER_FOLDER_ID
+            ? null
+            : s.openCategoryId,
+    })),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -145,7 +175,12 @@ export const useUiStore = create<UiState>((set, get) => ({
     // answer has to be checked independently: a refusal cites nothing and
     // therefore highlights nothing, and it must still be dismissable.
     if (s.highlightedIds.length > 0 || s.answer !== null) {
-      set({ highlightedIds: [], answer: null });
+      set({
+        highlightedIds: [],
+        answer: null,
+        // The answer folder cannot outlive the answer it holds.
+        openCategoryId: s.openCategoryId === ANSWER_FOLDER_ID ? null : s.openCategoryId,
+      });
       return;
     }
     set({ selectedId: null });

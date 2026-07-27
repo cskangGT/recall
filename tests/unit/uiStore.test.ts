@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useUiStore } from '../../src/store/uiStore';
+import { useUiStore, ANSWER_FOLDER_ID } from '../../src/store/uiStore';
 import { REFUSAL } from '../../src/ask/scriptedAsk';
 
 const reset = () =>
@@ -79,6 +79,43 @@ describe('uiStore.escape — spec 6.1 order', () => {
     expect(useUiStore.getState().answer).toBeNull();
     escape();
     expect(useUiStore.getState().selectedId).toBeNull();
+  });
+});
+
+describe('uiStore — the answer folder', () => {
+  beforeEach(() =>
+    useUiStore.setState({ view: 'tree', answer: null, openCategoryId: 'cat_fundraising' }),
+  );
+
+  it('opens its own folder when an answer lands while browsing', () => {
+    useUiStore.getState().setAnswer(answered);
+    expect(useUiStore.getState().openCategoryId).toBe(ANSWER_FOLDER_ID);
+  });
+
+  it('leaves the open folder alone on the map — there is no folder pane there', () => {
+    useUiStore.setState({ view: 'map' });
+    useUiStore.getState().setAnswer(answered);
+    expect(useUiStore.getState().openCategoryId).toBe('cat_fundraising');
+  });
+
+  it('cannot outlive its answer — clearing the answer closes the folder', () => {
+    useUiStore.getState().setAnswer(answered);
+    useUiStore.getState().setAnswer(null);
+    expect(useUiStore.getState().openCategoryId).toBeNull();
+  });
+
+  it('closes on Escape along with the answer and the highlight', () => {
+    useUiStore.getState().setAnswer(answered);
+    useUiStore.setState({ highlightedIds: answered.highlighted_node_ids });
+    useUiStore.getState().escape();
+    const s = useUiStore.getState();
+    expect(s.answer).toBeNull();
+    expect(s.openCategoryId).toBeNull();
+  });
+
+  it('a refusal still opens the folder, so the refusal is readable there too', () => {
+    useUiStore.getState().setAnswer(refused);
+    expect(useUiStore.getState().openCategoryId).toBe(ANSWER_FOLDER_ID);
   });
 });
 

@@ -1,4 +1,4 @@
-import { useUiStore } from '../store/uiStore';
+import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
@@ -49,7 +49,21 @@ function MemoryRow({
   );
 }
 
-function CategoryDetail({ category, payload }: { category: Category; payload: GraphPayload }) {
+/**
+ * `listMemories` is false in the folder browser: the middle pane is already
+ * showing this exact list, and three columns where two say the same thing is
+ * worse than two. The Inspector keeps the part the browser does not have —
+ * where the category sits, what it is made of, and whether you pinned it.
+ */
+function CategoryDetail({
+  category,
+  payload,
+  listMemories = true,
+}: {
+  category: Category;
+  payload: GraphPayload;
+  listMemories?: boolean;
+}) {
   const select = useUiStore((s) => s.select);
   const childIds = payload.categories.filter((c) => c.parent_id === category.id).map((c) => c.id);
   const memories = payload.memories
@@ -59,6 +73,18 @@ function CategoryDetail({ category, payload }: { category: Category; payload: Gr
     ? payload.categories.find((c) => c.id === category.parent_id)
     : null;
   const locked = category.name_locked || category.user_created;
+
+  // The one fact the middle pane cannot show: what this folder is *made of*.
+  const mix = (['text', 'link', 'screenshot'] as Source['type'][])
+    .map((type) => ({
+      type,
+      n: new Set(
+        memories
+          .filter((m) => payload.sources.find((s) => s.id === m.source_id)?.type === type)
+          .map((m) => m.source_id),
+      ).size,
+    }))
+    .filter((x) => x.n > 0);
 
   return (
     <>
@@ -84,9 +110,20 @@ function CategoryDetail({ category, payload }: { category: Category; payload: Gr
           })}
         </div>
       )}
-      {memories.map((m) => (
-        <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
-      ))}
+      {mix.length > 0 && (
+        <div className="chips">
+          {mix.map((x) => (
+            <span key={x.type} className="chip">
+              {x.n} {SOURCE_LABEL[x.type].toLowerCase()}
+              {x.n === 1 ? '' : 's'}
+            </span>
+          ))}
+        </div>
+      )}
+      {listMemories &&
+        memories.map((m) => (
+          <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
+        ))}
     </>
   );
 }
@@ -252,6 +289,8 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
 export function Inspector() {
   const selectedId = useUiStore((s) => s.selectedId);
   const answer = useUiStore((s) => s.answer);
+  const view = useUiStore((s) => s.view);
+  const openCategoryId = useUiStore((s) => s.openCategoryId);
   const payload = useWorkspaceStore((s) => s.payload);
 
   if (!payload) return <aside className="inspector" data-testid="inspector" />;
@@ -260,17 +299,26 @@ export function Inspector() {
   const memory = payload.memories.find((m) => m.id === selectedId);
   const source = payload.sources.find((s) => s.id === selectedId);
 
+  // In the browser the middle pane already renders the answer in full. Repeating
+  // it here would be the third column saying what the second one just said.
+  const answerShownInBrowser = view === 'tree' && openCategoryId === ANSWER_FOLDER_ID;
+  const showAnswerHere = answer !== null && !answerShownInBrowser;
+
   return (
     <aside className="inspector" data-testid="inspector">
-      {answer && !selectedId ? (
+      {showAnswerHere && !selectedId ? (
         <AnswerDetail />
       ) : category ? (
-        <CategoryDetail category={category} payload={payload} />
+        <CategoryDetail
+          category={category}
+          payload={payload}
+          listMemories={view !== 'tree'}
+        />
       ) : memory ? (
         <MemoryDetail memory={memory} payload={payload} />
       ) : source ? (
         <SourceDetail source={source} payload={payload} />
-      ) : answer ? (
+      ) : showAnswerHere ? (
         <AnswerDetail />
       ) : (
         <EmptyDetail payload={payload} />

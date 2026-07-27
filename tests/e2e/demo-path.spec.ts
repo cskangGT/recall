@@ -19,10 +19,17 @@ test('the 60-second demo path runs end to end with no backend (AC-42)', async ({
   const offences = watchForBackendCalls(page);
 
   // ---- Beat 1: recognition
+  //
+  // The app opens in the folder browser — "everything you saved, already filed"
+  // reads faster as folders than as a graph. G then turns the same corpus into
+  // the map, which is the surface Beat 2 reorganizes.
   await page.goto('/');
-  await expect(page.getByTestId('map-canvas')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('tree-view')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
   await expect(page.getByTestId('inspector')).toContainText('22 sources');
+
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
 
   // ---- Beat 2: the magic
   await page.keyboard.press('Meta+k');
@@ -54,6 +61,8 @@ test('the 60-second demo path runs end to end with no backend (AC-42)', async ({
 
 test('undo restores the map (AC-22)', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
   await page.keyboard.press('Meta+k');
@@ -76,6 +85,8 @@ test('undo restores the map (AC-22)', async ({ page }) => {
 
 test('an unsupported question is refused verbatim (AC-35, AC-37)', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
   await page.keyboard.press('Meta+/');

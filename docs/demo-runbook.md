@@ -57,13 +57,15 @@ Twelve steps, per spec §15.3. Timings are median across 20 measured runs.
 
 | Do | Say |
 |---|---|
-| Load the page. Map paints in **0.07s**. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and built this."* |
+| Load the page. The **folder browser** paints in **0.07s**, first folder already open. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."* |
+| Click **Investor Notes** in the left pane. Right pane fills with 4 memories, mixed source icons. | *"Six top-level folders, fourteen sub-folders. None of them are mine."* |
+| Press `G`. Same corpus, now as the map. | *"And the same thing as a map, for when I want the shape of it rather than the list."* |
 | Hover **Fundraising** — the cluster brightens, everything unconnected dims. | |
-| Click **Investor Notes**. Inspector shows the path, 4 memories, mixed source icons. | *"I never tagged or filed any of this."* |
 | `Esc` | |
 
-Optional, if the room is technical: press `T` for the tree, then `G` to come back. Selection
-carries across and the map re-centres on it. Adds ~8 seconds.
+The opening frame is deliberately the browser, not the map: "already organised" reads
+faster as folders than as a graph. The map is the surface Beat 2 reorganizes, so you must
+be on it (`G`) before the capture — the split animation only plays there.
 
 ### Beat 2 — the magic (~0:15–0:38)
 

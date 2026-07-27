@@ -37,6 +37,8 @@ test('the map loads from the database, not the seed file', async ({ page }) => {
   });
 
   await page.goto(API_MODE);
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
   await expect(page.getByTestId('inspector')).toContainText('22 sources');
@@ -52,6 +54,8 @@ test('seed mode still makes no API calls at all', async ({ page }) => {
   });
 
   await page.goto('/');
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -67,6 +71,8 @@ test('the whole demo runs against the server, and every beat goes over HTTP', as
   });
 
   await page.goto(API_MODE);
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
   // Beat 2 — capture. The split must come from the server's pipeline.
@@ -101,18 +107,22 @@ test('the whole demo runs against the server, and every beat goes over HTTP', as
 
 test('a user correction persists to the server (AC-28)', async ({ page }) => {
   await page.goto(API_MODE);
-  await expect(page.getByTestId('map-canvas')).toBeVisible();
-
-  await page.keyboard.press('t');
   await expect(page.getByTestId('tree-view')).toBeVisible();
 
-  const rowByText = (text: string) =>
-    page.locator('[data-row-id]').filter({ hasText: text }).first();
-  await rowByText('AI Tooling').locator('.tree__twisty').click();
-  await rowByText('Hiring').locator('.tree__twisty').click();
+  const folder = (text: string) => page.locator('.folder').filter({ hasText: text }).first();
+  const counts = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.folder--d0:not(.folder--answer)')].map(
+        (r) =>
+          `${r.querySelector('.folder__name')?.textContent}=${r.querySelector('.folder__count')?.textContent}`,
+      ),
+    );
 
-  const from = await page.locator('.tree__row--memory').first().boundingBox();
-  const to = await rowByText('Interview Loops').boundingBox();
+  await folder('AI Tooling').click();
+  await folder('Hiring').locator('.folder__twisty').click();
+
+  const from = await page.locator('.browser__contents .item').first().boundingBox();
+  const to = await folder('Interview Loops').boundingBox();
   await page.mouse.move(from!.x + 40, from!.y + from!.height / 2);
   await page.mouse.down();
   await page.mouse.move(to!.x + 40, to!.y + to!.height / 2, { steps: 12 });
@@ -122,16 +132,9 @@ test('a user correction persists to the server (AC-28)', async ({ page }) => {
 
   // Reload: if the move only happened in the store, it is gone now.
   await page.reload();
-  await expect(page.getByTestId('map-canvas')).toBeVisible();
-  await page.keyboard.press('t');
-  await rowByText('Hiring').locator('.tree__twisty').click();
+  await expect(page.getByTestId('tree-view')).toBeVisible();
 
-  const counts = await page.evaluate(() =>
-    [...document.querySelectorAll('.tree__row--d0')].map(
-      (r) =>
-        `${r.querySelector('.tree__label')?.textContent}=${r.querySelector('.tree__count')?.textContent}`,
-    ),
-  );
-  expect(counts).toContain('Hiring=8');
-  expect(counts).toContain('AI Tooling=8');
+  const after = await counts();
+  expect(after).toContain('Hiring=8');
+  expect(after).toContain('AI Tooling=8');
 });

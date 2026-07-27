@@ -10,6 +10,8 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });
 

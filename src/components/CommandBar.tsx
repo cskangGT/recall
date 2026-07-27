@@ -75,6 +75,7 @@ export function AskBar() {
   const payload = useWorkspaceStore((s) => s.payload);
   const setHovered = useUiStore((s) => s.setHovered);
   const setView = useUiStore((s) => s.setView);
+  const openCategory = useUiStore((s) => s.openCategory);
   const [text, setText] = useState('');
   const [debounced, setDebounced] = useState('');
   const ref = useRef<HTMLInputElement>(null);
@@ -94,10 +95,22 @@ export function AskBar() {
   );
   const groups = useMemo(() => groupByCategory(results), [results]);
 
-  /** Select the memory, put it on the map, and get out of the way. */
+  /**
+   * Reveal the result where you already are.
+   *
+   * It used to force the map. But search belongs to the manual mode — you are
+   * browsing folders and looking for one specific thing — and yanking you onto
+   * the map answered a question you had not asked. So: in the browser it opens
+   * the memory's folder, on the map it centres on the node.
+   */
   const openResult = (memoryId: string) => {
     setHovered(null);
-    setView('map');
+    const memory = payload?.memories.find((m) => m.id === memoryId);
+    if (useUiStore.getState().view === 'tree' && memory) {
+      openCategory(memory.category_id);
+    } else {
+      setView('map');
+    }
     select(memoryId);
     setAskOpen(false);
   };
@@ -135,7 +148,12 @@ export function AskBar() {
             // The chip is the contract: in Search mode Enter opens the top
             // result, it does not silently run an Ask instead.
             if (searching) {
-              if (results[0]) openResult(results[0].memory.id);
+              // Enter must act on what you typed, not on what the 120ms debounce
+              // has caught up to. Type fast, hit Enter, and the old code found an
+              // empty result list and did nothing at all.
+              const top =
+                debounced === text ? results[0] : payload ? search(payload, text)[0] : undefined;
+              if (top) openResult(top.memory.id);
               return;
             }
             void ask(text);

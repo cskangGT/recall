@@ -10,6 +10,8 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('tree-view')).toBeVisible();
+  await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.keyboard.press('Meta+/');
   await expect(page.getByTestId('ask-bar')).toBeVisible();
@@ -46,6 +48,19 @@ test('Enter opens the top result on the map instead of answering', async ({ page
   await expect(page.getByTestId('inspector')).toContainText('Memory');
   await expect(page.getByTestId('inspector')).toContainText('LangChain');
   await expect(page.getByTestId('answer')).toHaveCount(0);
+});
+
+/**
+ * Regression: Enter used to read the debounced query, so anyone who typed and
+ * hit Enter inside 120ms got an empty result list and no reaction at all. Enter
+ * must act on what is in the box.
+ */
+test('Enter acts on what you typed, even inside the search debounce', async ({ page }) => {
+  await page.getByTestId('ask-input').fill('langchain');
+  await page.getByTestId('ask-input').press('Enter');
+
+  await expect(page.getByTestId('ask-bar')).toHaveCount(0);
+  await expect(page.getByTestId('inspector')).toContainText('LangChain');
 });
 
 test('clicking a result selects that memory', async ({ page }) => {

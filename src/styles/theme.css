@@ -166,25 +166,49 @@ button {
   color: var(--accent);
 }
 
-/* ------------------------------------------------------------------ tree */
+/* ---------------------------------------------------------- folder browser */
 
-.tree {
+/*
+ * Two panes: folders left, contents right. The single column that inlined
+ * memories as leaves buried the taxonomy under its own contents the moment you
+ * opened anything — the split keeps the shape readable at any size.
+ */
+.browser {
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.browser__folders,
+.browser__contents {
   height: 100%;
   overflow-y: auto;
-  /* Capped so the count column stays beside the label rather than stranded at
-     the far edge of a wide canvas. */
-  --tree-width: 780px;
-  padding: 24px 28px 120px;
+  padding: 24px 20px 120px;
+  min-width: 0;
 }
 
-.tree > * {
-  max-width: var(--tree-width);
+.browser__folders {
+  /* The one hairline in the app. Two scrollable panes that move independently
+     need a seam, or the eye reads them as one broken column. */
+  border-right: 1px solid #17171b;
+  padding-right: 14px;
 }
 
-.tree__head {
+.browser__contents {
+  --contents-width: 720px;
+  padding-left: 28px;
+}
+
+.browser__contents > * {
+  max-width: var(--contents-width);
+}
+
+.browser__head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 16px;
   color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.07em;
@@ -193,12 +217,74 @@ button {
   margin-bottom: 6px;
 }
 
-.tree__head span:last-child {
+.browser__contents .browser__head span:first-child {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 550;
+  letter-spacing: -0.012em;
+  text-transform: none;
+}
+
+.browser__hint {
+  flex: none;
   letter-spacing: 0.02em;
   text-transform: none;
 }
 
-.tree__row {
+.browser__empty {
+  color: var(--text-dim);
+  padding: 8px 10px;
+}
+
+.browser__ask {
+  flex: none;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  transition: color 90ms ease;
+}
+
+.browser__ask:hover {
+  color: var(--accent);
+}
+
+/* The answer reads as prose, not as a row — it is the one thing on this screen
+   Recall wrote rather than filed. */
+.browser__answer {
+  margin: 2px 0 18px;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.folder--answer {
+  margin-bottom: 10px;
+}
+
+.folder--answer .folder__name {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 12.5px;
+}
+
+.folder--answer.folder--open .folder__name {
+  color: var(--text);
+}
+
+.folder__icon--answer {
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- folder rows */
+
+.folder {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -207,36 +293,44 @@ button {
   border-radius: 7px;
   cursor: default;
   transition: background 90ms ease, color 90ms ease;
+  color: var(--text);
 }
 
-.tree__row--d0 { margin-left: 0; }
-.tree__row--d1 { margin-left: 26px; }
-.tree__row--d2 { margin-left: 52px; }
+.folder--d0 {
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
 
-.tree__row--category { color: var(--text); }
-.tree__row--d0 { font-weight: 550; letter-spacing: -0.01em; }
-.tree__row--d1.tree__row--category { color: var(--accent-dim); }
-.tree__row--memory { color: var(--text-dim); }
+.folder--d1 {
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
 
-.tree__row:hover {
+.folder:hover {
   background: var(--bg-panel);
 }
 
-.tree__row--selected {
+.folder--open {
   background: var(--bg-raised);
   color: var(--text);
 }
 
-.tree__row--dragging {
+/* The open folder is where you are standing — it gets the accent, not just a
+   lighter background, so the right pane always has a visible owner. */
+.folder--open .folder__icon {
+  color: var(--accent);
+}
+
+.folder--dragging {
   opacity: 0.4;
 }
 
-.tree__row--drop {
+.folder--drop {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--text);
 }
 
-.tree__row--reject {
+.folder--reject {
   animation: shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
 }
 
@@ -248,34 +342,46 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tree__row--reject { animation: none; outline: 1px solid #c2603a; }
+  .folder--reject { animation: none; outline: 1px solid #c2603a; }
 }
 
-.tree__twisty {
-  width: 15px;
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1;
-  text-align: left;
+/* Subfolders hang off a guide line, so containment is drawn rather than merely
+   implied by indentation. */
+.folder__children {
+  margin-left: 19px;
+  padding-left: 11px;
+  border-left: 1px solid #1c1c21;
+}
+
+.folder__twisty {
+  width: 14px;
+  /* Explicit height: an empty twisty (a folder with no subfolders) would
+     otherwise collapse to zero and become an unclickable target. */
+  height: 22px;
   flex: none;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 22px;
+  text-align: left;
 }
 
-.tree__twisty:hover { color: var(--text); }
+.folder__twisty:hover { color: var(--text); }
 
-.tree__twisty:focus-visible,
-.tree__row:focus-visible {
+.folder__twisty:focus-visible,
+.folder:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
 
-.tree__icon {
+.folder__icon {
   width: 15px;
+  height: 15px;
   flex: none;
-  color: var(--text-faint);
-  font-size: 11px;
+  fill: currentColor;
+  color: var(--accent-dim);
 }
 
-.tree__label {
+.folder__name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -283,18 +389,72 @@ button {
   white-space: nowrap;
 }
 
-.tree__lock {
+.folder__lock,
+.item__lock {
   color: var(--accent);
   font-size: 9px;
   flex: none;
 }
 
-.tree__count {
+.folder__count {
   flex: none;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
-  min-width: 24px;
+  min-width: 22px;
   text-align: right;
+}
+
+/* ------------------------------------------------------------ content items */
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: default;
+  transition: background 90ms ease;
+}
+
+.item:hover {
+  background: var(--bg-panel);
+}
+
+.item--selected {
+  background: var(--bg-raised);
+}
+
+.item--dragging {
+  opacity: 0.4;
+}
+
+.item__icon {
+  flex: none;
+  width: 15px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.item__text {
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.item__meta {
+  color: var(--text-faint);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ sources */
