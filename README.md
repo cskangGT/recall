@@ -23,7 +23,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
 | `⌘/` | Ask. Try *"What did we decide about our eval stack?"* — the answer cites three memories and the map dims everything else. |
 | `⌘Z` | Undo the reorganization. |
-| `T` / `G` | Tree view / Map view. Selection carries across, and the map centres on it. |
+| `T` / `G` / `S` | Tree view / Map view / Sources. Selection carries across, and the map centres on it. |
 
 ## Tree view
 
@@ -115,5 +115,7 @@ default). The harness is dimension-agnostic and also supports OpenAI via `--prov
 
 ## Not built yet
 
-Sources screen, Settings, instant Search, MERGE/PROMOTE animations (their gates are built and
-tested), proposal mode, category renaming, offline mode. See `docs/spec-review-summary.md`.
+Settings, instant Search mode, MERGE/PROMOTE *animations* (both are applied and tested, but the
+map does not choreograph them), proposal mode, offline mode, and the real AI providers — the
+interfaces are ready, but there are no API keys to verify them against. See
+`docs/spec-review-summary.md`.

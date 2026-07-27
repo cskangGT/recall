@@ -297,6 +297,121 @@ button {
   text-align: right;
 }
 
+/* ------------------------------------------------------------------ sources */
+
+.sources {
+  height: 100%;
+  overflow-y: auto;
+  --sources-width: 780px;
+  padding: 24px 28px 120px;
+}
+
+.sources > * {
+  max-width: var(--sources-width);
+}
+
+.sources__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding-bottom: 14px;
+}
+
+.sources__filters {
+  display: flex;
+  gap: 4px;
+}
+
+.sources__filter {
+  padding: 3px 9px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 11px;
+}
+
+.sources__filter:hover {
+  color: var(--text);
+}
+
+.sources__filter--on {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.sources__empty {
+  color: var(--text-dim);
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--sources-width);
+  text-align: left;
+  padding: 11px 10px;
+  border-radius: 8px;
+  border-top: 1px solid #191920;
+  transition: background 90ms ease;
+}
+
+.source-row:hover {
+  background: var(--bg-panel);
+}
+
+.source-row--selected {
+  background: var(--bg-raised);
+}
+
+.source-row__icon {
+  flex: none;
+  width: 16px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.source-row__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.source-row__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-row__meta {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* A capture that produced nothing is the case the "It's in your Sources" toast
+   points here for — it has to be findable, not just present. */
+.source-row--empty .source-row__count {
+  color: var(--accent);
+}
+
+.source-row--empty .source-row__meta {
+  color: var(--accent-dim);
+}
+
+.source-row__count {
+  flex: none;
+  min-width: 24px;
+  text-align: right;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------------------ capture fab */
 
 .fab {

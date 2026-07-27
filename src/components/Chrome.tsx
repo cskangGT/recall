@@ -26,7 +26,12 @@ export function LeftRail() {
       >
         ⋮
       </button>
-      <button className="rail__btn" disabled title="Sources — not built yet">
+      <button
+        className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
+        title="Sources (S)"
+        data-testid="rail-sources"
+        onClick={() => setView('sources')}
+      >
         ▤
       </button>
       <button

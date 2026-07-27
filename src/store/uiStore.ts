@@ -17,10 +17,12 @@ export interface Toast {
   text: string;
 }
 
-export type View = 'map' | 'tree';
+export type View = 'map' | 'tree' | 'sources';
+export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
 interface UiState {
   view: View;
+  sourceFilter: SourceFilter;
   /** Category ids whose children are shown in the tree. */
   expandedIds: string[];
   /**
@@ -40,6 +42,7 @@ interface UiState {
   toasts: Toast[];
 
   setView: (view: View) => void;
+  setSourceFilter: (filter: SourceFilter) => void;
   toggleExpanded: (id: string) => void;
   setExpanded: (id: string, open: boolean) => void;
   consumeCenterOn: () => string | null;
@@ -64,6 +67,7 @@ let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'map',
+  sourceFilter: 'all',
   expandedIds: [],
   centerOnId: null,
   hoveredId: null,
@@ -84,6 +88,8 @@ export const useUiStore = create<UiState>((set, get) => ({
       view,
       centerOnId: view === 'map' ? s.selectedId : null,
     })),
+
+  setSourceFilter: (sourceFilter) => set({ sourceFilter }),
 
   toggleExpanded: (id) =>
     set((s) => ({

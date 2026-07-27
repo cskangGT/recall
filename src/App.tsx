@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { TreeView } from './components/TreeView';
+import { SourcesView } from './components/SourcesView';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -113,6 +114,10 @@ export function App() {
         ui.setView('tree');
         return;
       }
+      if (e.key === 's' || e.key === 'S') {
+        ui.setView('sources');
+        return;
+      }
       if (e.key === ' ') {
         e.preventDefault();
         const ws = useWorkspaceStore.getState();
@@ -132,6 +137,8 @@ export function App() {
       <div className="canvas-wrap">
         {view === 'tree' ? (
           <TreeView />
+        ) : view === 'sources' ? (
+          <SourcesView />
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}

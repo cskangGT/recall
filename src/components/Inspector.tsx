@@ -200,6 +200,55 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
   );
 }
 
+/** Spec §5.4 Mode C — the full provenance of one capture. */
+function SourceDetail({ source, payload }: { source: Source; payload: GraphPayload }) {
+  const select = useUiStore((s) => s.select);
+  const extracted = payload.memories.filter((m) => m.source_id === source.id);
+
+  return (
+    <>
+      <div className="inspector__eyebrow">Source</div>
+      <h2>{source.title}</h2>
+      <div className="inspector__meta">
+        {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
+        {extracted.length} {extracted.length === 1 ? 'memory' : 'memories'}
+      </div>
+
+      {source.url && (
+        <div className="chips">
+          <a className="chip" href={source.url} target="_blank" rel="noreferrer noopener">
+            Open link ↗
+          </a>
+        </div>
+      )}
+
+      <div className="source-card">
+        <div className="source-card__type">
+          {source.type === 'screenshot' ? 'What Recall saw' : 'Raw content'}
+        </div>
+        <div className="source-card__body">
+          {source.type === 'screenshot' && source.scene_description
+            ? source.scene_description
+            : source.raw_content}
+        </div>
+      </div>
+
+      {extracted.length === 0 ? (
+        // The state the "It's in your Sources" toast points at. Saying so beats
+        // an empty list that reads like a bug.
+        <p className="inspector__meta">Recall couldn't find anything to remember in this.</p>
+      ) : (
+        <>
+          <div className="inspector__eyebrow">Memories extracted from this</div>
+          {extracted.map((m) => (
+            <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 export function Inspector() {
   const selectedId = useUiStore((s) => s.selectedId);
   const answer = useUiStore((s) => s.answer);
@@ -209,6 +258,7 @@ export function Inspector() {
 
   const category = payload.categories.find((c) => c.id === selectedId);
   const memory = payload.memories.find((m) => m.id === selectedId);
+  const source = payload.sources.find((s) => s.id === selectedId);
 
   return (
     <aside className="inspector" data-testid="inspector">
@@ -218,6 +268,8 @@ export function Inspector() {
         <CategoryDetail category={category} payload={payload} />
       ) : memory ? (
         <MemoryDetail memory={memory} payload={payload} />
+      ) : source ? (
+        <SourceDetail source={source} payload={payload} />
       ) : answer ? (
         <AnswerDetail />
       ) : (
