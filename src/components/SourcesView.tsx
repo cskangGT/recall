@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { GraphPayload, Source, SourceType } from '../core/types';
@@ -31,6 +31,9 @@ export type SourceFilter = 'all' | SourceType;
 export interface SourceRow {
   source: Source;
   memoryCount: number;
+  /** Processing genuinely failed — distinct from "produced nothing". */
+  failed: boolean;
+  error: string | null;
   /** A capture that produced nothing is the case the toast points here for. */
   empty: boolean;
 }
@@ -39,11 +42,14 @@ export interface SourceRow {
  * Reverse-chronological, newest first, with the memory count each source
  * produced.
  *
- * "Produced nothing" is derived from the payload rather than read from a status
- * column: from the user's side those are the same thing, and it needs no schema
- * change to be true in both seed and API mode. An explicit `failed` status —
- * which would carry a Retry action — needs the status field surfaced on the
- * payload, and is not here yet.
+ * "Produced nothing" stays derived from the payload rather than read from a
+ * status column: from the user's side an empty extraction and a source with no
+ * memories are the same thing, and deriving it needs no schema change to be true
+ * in both seed and API mode.
+ *
+ * A *failure* is different and cannot be derived — an empty result and a crashed
+ * one look identical from the payload, and only one of them is worth retrying.
+ * That one reads `status`, which the server now surfaces.
  */
 export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'all'): SourceRow[] {
   const counts = new Map<string, number>();
@@ -55,7 +61,16 @@ export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'a
     .filter((s) => filter === 'all' || s.type === filter)
     .map((s) => {
       const memoryCount = counts.get(s.id) ?? 0;
-      return { source: s, memoryCount, empty: memoryCount === 0 };
+      const failed = s.status === 'failed';
+      return {
+        source: s,
+        memoryCount,
+        // A failed source produced nothing, but calling it empty would hide the
+        // fact that it can be retried.
+        empty: !failed && memoryCount === 0,
+        failed,
+        error: s.error_message ?? null,
+      };
     })
     .sort(
       (a, b) =>
@@ -73,6 +88,30 @@ export function SourcesView() {
   const select = useUiStore((s) => s.select);
   const filter = useUiStore((s) => s.sourceFilter);
   const setFilter = useUiStore((s) => s.setSourceFilter);
+
+  const [retrying, setRetrying] = useState<string | null>(null);
+
+  /**
+   * Only the API can genuinely retry — seed mode has no processing to re-run,
+   * and pretending otherwise would show a spinner that resolves to nothing.
+   */
+  const retrySource = async (sourceId: string) => {
+    const { source: dataSource, applyPayload } = useWorkspaceStore.getState();
+    if (!dataSource.retrySource) {
+      useUiStore.getState().toast('Retry needs the server — this is seed mode.');
+      return;
+    }
+    setRetrying(sourceId);
+    try {
+      applyPayload(await dataSource.retrySource(sourceId));
+    } catch (err) {
+      useUiStore.getState().toast(
+        err instanceof Error ? `Retry failed — ${err.message}` : 'Retry failed.',
+      );
+    } finally {
+      setRetrying(null);
+    }
+  };
 
   const rows = useMemo(
     () => (payload ? buildSourceRows(payload, filter) : []),
@@ -101,14 +140,15 @@ export function SourcesView() {
 
       {rows.length === 0 && <p className="sources__empty">No sources yet.</p>}
 
-      {rows.map(({ source, memoryCount, empty }) => (
-        <button
+      {rows.map(({ source, memoryCount, empty, failed, error }) => (
+        <div
           key={source.id}
           data-testid={`source-row-${source.id}`}
           className={[
             'source-row',
             selectedId === source.id ? 'source-row--selected' : '',
             empty ? 'source-row--empty' : '',
+            failed ? 'source-row--failed' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -122,10 +162,25 @@ export function SourcesView() {
             <span className="source-row__meta">
               {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
               {empty ? ' · nothing to remember in this' : ''}
+              {failed ? ` · couldn't process this${error ? ` — ${error}` : ''}` : ''}
             </span>
           </span>
-          <span className="source-row__count">{memoryCount}</span>
-        </button>
+          {failed ? (
+            <button
+              className="source-row__retry"
+              data-testid={`retry-${source.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void retrySource(source.id);
+              }}
+              disabled={retrying === source.id}
+            >
+              {retrying === source.id ? 'Retrying…' : 'Retry'}
+            </button>
+          ) : (
+            <span className="source-row__count">{memoryCount}</span>
+          )}
+        </div>
       ))}
     </div>
   );

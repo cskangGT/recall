@@ -73,3 +73,37 @@ describe('buildSourceRows', () => {
     expect(buildSourceRows(bare)).toEqual([]);
   });
 });
+
+describe('a failed source is not an empty one', () => {
+  const base = (over: Partial<Source> = {}): Source => ({
+    id: 'src_x', type: 'text', title: 'A capture', raw_content: '',
+    scene_description: null, url: null, image_path: null,
+    created_at: '2026-07-01T00:00:00Z', ...over,
+  });
+
+  const payloadWith = (source: Source): GraphPayload => ({
+    workspace: { id: 'ws', name: 'ws', auto_reorganize: true },
+    sources: [source], memories: [], categories: [], entities: [], edges: [],
+  });
+
+  it('marks a failed source failed rather than empty', () => {
+    const [row] = buildSourceRows(payloadWith(base({ status: 'failed', error_message: 'timeout' })));
+    expect(row!.failed).toBe(true);
+    // Calling it empty would hide that it can be retried.
+    expect(row!.empty).toBe(false);
+    expect(row!.error).toBe('timeout');
+  });
+
+  it('still calls a successful source with no memories empty', () => {
+    const [row] = buildSourceRows(payloadWith(base({ status: 'no_memories' })));
+    expect(row!.empty).toBe(true);
+    expect(row!.failed).toBe(false);
+  });
+
+  it('treats a source with no status at all as fine — seed payloads predate it', () => {
+    const [row] = buildSourceRows(payloadWith(base()));
+    expect(row!.failed).toBe(false);
+    expect(row!.error).toBeNull();
+  });
+});
+

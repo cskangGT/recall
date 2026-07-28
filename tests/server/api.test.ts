@@ -235,3 +235,38 @@ describe('PATCH category', () => {
     expect((await patch(`${base}/categories/${category.id}`, {})).status).toBe(400);
   });
 });
+
+describe('POST /sources/:id/retry', () => {
+  it('refuses a source that did not fail — retrying would double its memories', async () => {
+    const graph = validateSeed((await get(`${base}/graph`)).body);
+    const res = await post(`${base}/sources/${graph.sources[0]!.id}/retry`);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toMatch(/only a failed source/);
+  });
+
+  it('404s an unknown source', async () => {
+    expect((await post(`${base}/sources/src_nope/retry`)).status).toBe(404);
+  });
+
+  it('re-runs a failed source and reports the new graph', async () => {
+    // Fail one on purpose, through the real pipeline.
+    const broken = new FixtureProvider();
+    broken.extract = async () => {
+      throw new Error('rate limited');
+    };
+    const failing = new IngestPipeline(repo, broken, new FixtureEmbeddings());
+    const failed = await failing.ingest({ workspaceId: WS, type: 'text', content: 'anything' });
+    expect(failed.status).toBe('failed');
+
+    const res = await post(`${base}/sources/${failed.sourceId}/retry`);
+    expect(res.status).toBe(200);
+
+    const body = res.body as { status: string; graph: GraphPayload };
+    expect(body.status).not.toBe('failed');
+    // The payload carries status through, so the UI can stop offering Retry.
+    const source = body.graph.sources.find((s) => s.id === failed.sourceId)!;
+    expect(source.status).not.toBe('failed');
+    expect(source.error_message).toBeNull();
+  });
+});
+

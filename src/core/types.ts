@@ -22,6 +22,12 @@ export interface Source {
   url: string | null;
   image_path: string | null;
   created_at: string;
+  /**
+   * Optional because seed payloads predate it and everything in them succeeded.
+   * Absent means "fine" — only a failure needs saying.
+   */
+  status?: 'pending' | 'processing' | 'complete' | 'failed' | 'no_memories';
+  error_message?: string | null;
 }
 
 /**

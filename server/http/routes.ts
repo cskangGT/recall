@@ -120,6 +120,21 @@ async function handleWorkspace(
     return ok({ undone: event.id, graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
+  // POST /api/workspaces/:id/sources/:sourceId/retry — re-run a failed capture.
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'retry') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+    if (source.status !== 'failed') {
+      return badRequest(`source is ${source.status}, only a failed source can be retried`);
+    }
+    const result = await deps.ingest.retry(workspaceId, resourceId);
+    return ok({
+      status: result.status,
+      note: result.note ?? null,
+      graph: deps.repo.getGraphPayload(workspaceId),
+    });
+  }
+
   // POST /api/workspaces/:id/memories/:memoryId/category — a user correction,
   // which locks the assignment against every future reorganization pass.
   if (req.method === 'POST' && resource === 'memories' && resourceId && action === 'category') {

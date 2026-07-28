@@ -110,6 +110,9 @@ export class SqliteRepository implements Repository {
         id: s.id, type: s.type, title: s.title, raw_content: s.raw_content,
         scene_description: s.scene_description, url: s.url,
         image_path: s.image_path, created_at: s.created_at,
+        // Surfaced so the Sources screen can offer a retry rather than showing
+        // a failed capture as merely empty.
+        status: s.status, error_message: s.error_message,
       })),
       memories: memories.map((m) => ({
         ...m,
@@ -145,15 +148,27 @@ export class SqliteRepository implements Repository {
     status: SourceRow['status'],
     fields: { error_message?: string | null; summary?: string | null; processed_at?: string | null } = {},
   ): void {
+    // COALESCE gives every field "null means leave it alone" semantics, which is
+    // right for summary and processed_at and wrong for the error: it made a
+    // message unclearable, so a source that failed once carried its error into
+    // every later state — including a successful retry. An error belongs to a
+    // failure, so anything that is not a failure clears it.
     this.db
       .prepare(
         `UPDATE sources SET status = ?,
-           error_message = COALESCE(?, error_message),
+           error_message = CASE WHEN ? = 1 THEN COALESCE(?, error_message) ELSE NULL END,
            summary       = COALESCE(?, summary),
            processed_at  = COALESCE(?, processed_at)
          WHERE id = ?`,
       )
-      .run(status, fields.error_message ?? null, fields.summary ?? null, fields.processed_at ?? null, id);
+      .run(
+        status,
+        status === 'failed' ? 1 : 0,
+        fields.error_message ?? null,
+        fields.summary ?? null,
+        fields.processed_at ?? null,
+        id,
+      );
   }
 
   listSources(workspaceId: string): SourceRow[] {

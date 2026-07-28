@@ -51,6 +51,8 @@ export interface DataSource {
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
   ): Promise<GraphPayload>;
+  /** Re-runs a capture whose processing failed. Only the API can do this. */
+  retrySource?(sourceId: string): Promise<GraphPayload>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -121,6 +123,13 @@ export class ApiDataSource implements DataSource {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/memories/${encodeURIComponent(memoryId)}/category`,
       { categoryId },
+    );
+    return validateSeed(graph);
+  }
+
+  async retrySource(sourceId: string): Promise<GraphPayload> {
+    const { graph } = await this.post<{ graph: GraphPayload }>(
+      `/sources/${encodeURIComponent(sourceId)}/retry`,
     );
     return validateSeed(graph);
   }

@@ -79,6 +79,39 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
+    return this.process(input.workspaceId, source);
+  }
+
+  /**
+   * Re-runs a source that failed, keeping its id.
+   *
+   * The failure note has always said "it's saved and you can retry" — this is
+   * the retry. Reusing the id matters: a new one would leave the failed capture
+   * sitting in Sources forever beside its own successful replacement.
+   *
+   * Only failures are retried. Re-running a completed source would extract its
+   * memories a second time, and nothing here de-duplicates.
+   */
+  async retry(workspaceId: string, sourceId: string): Promise<IngestResult> {
+    const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
+    if (!source) throw new Error(`unknown source ${sourceId}`);
+    if (source.status !== 'failed') {
+      throw new Error(`source ${sourceId} is ${source.status}, not failed`);
+    }
+
+    this.repo.updateSourceStatus(sourceId, 'processing', { error_message: null });
+    return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
+  }
+
+  /** Steps 2-6, shared by a first attempt and a retry. */
+  private async process(workspaceId: string, source: SourceRow): Promise<IngestResult> {
+    const sourceId = source.id;
+    const input = {
+      workspaceId,
+      type: source.type,
+      content: source.raw_content,
+      imagePath: source.image_path ?? undefined,
+    };
 
     try {
       // ---- 2. Normalize (screenshots only — spec §10.1)

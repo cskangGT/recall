@@ -998,12 +998,62 @@ button {
 
 /* A capture that produced nothing is the case the "It's in your Sources" toast
    points here for — it has to be findable, not just present. */
-.source-row--empty .source-row__count {
+.source-row--empty /* A failure is the one row here that needs to be noticed. */
+.source-row--failed .source-row__meta {
+  color: #c2603a;
+}
+
+.source-row__retry {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: 12px;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.source-row__retry:hover:not(:disabled) {
+  background: var(--accent);
+  color: #14141a;
+}
+
+.source-row__retry:disabled {
+  cursor: default;
+  color: var(--text-faint);
+}
+
+.source-row__count {
   color: var(--accent);
 }
 
 .source-row--empty .source-row__meta {
   color: var(--accent-dim);
+}
+
+/* A failure is the one row here that needs to be noticed. */
+.source-row--failed .source-row__meta {
+  color: #c2603a;
+}
+
+.source-row__retry {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: 12px;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.source-row__retry:hover:not(:disabled) {
+  background: var(--accent);
+  color: #14141a;
+}
+
+.source-row__retry:disabled {
+  cursor: default;
+  color: var(--text-faint);
 }
 
 .source-row__count {

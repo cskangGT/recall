@@ -177,6 +177,54 @@ describe('IngestPipeline — failure paths keep the capture', () => {
     expect(repo.listMemories(WS)).toHaveLength(47);
   });
 
+  /**
+   * The failure note has always said "it's saved and you can retry". These are
+   * the retry actually existing.
+   */
+  it('retries a failed source in place, keeping its id', async () => {
+    const flaky = new FixtureProvider();
+    let firstAttempt = true;
+    // FixtureProvider.extract ignores its argument, so the passthrough does too.
+    const realExtract = flaky.extract.bind(flaky);
+    flaky.extract = () => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        return Promise.reject(new Error('rate limited'));
+      }
+      return realExtract();
+    };
+    const p = new IngestPipeline(repo, flaky, new FixtureEmbeddings());
+
+    const failed = await p.ingest({
+      workspaceId: WS, type: 'screenshot', content: 'Braintrust vs Langfuse for agent evals',
+      imagePath: '/seed/demo-screenshot.png',
+    });
+    expect(failed.status).toBe('failed');
+    const sourcesAfterFailure = repo.listSources(WS).length;
+
+    const retried = await p.retry(WS, failed.sourceId);
+
+    expect(retried.status).toBe('complete');
+    // Same id, and no second row — otherwise the failed capture would sit in
+    // Sources forever beside its own replacement.
+    expect(retried.sourceId).toBe(failed.sourceId);
+    expect(repo.listSources(WS)).toHaveLength(sourcesAfterFailure);
+    const source = repo.listSources(WS).find((s) => s.id === failed.sourceId)!;
+    expect(source.status).toBe('complete');
+    expect(source.error_message).toBeNull();
+    expect(repo.listMemories(WS).length).toBeGreaterThan(47);
+  });
+
+  it('refuses to retry a source that did not fail', async () => {
+    const ok = await capture();
+    expect(ok.status).toBe('complete');
+    await expect(pipeline.retry(WS, ok.sourceId)).rejects.toThrow(/not failed/);
+  });
+
+  it('refuses to retry a source it has never seen', async () => {
+    await expect(pipeline.retry(WS, 'src_nope')).rejects.toThrow(/unknown source/);
+  });
+
   it('still attaches the memories when naming fails, rather than losing the ingest', async () => {
     const badNamer = new FixtureProvider();
     badNamer.nameClusters = async () => {
