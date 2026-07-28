@@ -69,6 +69,16 @@ export function Thinker({
               carrying the forward lean that is the whole pose. */}
           <path d="M63 44 Q74 50 78 68 Q82 92 80 112 Q78 124 66 124 Q56 122 58 108 Q62 86 60 68 Q58 52 63 44 Z" />
 
+          {/*
+            Neck and trapezius.
+            Without it the head met the torso at a single point and the pinch
+            between them read as a gap — a bright ball balanced on a body. The
+            reflection never had the problem because its blur closed the gap for
+            it, which is exactly why the two halves looked like different
+            drawings.
+          */}
+          <path d="M46 40 Q58 42 68 50 Q73 56 66 59 Q55 56 46 49 Z" />
+
           {/* Thigh: broad at the hip, narrow at the knee. */}
           <path d="M70 104 Q52 92 36 88 Q28 87 27 94 Q26 101 34 103 Q50 108 66 118 Z" />
 
@@ -83,16 +93,21 @@ export function Thinker({
               the wedge between them stays open and the pose stays legible. */}
           <path d="M38 88 Q36 82 42 74 Q48 62 51 52 Q53 46 58 48 Q62 50 59 58 Q55 72 47 86 Q43 93 38 88 Z" />
 
-          {/* Head: a small oval, tipped forward. Roughly one seventh of the
-              standing height — caricature proportions read as a mascot. */}
-          <ellipse cx="51" cy="33" rx="11" ry="12.5" transform="rotate(-14 51 33)" />
+          {/*
+            Head: a small oval, tipped forward and overlapping the shoulder.
+            Sitting it higher on a thin neck left a dark gap either side, and
+            the head read as a ball balanced on the body rather than part of it
+            — the reflection looked right precisely because the blur closed
+            that gap for it.
+          */}
+          <ellipse cx="52" cy="36" rx="10.5" ry="11.5" transform="rotate(-16 52 36)" />
           {/* Fist under the chin. */}
-          <ellipse cx="53" cy="47" rx="7" ry="6" />
+          <ellipse cx="54" cy="50" rx="6.5" ry="5.5" />
         </g>
       </defs>
 
       {/* Air. Does most of the atmospheric work. */}
-      <ellipse cx="56" cy="76" rx="56" ry="66" fill="url(#thinker-air)" />
+      <ellipse cx="55" cy="92" rx="58" ry="46" fill="url(#thinker-air)" />
 
       <g className="thinker__body">
         <g className="thinker__shape" filter="url(#thinker-soft)">
