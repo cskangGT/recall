@@ -47,6 +47,7 @@ export interface Repository {
   /** Drops a workspace and everything under it. Used to reset the demo. */
   deleteWorkspace(id: string): void;
   getWorkspace(id: string): { id: string; name: string; auto_reorganize: boolean } | null;
+  setAutoReorganize(id: string, enabled: boolean): void;
 
   /**
    * The single read the frontend needs — the same shape `SeedDataSource` returns,

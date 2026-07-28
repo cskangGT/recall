@@ -171,6 +171,10 @@ export class SqliteRepository implements Repository {
       );
   }
 
+  setAutoReorganize(id: string, enabled: boolean): void {
+    this.db.prepare('UPDATE workspaces SET auto_reorganize = ? WHERE id = ?').run(int(enabled), id);
+  }
+
   listSources(workspaceId: string): SourceRow[] {
     const rows = this.db
       .prepare('SELECT * FROM sources WHERE workspace_id = ? ORDER BY created_at DESC, id')

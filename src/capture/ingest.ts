@@ -129,7 +129,10 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
   };
 
   const touched = [...new Set(newMemories.map((m) => m.category_id))];
-  const candidate = evaluateReorg(attached, touched);
+  // `auto_reorganize` has been in the schema and the payload since Phase 3 and
+  // was read by nobody — declared and ignored. Off means the memories still
+  // file, the structure just stops moving on its own.
+  const candidate = attached.workspace.auto_reorganize ? evaluateReorg(attached, touched) : null;
 
   if (!candidate || candidate.operation !== 'split') {
     useWorkspaceStore.getState().applyPayload(attached);

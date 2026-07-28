@@ -45,6 +45,14 @@ export function LeftRail() {
       <div className="rail__spacer" />
       <button
         className="rail__btn"
+        title="Settings (,)"
+        data-testid="rail-settings"
+        onClick={() => useUiStore.getState().setSettingsOpen(true)}
+      >
+        ⚙
+      </button>
+      <button
+        className="rail__btn"
         title="Add (⌘K)"
         data-testid="rail-capture"
         onClick={() => setCaptureOpen(true)}

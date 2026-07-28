@@ -6,6 +6,7 @@ import { SourcesView } from './components/SourcesView';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
+import { Settings } from './components/Settings';
 import { LeftRail, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
@@ -24,6 +25,7 @@ export function App() {
   const nodes = useWorkspaceStore((s) => s.nodes);
   const captureOpen = useUiStore((s) => s.captureOpen);
   const askOpen = useUiStore((s) => s.askOpen);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
   const view = useUiStore((s) => s.view);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dropActive = useUiStore((s) => s.dropActive);
@@ -162,6 +164,10 @@ export function App() {
         ui.setView('sources');
         return;
       }
+      if (e.key === ',') {
+        ui.setSettingsOpen(true);
+        return;
+      }
       if (e.key === ' ') {
         e.preventDefault();
         const ws = useWorkspaceStore.getState();
@@ -238,6 +244,7 @@ export function App() {
       <Inspector />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
+      {settingsOpen && <Settings />}
     </div>
   );
 }

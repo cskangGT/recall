@@ -53,6 +53,7 @@ export interface DataSource {
   ): Promise<GraphPayload>;
   /** Re-runs a capture whose processing failed. Only the API can do this. */
   retrySource?(sourceId: string): Promise<GraphPayload>;
+  setAutoReorganize?(enabled: boolean): Promise<GraphPayload>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -127,6 +128,14 @@ export class ApiDataSource implements DataSource {
     return validateSeed(graph);
   }
 
+  async setAutoReorganize(enabled: boolean): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>('/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ autoReorganize: enabled }),
+    });
+    return validateSeed(graph);
+  }
+
   async retrySource(sourceId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/sources/${encodeURIComponent(sourceId)}/retry`,
@@ -154,7 +163,22 @@ export class ApiDataSource implements DataSource {
  * project's most valuable asset, and defaulting to the API would quietly spend
  * it. `?api=1` opts in.
  */
+/**
+ * `?offline=1` wins over `?api=1`.
+ *
+ * Spec 15.4 promises the demo survives a venue whose network has failed. Seed
+ * mode already is that — everything runs in the page against committed data at
+ * the real latencies — so offline is not a separate implementation, it is a
+ * refusal to reach for the server. Checked first precisely because the flag is
+ * reached for in a panic, and a flag that loses an argument to another flag is
+ * worse than no flag.
+ */
+export function isOffline(search = typeof window === 'undefined' ? '' : window.location.search): boolean {
+  return new URLSearchParams(search).get('offline') === '1';
+}
+
 export function selectDataSource(search = typeof window === 'undefined' ? '' : window.location.search): DataSource {
+  if (isOffline(search)) return SeedDataSource;
   const params = new URLSearchParams(search);
   return params.get('api') === '1' ? new ApiDataSource() : SeedDataSource;
 }

@@ -27,6 +27,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | `⌘/` | One bar, two modes. A keyword searches as you type; a question is answered. The chip tells you which, and `⏎` does what the chip says. |
 | `⌘Z` | Undo the reorganization. |
 | `T` / `G` / `S` | Browse / Map / Sources. Selection carries across, and the map centres on it. |
+| `,` | Settings — three switches, not a screen. |
 
 ## Three surfaces, one corpus
 
@@ -168,8 +169,22 @@ scoring, so a category you named stops being a restructuring candidate
 altogether — rename `AI Tooling` and the demo's own split no longer fires.
 That is spec 4.2's trust loop: the AI does the work, the user keeps authority.
 
+## Settings
+
+Three controls, reached with `,`. Everything there does something; nothing there
+is a preference — spec §17 rules out a settings page and is right to.
+
+- **Auto-reorganize.** Off means new items still get filed, the structure just
+  stops moving without you. The field had been in the schema and the payload
+  since Phase 3 and was read by nobody.
+- **Data source**, and a way to force `?offline=1`. Spec §15.4 promises the demo
+  survives a venue whose network has failed; offline is not a second
+  implementation, it is a refusal to reach for the server, and it beats `?api=1`
+  because a flag reached for in a panic must not lose an argument to another flag.
+- **Reset the workspace**, back to the 47 seeded memories.
+
 ## Not built yet
 
-Settings, proposal mode, and offline mode. The real AI providers are implemented
-but unverified against a live endpoint — see "Running on real models" above.
-See `docs/spec-review-summary.md`.
+Proposal mode. The real AI providers are implemented but unverified against a
+live endpoint — see "Running on real models" above. See
+`docs/spec-review-summary.md`.

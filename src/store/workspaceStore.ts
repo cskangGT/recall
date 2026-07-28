@@ -18,6 +18,8 @@ interface WorkspaceState {
   moveCategory: (categoryId: string, parentId: string) => void;
   /** Renames a category and locks it against future reorganization. */
   renameCategory: (categoryId: string, name: string) => void;
+  /** Whether Recall may restructure on its own. */
+  setAutoReorganize: (enabled: boolean) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -76,6 +78,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
    * for restructuring at all. That is the promise in spec 4.2: the AI does the
    * work, the user keeps authority, and a correction is never quietly undone.
    */
+  setAutoReorganize: (enabled) => {
+    const current = get().payload;
+    if (!current) return;
+    get().applyPayload({
+      ...current,
+      workspace: { ...current.workspace, auto_reorganize: enabled },
+    });
+    const { source } = get();
+    void source.setAutoReorganize?.(enabled)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
+  },
+
   renameCategory: (categoryId, name) => {
     const current = get().payload;
     const trimmed = name.trim();

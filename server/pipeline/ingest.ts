@@ -152,11 +152,17 @@ export class IngestPipeline {
 
       // ---- 6. Reorganize. A failure here is silent by design (spec §7.4):
       // the user still got their memories; a structural change is a bonus.
+      //
+      // Skipped entirely when the workspace has auto-reorganize off. That field
+      // has been in the schema and the payload since Phase 3 and was read by
+      // nobody — declared and ignored.
       let reorg: ReorgEventRow | null = null;
-      try {
-        reorg = await this.reorganize(input.workspaceId, sourceId, result.touchedCategoryIds);
-      } catch {
-        reorg = null;
+      if (this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
+        try {
+          reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds);
+        } catch {
+          reorg = null;
+        }
       }
 
       return { sourceId, status: 'complete', ...result, reorg };

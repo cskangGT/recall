@@ -59,6 +59,7 @@ interface UiState {
   camera: Camera | null;
   captureOpen: boolean;
   askOpen: boolean;
+  settingsOpen: boolean;
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
   answer: (ScriptedAnswer & { question: string }) | null;
@@ -81,6 +82,7 @@ interface UiState {
   setCamera: (c: Camera) => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
   setCaptureStage: (s: CaptureStage) => void;
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
@@ -108,6 +110,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   camera: null,
   captureOpen: false,
   askOpen: false,
+  settingsOpen: false,
   captureStage: 'idle',
   reorgHistory: [],
   answer: null,
@@ -142,6 +145,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setCamera: (camera) => set({ camera }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCaptureStage: (captureStage) => set({ captureStage }),
 
   // 10 deep, session-scoped (spec 8.4.5).
@@ -172,8 +176,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   escape: () => {
     const s = get();
-    if (s.captureOpen || s.askOpen) {
-      set({ captureOpen: false, askOpen: false });
+    if (s.captureOpen || s.askOpen || s.settingsOpen) {
+      set({ captureOpen: false, askOpen: false, settingsOpen: false });
       return;
     }
     // An answer and its highlight are one surface, so they clear together. The

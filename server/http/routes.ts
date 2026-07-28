@@ -120,6 +120,16 @@ async function handleWorkspace(
     return ok({ undone: event.id, graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
+  // PATCH /api/workspaces/:id/settings — the workspace's own switches.
+  if (req.method === 'PATCH' && resource === 'settings' && !resourceId) {
+    const body = (req.body ?? {}) as { autoReorganize?: unknown };
+    if (typeof body.autoReorganize !== 'boolean') {
+      return badRequest('autoReorganize must be a boolean');
+    }
+    deps.repo.setAutoReorganize(workspaceId, body.autoReorganize);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
   // POST /api/workspaces/:id/sources/:sourceId/retry — re-run a failed capture.
   if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'retry') {
     const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);

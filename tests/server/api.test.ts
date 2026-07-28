@@ -270,3 +270,33 @@ describe('POST /sources/:id/retry', () => {
   });
 });
 
+describe('PATCH /settings', () => {
+  it('turns auto-reorganize off and reports it in the payload', async () => {
+    const res = await patch(`${base}/settings`, { autoReorganize: false });
+    expect(res.status).toBe(200);
+    expect(validateSeed((res.body as { graph: unknown }).graph).workspace.auto_reorganize)
+      .toBe(false);
+  });
+
+  it('rejects a non-boolean rather than coercing it', async () => {
+    expect((await patch(`${base}/settings`, { autoReorganize: 'off' })).status).toBe(400);
+  });
+
+  /** The switch has to change what the pipeline does, not just what it says. */
+  it('stops the ingest restructuring anything', async () => {
+    await patch(`${base}/settings`, { autoReorganize: false });
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot',
+      content: 'Braintrust vs Langfuse for agent evals',
+      imagePath: '/seed/demo-screenshot.png',
+    });
+
+    expect(res.status).toBe(200);
+    const body = res.body as { reorg: unknown; graph: GraphPayload };
+    expect(body.reorg).toBeNull();
+    // The memories still landed; only the taxonomy stayed put.
+    expect(body.graph.memories.length).toBeGreaterThan(47);
+    expect(body.graph.categories).toHaveLength(20);
+  });
+});
+
