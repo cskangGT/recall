@@ -16,6 +16,8 @@ interface WorkspaceState {
   moveMemory: (memoryId: string, categoryId: string) => void;
   /** User re-parents a child category. */
   moveCategory: (categoryId: string, parentId: string) => void;
+  /** Renames a category and locks it against future reorganization. */
+  renameCategory: (categoryId: string, name: string) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -62,6 +64,35 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     get().applyPayload(next);
     const { source } = get();
     void source.moveMemory?.(memoryId, categoryId)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
+  },
+
+  /**
+   * Renaming is a correction, so it locks.
+   *
+   * `gates.ts` drops locked categories before any scoring, which means a name
+   * you chose is not merely preserved — the category stops being a candidate
+   * for restructuring at all. That is the promise in spec 4.2: the AI does the
+   * work, the user keeps authority, and a correction is never quietly undone.
+   */
+  renameCategory: (categoryId, name) => {
+    const current = get().payload;
+    const trimmed = name.trim();
+    if (!current || trimmed.length === 0) return;
+
+    const existing = current.categories.find((c) => c.id === categoryId);
+    if (!existing || existing.name === trimmed) return;
+
+    const next: GraphPayload = {
+      ...current,
+      categories: current.categories.map((c) =>
+        c.id === categoryId ? { ...c, name: trimmed, name_locked: true } : c,
+      ),
+    };
+    get().applyPayload(next);
+    const { source } = get();
+    void source.updateCategory?.(categoryId, { name: trimmed })
       .then(get().applyPayload)
       .catch(() => void get().load());
   },

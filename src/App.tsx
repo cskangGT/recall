@@ -11,6 +11,7 @@ import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
 import { buildCaptureStory } from './capture/story';
+import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
@@ -77,6 +78,10 @@ export function App() {
     const camera = ui.camera ?? fitToBounds(ws.nodes, { w: 1200, h: 800 });
     const ghost = { x: camera.x + 520 / camera.zoom, y: camera.y };
 
+    const motion = ws.payload
+      ? reorgMotion(result.event, ws.payload)
+      : { dissolving: [], travelling: [] };
+
     setAnimation({
       startedAt: performance.now(),
       hasStructure: result.event !== null,
@@ -85,6 +90,7 @@ export function App() {
       targetCategoryId: result.targetCategoryId,
       ghost,
       event: result.event,
+      ...motion,
     });
   }, []);
 

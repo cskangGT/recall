@@ -113,6 +113,52 @@ test('a subcategory cannot be nested under another subcategory (AC-31)', async (
   await expect(page.getByTestId('toast')).toContainText('Recall keeps categories two levels deep.');
 });
 
+/**
+ * The other half of the trust loop. Dragging a memory says "not there";
+ * renaming says "not that". Both have to stick.
+ */
+test('renaming a category locks it against the AI', async ({ page }) => {
+  await node(page, 'cat_ai_tooling').click();
+  await expect(page.getByTestId('category-name')).toHaveText('AI Tooling');
+
+  await page.getByTestId('category-name').click();
+  await page.getByTestId('category-name-input').fill('Agent Stack');
+  await page.getByTestId('category-name-input').press('Enter');
+
+  await expect(page.getByTestId('category-name')).toHaveText('Agent Stack');
+  await expect(page.getByTestId('inspector')).toContainText("Named by you");
+  // The arc is the same category, so it renames there too.
+  await expect(named(page, 'Agent Stack')).toBeVisible();
+});
+
+test('Escape abandons a rename instead of committing it', async ({ page }) => {
+  await node(page, 'cat_hiring').click();
+  await page.getByTestId('category-name').click();
+  await page.getByTestId('category-name-input').fill('Recruiting');
+  await page.getByTestId('category-name-input').press('Escape');
+
+  await expect(page.getByTestId('category-name')).toHaveText('Hiring');
+  // Escape must not have fallen through and cleared the selection either.
+  await expect(page.getByTestId('inspector')).toContainText('Hiring');
+});
+
+test('a renamed category no longer reorganizes — the correction is permanent', async ({ page }) => {
+  await node(page, 'cat_ai_tooling').click();
+  await page.getByTestId('category-name').click();
+  await page.getByTestId('category-name-input').fill('Agent Stack');
+  await page.getByTestId('category-name-input').press('Enter');
+  await expect(page.getByTestId('category-name')).toHaveText('Agent Stack');
+
+  // The capture that normally splits AI Tooling now files without restructuring.
+  await page.keyboard.press('Meta+k');
+  await page.getByTestId('capture-input').fill('Braintrust vs Langfuse for agent evals');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('capture-story')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('capture-story')).not.toContainText('reorganized around it');
+  await expect(named(page, 'Agent Stack')).toBeVisible();
+});
+
 test('an answer becomes a cloud of its own with the citations below it', async ({ page }) => {
   await page.keyboard.press('Meta+/');
   await page.getByTestId('ask-input').fill('What did we decide about our eval stack?');

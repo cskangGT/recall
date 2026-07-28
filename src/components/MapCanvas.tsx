@@ -26,6 +26,17 @@ export interface RunningAnimation {
   targetCategoryId: string | null;
   ghost: { x: number; y: number };
   event: ReorgEvent | null;
+  /**
+   * Categories that existed before this change and do not now — a merge's
+   * absorbed side. They are already gone from the payload, so they can only be
+   * drawn from the event's snapshot, converging into whatever absorbed them.
+   */
+  dissolving: { x: number; y: number; radius: number; intoX: number; intoY: number }[];
+  /**
+   * Categories that moved. A promotion pushes a child 320px clear of the parent
+   * it is leaving; without this it simply appears somewhere else between frames.
+   */
+  travelling: { id: string; fromX: number; fromY: number }[];
 }
 
 const ENTRY_MS = 800;
@@ -193,6 +204,17 @@ export function MapCanvas({
               y: animation.ghost.y + (n.y - animation.ghost.y) * travel,
             };
           }
+          const moving = animation.travelling.find((t) => t.id === n.id);
+          if (moving) {
+            // Same 1400–1900ms window the split's children emerge in, so a
+            // promotion and a split feel like the same kind of event.
+            const progress = easeInOutCubic(Math.min(1, Math.max(0, (t - 1400) / 500)));
+            return {
+              ...n,
+              x: moving.fromX + (n.x - moving.fromX) * progress,
+              y: moving.fromY + (n.y - moving.fromY) * progress,
+            };
+          }
           if (createdIds.has(n.id)) {
             // Children emerge from the parent during `transform` (1400-1900ms).
             const grow = Math.min(1, Math.max(0, (t - 1400) / 500));
@@ -234,6 +256,25 @@ export function MapCanvas({
         }
       }
 
+      // A merge's absorbed category, drawn from the snapshot and collapsing into
+      // whatever took it. It no longer exists in `nodes`, so nothing else can
+      // show it going.
+      const dissolving = animation
+        ? animation.dissolving
+            .map((d) => {
+              const progress = (now - animation.startedAt - 1400) / 500;
+              if (progress <= 0 || progress >= 1) return null;
+              const e = easeInOutCubic(progress);
+              return {
+                x: d.x + (d.intoX - d.x) * e,
+                y: d.y + (d.intoY - d.y) * e,
+                radius: d.radius * (1 - e),
+                alpha: 1 - e,
+              };
+            })
+            .filter((d): d is NonNullable<typeof d> => d !== null)
+        : [];
+
       drawFrame(c, {
         nodes: renderNodes,
         edges: allEdges,
@@ -247,6 +288,7 @@ export function MapCanvas({
         desaturatedIds,
         ghost,
         bloom,
+        dissolving,
       });
     };
 

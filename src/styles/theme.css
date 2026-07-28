@@ -1088,6 +1088,33 @@ button {
   margin-bottom: 10px;
 }
 
+/* The name is its own affordance — it only announces itself on hover, so the
+   panel stays a reading surface rather than a form. */
+.inspector__name {
+  cursor: text;
+  border-radius: 6px;
+  margin: 0 -6px 4px;
+  padding: 0 6px;
+  transition: background 110ms ease;
+}
+
+.inspector__name:hover {
+  background: var(--bg-raised);
+}
+
+.inspector__name--editing {
+  display: block;
+  width: calc(100% + 12px);
+  background: var(--bg-raised);
+  border: none;
+  outline: 1px solid var(--accent);
+  color: var(--text);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+
 .inspector h2 {
   margin: 0 0 4px;
   font-size: 19px;

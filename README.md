@@ -156,9 +156,20 @@ default). The harness is dimension-agnostic and also supports OpenAI via `--prov
 | `src/components/` | React surfaces |
 | `docs/` | Product spec, review summary, Phase 1 plan |
 
+## Corrections
+
+Two ways to disagree with Recall, and both are permanent:
+
+- **Drag a memory** onto another category — "not there".
+- **Click a category's name** in the Inspector to rename it — "not that".
+
+Renaming locks the category. `gates.ts` drops locked categories before any
+scoring, so a category you named stops being a restructuring candidate
+altogether — rename `AI Tooling` and the demo's own split no longer fires.
+That is spec 4.2's trust loop: the AI does the work, the user keeps authority.
+
 ## Not built yet
 
-Settings, MERGE/PROMOTE *animations* (both are applied and tested, but the
-map does not choreograph them), proposal mode, offline mode, and the real AI providers — the
-interfaces are ready, but there are no API keys to verify them against. See
-`docs/spec-review-summary.md`.
+Settings, proposal mode, and offline mode. The real AI providers are implemented
+but unverified against a live endpoint — see "Running on real models" above.
+See `docs/spec-review-summary.md`.

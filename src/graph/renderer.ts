@@ -31,6 +31,11 @@ export interface FrameState {
    * makes the split read as an event rather than two circles sliding apart.
    */
   bloom?: { x: number; y: number; progress: number } | null;
+  /**
+   * Categories mid-absorption. They are gone from `nodes` by the time this
+   * runs, so a merge has nothing to show unless it is drawn separately.
+   */
+  dissolving?: { x: number; y: number; radius: number; alpha: number }[];
 }
 
 const withAlpha = (hex: string, alpha: number): string => {
@@ -187,6 +192,18 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     ctx.arc(sx, sy, r * 2.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = withAlpha(COLORS.ghost, 0.9);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // A merge, as its opposite: mass collapsing inward instead of pushing apart.
+  // Drawn after the nodes so it passes in front of the category taking it.
+  for (const d of s.dissolving ?? []) {
+    const { sx, sy } = worldToScreen(d, camera, viewport);
+    const r = d.radius * camera.zoom;
+    if (r <= 0.5) continue;
+    ctx.fillStyle = withAlpha(COLORS.parentCategory, 0.55 * d.alpha);
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();

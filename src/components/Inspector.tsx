@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
@@ -50,6 +51,77 @@ function MemoryRow({
 }
 
 /**
+ * The category name, editable in place.
+ *
+ * Renaming is the other half of the trust loop — dragging a memory says "not
+ * there", renaming says "not that". Both lock, and a locked category is dropped
+ * before any scoring in `gates.ts`, so the correction is permanent rather than
+ * merely applied.
+ *
+ * Click to edit, Enter to keep, Escape to abandon. No edit button: the name is
+ * the affordance, and a pencil icon beside every heading is chrome the rest of
+ * this interface does without.
+ */
+function CategoryName({ category }: { category: Category }) {
+  const renameCategory = useWorkspaceStore((s) => s.renameCategory);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(category.name);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) ref.current?.select();
+  }, [editing]);
+
+  // A different category selected while editing must not carry the draft over.
+  useEffect(() => {
+    setEditing(false);
+    setDraft(category.name);
+  }, [category.id, category.name]);
+
+  const commit = () => {
+    setEditing(false);
+    renameCategory(category.id, draft);
+  };
+
+  if (!editing) {
+    return (
+      <h2
+        className="inspector__name"
+        data-testid="category-name"
+        title="Click to rename"
+        onClick={() => setEditing(true)}
+      >
+        {category.name}
+      </h2>
+    );
+  }
+
+  return (
+    <input
+      ref={ref}
+      className="inspector__name inspector__name--editing"
+      data-testid="category-name-input"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        }
+        if (e.key === 'Escape') {
+          // Stop it reaching the global handler, which would clear the
+          // selection out from under the thing being renamed.
+          e.stopPropagation();
+          setDraft(category.name);
+          setEditing(false);
+        }
+      }}
+    />
+  );
+}
+
+/**
  * `listMemories` is false in the folder browser: the middle pane is already
  * showing this exact list, and three columns where two say the same thing is
  * worse than two. The Inspector keeps the part the browser does not have —
@@ -89,13 +161,13 @@ function CategoryDetail({
   return (
     <>
       <div className="inspector__eyebrow">Category</div>
-      <h2>{category.name}</h2>
+      <CategoryName category={category} />
       <div className="inspector__meta">
         {parent ? `${parent.name} › ${category.name}` : 'Top level'} · {memories.length} memories
       </div>
       {locked && (
         <div className="chips">
-          <span className="chip chip--lock">Pinned by you — AI won't reorganize this</span>
+          <span className="chip chip--lock">Named by you — AI won't reorganize this</span>
         </div>
       )}
       {childIds.length > 0 && (

@@ -141,6 +141,60 @@ describe('view switching', () => {
   });
 });
 
+describe('renameCategory', () => {
+  beforeEach(load);
+
+  it('renames and locks, so the AI can never rename it back', async () => {
+    const before = useWorkspaceStore.getState().payload!;
+    const target = cat(before, 'AI Tooling');
+    expect(target.name_locked).toBe(false);
+
+    useWorkspaceStore.getState().renameCategory(target.id, 'Agent Stack');
+
+    const after = useWorkspaceStore.getState().payload!.categories.find((c) => c.id === target.id)!;
+    expect(after.name).toBe('Agent Stack');
+    expect(after.name_locked).toBe(true);
+  });
+
+  /**
+   * The reason renaming locks at all. `gates.ts` drops locked categories before
+   * scoring, so a category you named stops being a restructuring candidate —
+   * the correction is permanent, not merely applied.
+   */
+  it('takes the category out of reorganization entirely', async () => {
+    const base = useWorkspaceStore.getState().payload!;
+    const aiTooling = cat(base, 'AI Tooling');
+
+    // Unrenamed, the demo item splits this category — that is the whole demo.
+    const withDemo = (payload: GraphPayload): GraphPayload => ({
+      ...payload,
+      sources: [...payload.sources, demoItem.source as Source],
+      memories: [...payload.memories, ...(demoItem.memories as unknown as Memory[])],
+    });
+    expect(evaluateReorg(withDemo(base), [aiTooling.id])).not.toBeNull();
+
+    useWorkspaceStore.getState().renameCategory(aiTooling.id, 'Agent Stack');
+    const renamed = useWorkspaceStore.getState().payload!;
+    expect(evaluateReorg(withDemo(renamed), [aiTooling.id])).toBeNull();
+  });
+
+  it('ignores an empty name rather than blanking the category', async () => {
+    const before = useWorkspaceStore.getState().payload!;
+    const target = cat(before, 'Hiring');
+    useWorkspaceStore.getState().renameCategory(target.id, '   ');
+    expect(useWorkspaceStore.getState().payload!.categories.find((c) => c.id === target.id)!.name)
+      .toBe('Hiring');
+  });
+
+  it('does not lock a category when the name did not actually change', async () => {
+    const before = useWorkspaceStore.getState().payload!;
+    const target = cat(before, 'Product');
+    useWorkspaceStore.getState().renameCategory(target.id, 'Product');
+    expect(useWorkspaceStore.getState().payload!.categories.find((c) => c.id === target.id)!
+      .name_locked).toBe(false);
+  });
+});
+
 describe('arc navigation state', () => {
   beforeEach(() => useUiStore.setState({ arcLevelId: null, openCategoryId: null }));
 
