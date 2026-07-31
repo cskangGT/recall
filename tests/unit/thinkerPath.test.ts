@@ -54,13 +54,17 @@ describe('pathD', () => {
 
 describe('the traced rings', () => {
   /**
-   * No assertion on the outer ring's length. It was a tripwire for accidental
-   * change, and the shape is now edited on purpose every few minutes, so it
-   * fired on every legitimate edit — which teaches you to ignore it. The hole is
-   * not being edited, so it keeps its count.
+   * No assertion on any ring's length any more. Counting points was a tripwire
+   * for accidental change, and every ring is now edited on purpose — the hole
+   * grew when the thigh lengthened — so it only ever fired on legitimate work,
+   * which teaches you to ignore it. What follows are properties instead.
    */
-  it('still has exactly one hole, of the size it was traced at', () => {
-    expect(VOID).toHaveLength(10);
+  it('has a hole big enough to see', () => {
+    expect(VOID.length).toBeGreaterThanOrEqual(6);
+    const xs = VOID.map(([x]) => x);
+    const ys = VOID.map(([, y]) => y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(8);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(8);
   });
 
   it('has no repeated point, which would be a zero-length segment', () => {
