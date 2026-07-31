@@ -28,9 +28,20 @@ describe('pathD', () => {
 });
 
 describe('the traced rings', () => {
-  it('are the shape that came off the photograph', () => {
-    expect(OUTER).toHaveLength(59);
+  /**
+   * No assertion on the outer ring's length. It was a tripwire for accidental
+   * change, and the shape is now edited on purpose every few minutes, so it
+   * fired on every legitimate edit — which teaches you to ignore it. The hole is
+   * not being edited, so it keeps its count.
+   */
+  it('still has exactly one hole, of the size it was traced at', () => {
     expect(VOID).toHaveLength(10);
+  });
+
+  it('has no repeated point, which would be a zero-length segment', () => {
+    for (let i = 1; i < OUTER.length; i++) {
+      expect(OUTER[i]).not.toEqual(OUTER[i - 1]);
+    }
   });
 
   it('stay inside the viewBox', () => {
@@ -90,10 +101,11 @@ describe('spanPolygon', () => {
    * exactly why it is the case that would be got wrong and not noticed.
    */
   it('wraps past the start of the ring', () => {
-    const p = spanPolygon(57, 2);
+    const last = OUTER.length - 1;
+    const p = spanPolygon(last - 1, 2);
     expect(p).toHaveLength(5);
-    expect(p[0]).toEqual(OUTER[57]);
-    expect(p[1]).toEqual(OUTER[58]);
+    expect(p[0]).toEqual(OUTER[last - 1]);
+    expect(p[1]).toEqual(OUTER[last]);
     expect(p[2]).toEqual(OUTER[0]);
     expect(p[4]).toEqual(OUTER[2]);
   });

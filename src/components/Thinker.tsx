@@ -25,13 +25,19 @@
  *   - **Open the shape.** There is a bag on the ground beside the figure joined
  *     to it by a thin bridge. Erode, keep the largest piece, dilate back: that
  *     severs the bridge and leaves the body, which is thick everywhere.
- *   - **Then look at it.** An opening only removes what is *loosely* attached.
- *     A second object at the shin held on across more than the erosion radius
- *     and came through — ten points of blocky tab that read as a defect, because
- *     everything else on this outline is a body part and that one was not. It
- *     was cut by hand afterwards; the giveaway in the path data is an
- *     out-and-back, where the contour reverses (y ran 71 → 69.6 → 69.8 → 72.2 →
- *     71.2) instead of advancing. A trace still needs one pass by eye.
+ *   - **Then look at it — and then look at the photograph again.** An opening
+ *     only removes what is *loosely* attached, so a second object at the shin
+ *     came through. Its signature in the path data is an out-and-back, where the
+ *     contour reverses instead of advancing, and on that evidence it was cut:
+ *     everything else on this outline is a body part and that one was not.
+ *
+ *     It was the **flashlight**. At 18x the reference shows a lamp head and a
+ *     barrel propped against the shin — the one thing in the picture that says
+ *     the person walked up there at night on purpose. The detection was right
+ *     and the conclusion was wrong, because *not anatomy* is not the same as
+ *     *not intended*. It is drawn back in, redrawn rather than restored: the six
+ *     traced points were a blob at nine pixels, and a torch only reads as one if
+ *     the head is visibly wider than the barrel.
  *
  * The two holes are punched from the same path with `evenodd` — sky through the
  * gap between forearm, torso and thigh, and again between the near shin and the

@@ -307,10 +307,23 @@ button {
 .sky__hill {
   position: absolute;
   left: 50%;
-  width: 170vw;
+  /*
+   * The curvature is the reference's, measured rather than guessed. There the
+   * crest sits at (600, 572) of a 1007x639 frame and the edge falls to about
+   * y=635 by x=200 — a 63px drop over 400px, near a tenth of the frame height.
+   * A 62vw semi-axis against a 28vh radius drops 28 x (1 - sqrt(1 - (50/62)^2))
+   * ~= 11.5vh from crest to frame edge, which is that.
+   *
+   * It was 170vw and 22vh, which drops 4.2vh — under half — and read as a floor
+   * with a slight bow rather than as a mound somebody climbed. Only the
+   * curvature is copied: the crest stays on the arc's focus, because the figure
+   * sits on it and the greeting sits below it on the dark slope. At the
+   * reference's 89.5% the greeting would be on the pale sky.
+   */
+  width: 124vw;
   height: 140vh;
   transform: translateX(-50%);
-  border-radius: 50% 50% 0 0 / 22vh 22vh 0 0;
+  border-radius: 50% 50% 0 0 / 28vh 28vh 0 0;
   background: #0f0b16;
   pointer-events: none;
 }

@@ -66,7 +66,21 @@ export const OUTER: readonly Pt[] = [
   [20.6, 94.1],
   [21.3, 90.8],
   [25.7, 83.6],
-  [24.6, 78.5],
+  // --- the flashlight -----------------------------------------------------
+  // Propped against the shin, lamp head up and to the left. It is in the
+  // reference photograph and it was cut out of an earlier pass as a stray
+  // object; see the note in Thinker.tsx. Redrawn rather than restored from the
+  // trace, because at nine pixels the original six points were a blob — a torch
+  // only reads as one if the head is visibly wider than the barrel.
+  [24.2, 79.6],
+  [21.2, 76.4],
+  [18.4, 73.6],
+  [15.9, 71.6],
+  [16.2, 68.2],
+  [19.4, 67.4],
+  [20.6, 70.4],
+  [24.6, 74.8],
+  // --- back to the shin ---------------------------------------------------
   [25.9, 67.7],
   [26.9, 65.4],
   [27.1, 60.8],
@@ -132,11 +146,13 @@ export const PARTS: readonly Part[] = [
   { name: 'Leg notch', from: 22, to: 27, colour: '#4fa8ff' },
   { name: 'Foot', from: 28, to: 30, colour: '#7c7cff' },
   { name: 'Heel', from: 31, to: 35, colour: '#b06bff' },
-  { name: 'Shin', from: 36, to: 45, colour: '#ff6bd6' },
-  { name: 'Knee', from: 46, to: 47, colour: '#ff4f9a' },
-  { name: 'Forearm', from: 48, to: 52, colour: '#ffffff' },
-  { name: 'Chest', from: 53, to: 54, colour: '#c9a06b' },
-  { name: 'Bill and cap front', from: 55, to: 58, colour: '#6bd0ff' },
+  { name: 'Shin, lower', from: 36, to: 41, colour: '#ff6bd6' },
+  { name: 'Flashlight', from: 42, to: 49, colour: '#ffd166' },
+  { name: 'Shin, upper', from: 50, to: 52, colour: '#ff8fdf' },
+  { name: 'Knee', from: 53, to: 54, colour: '#ff4f9a' },
+  { name: 'Forearm', from: 55, to: 59, colour: '#ffffff' },
+  { name: 'Chest', from: 60, to: 61, colour: '#c9a06b' },
+  { name: 'Bill and cap front', from: 62, to: 65, colour: '#6bd0ff' },
 ];
 
 const pt = ([x, y]: Pt) => `${x} ${y}`;
