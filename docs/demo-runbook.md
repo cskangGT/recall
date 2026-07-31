@@ -58,7 +58,7 @@ Twelve steps, per spec §15.3. Timings are median across 20 measured runs.
 | Do | Say |
 |---|---|
 | Load the page. The **welcome screen**: one line and a text box. | *"Recall opens by asking, not by showing you a dashboard."* |
-| Press `⏎`. The **arc browser** paints — six category stones above a face in profile. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."* |
+| Press `⏎`. The **arc browser** paints — six category stones above the seated Thinker. | *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."* |
 | Click **Fundraising**. Its three subcategories fan out; 11 memories fill the list below. | *"Six categories, fourteen sub-categories. None of them are mine. The bigger the stone, the more is in it."* |
 | Press `G`. Same corpus as the map — and the colour comes back. | *"Grey when I'm looking something up, colour when I want to think out loud."* |
 | Hover **Fundraising** — the cluster brightens, everything unconnected dims. | |

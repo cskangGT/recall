@@ -336,7 +336,7 @@ button {
 @media (prefers-reduced-motion: no-preference) {
   .thinker__body {
     animation: breathe 6.5s ease-in-out infinite;
-    transform-origin: 56px 84px;
+    transform-origin: 57px 122px;
   }
 }
 

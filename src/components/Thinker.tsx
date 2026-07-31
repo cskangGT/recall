@@ -1,45 +1,50 @@
 /**
- * The thinking figure: one head in profile, standing in its own reflection.
+ * Rodin's Thinker, in profile, seated in his own reflection.
  *
- * Two things were learned the expensive way and are worth keeping written down.
+ * Thirteen attempts at this shape failed before it read, and the same four
+ * mistakes account for all of them. Every one is the natural thing to do if you
+ * are drawing from the idea of the sculpture rather than looking at it.
  *
- * **It is a head, not a body.** Earlier passes drew a seated Rodin and never got
- * it to read — the head always looked like a ball resting on the torso, because
- * a head authored as its own shape and butted against a body leaves a seam
- * wherever they meet. A profile is one unbroken contour from crown to throat, so
- * that failure mode cannot occur here.
+ * **The shoulders are up around the ears.** He is hunched, so the trapezius
+ * rises *above* the base of the skull — the shoulder hump peaks higher than the
+ * nape. Drawing the back as one smooth arc from the head down to the buttock
+ * loses that hump, and without it the whole silhouette collapses into a pawn.
+ * This is the single most Thinker-ish thing about the outline.
  *
- * **Crown to chin is 59 units against 58 of width, and that ratio is the whole
- * drawing.** Three versions ran 65–79 tall on the same width and read as long,
- * drawn faces. The tell was in the picture the whole time: the reflection is the
- * same head squashed to 55%, and it looked better proportioned than the head
- * casting it. A head in profile is close to square; past about 1.2 it is a
- * portrait stretched vertically, and the eye names that before it can say why.
+ * **The void is large.** The gap between the forearm, the chest and the thigh is
+ * roughly a third of the torso's area. Drawn small it reads as a hole punched in
+ * a blob; drawn full size it is what makes a person leaning on his own hand.
  *
- * A pair of these back to back was tried, because that is what the reference
- * literally shows and it said something nice about the product — one head you,
- * one head Recall, the overlap the memory you share. It did not survive contact
- * with the screen. At the size this actually renders, two heads are a lot of
- * silhouette for one focal point, and the second one takes width the arc wants
- * for its categories. One figure with one reflection is the version that reads.
+ * **The knee is the front of the figure.** It projects further forward than any
+ * other point — further than the face — and both the shin below it and the
+ * forearm above it recede from it, so it reads as a spur. Earlier versions had
+ * it barely proud of the arm and the lower body became a wedge.
+ *
+ * **The head is small and bowed.** Twenty-eight units against a hundred and
+ * twenty of figure, and tipped far enough forward that its crown points back
+ * rather than up. Every version that put an upright head on top of the mass
+ * produced the same complaint — a big ball resting on a face.
+ *
+ * One structural rule holds the whole thing together: **it is a single closed
+ * contour.** A head authored as its own shape and butted against a torso leaves
+ * a seam wherever they meet, and no blending hides it — each fix just moves the
+ * seam. The void is the same path's second subpath, punched out with `evenodd`.
+ *
+ * It also has to survive being small. An earlier seated version read at 2.4x and
+ * fell apart at 126px, which is the size the app actually renders; the figure is
+ * bigger here for exactly that reason.
  *
  * Greyscale, because the browsing screen is monochrome and the colour lives on
  * the map.
  */
 
-/** The head spans x 27–85, so a 112-wide box centres it with even margins. */
-const CENTER_X = 56;
-const VIEW_W = 112;
-const VIEW_H = 142;
+/** The figure spans x 10–104, so a 116-wide box centres it with even margins. */
+const CENTER_X = 57;
+const VIEW_W = 116;
+const VIEW_H = 200;
 
-/**
- * Where the water is.
- *
- * The head stands *in* it, not on it — an early pass left 40 units of neck above
- * the line and it read as a head on a stalk. Thirteen units is enough to say
- * "neck" and not enough to compete with the face.
- */
-const WATER_Y = 88;
+/** Where the water is. He sits on a rock the water has already covered. */
+const WATER_Y = 125;
 /** A reflection foreshortens; 0.55 is the amount that still reads as the same figure. */
 const SQUASH = 0.55;
 
@@ -57,7 +62,7 @@ export function Thinker({
       height={(size * VIEW_H) / VIEW_W}
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       role="img"
-      aria-label="A face in profile, thinking"
+      aria-label="A seated figure in profile, chin on hand, thinking"
     >
       <defs>
         <filter id="thinker-soft" x="-50%" y="-50%" width="200%" height="200%">
@@ -70,14 +75,14 @@ export function Thinker({
         {/* User space, not bounding box: the figure and its reflection are two
             separate elements, and per-element units would give each its own
             private ramp instead of one light falling across both. Runs from the
-            lit face at the upper left down to the back of the skull. */}
+            lit knee and face at the front to the back, which stays in shadow. */}
         <linearGradient
           id="thinker-tone"
           gradientUnits="userSpaceOnUse"
-          x1="32"
-          y1="16"
-          x2="78"
-          y2="88"
+          x1="14"
+          y1="8"
+          x2="105"
+          y2="123"
         >
           <stop offset="0" stopColor="#F2F2F8" />
           <stop offset="0.45" stopColor="#A6A6B4" />
@@ -90,53 +95,61 @@ export function Thinker({
         </radialGradient>
 
         {/*
-          The head, as one closed contour, wound clockwise from the crown: back
-          of the skull, nape, neck, then up the throat and along the face.
-
-          The features carry it. A smooth cranium with a small nose reads as a
-          balloon however the outline is proportioned — what says "face" is the
-          brow stepping out, the nose leaving it, and the notch under the lip
-          before the chin. Below the brow the face is compressed harder than the
-          cranium, so the skull dominates the way a real one does, and none of
-          that compression touched the horizontal excursion: the nose still
-          reaches x=27 and the lip still tucks back to x=41. Features pack
-          closer together on a shorter face, which is what real faces do.
-
           Authored once and drawn twice through <use>, so the figure and its
           reflection cannot drift apart. Fill is inherited from the wrapping
           group, because a <use> clone lives in a shadow tree that an outside
           CSS selector never reaches.
+
+          Outer contour, clockwise from the crown:
+
+            crown → back of skull → nape (concave) → shoulder hump (rises above
+            the nape) → back → buttock → into the water → along the rock → ankle
+            → shin → knee (the front of the figure) → up the outside of the
+            forearm → fist → chin → lip → nose → brow → forehead → crown
+
+          Second subpath: the void between forearm, chest and thigh.
         */}
-        <g id="thinker-head">
+        <g id="thinker-figure">
           <path
-            d="M50 14
-               Q70 15 81 36
-               Q85 50 81 62
-               Q78 68 76 74
-               L76 96
-               L54 96
-               Q53 88 52 80
-               Q49 77 41 72
-               Q35 71 34 67
-               Q31 65 32 62
-               Q34 60 32 57
-               Q33 56 33 55
-               Q30 54 27 51
-               Q28 47 34 44
-               Q33 42 32 39
-               Q32 34 35 28
-               Q42 15 50 14
+            fillRule="evenodd"
+            d="M58 7
+               Q72 10 74 21
+               Q73 30 68 35
+               Q76 28 84 33
+               Q95 45 100 67
+               Q105 89 103 105
+               Q101 119 95 124
+               L95 130
+               L22 130
+               Q14 129 14 122
+               Q18 107 16 92
+               Q11 84 10 76
+               Q11 72 17 70
+               Q22 56 33 43
+               Q37 41 35 37
+               Q30 35 28 31
+               Q25 30 24 26
+               Q26 22 28 18
+               Q30 12 37 10
+               Q47 6 58 7
+               Z
+               M28 81
+               Q35 66 47 52
+               Q50 49 54 54
+               Q60 63 61 73
+               Q62 82 53 82
+               Q40 84 28 81
                Z"
           />
         </g>
       </defs>
 
       {/* Air. Does most of the atmospheric work. */}
-      <ellipse cx={CENTER_X} cy="54" rx="58" ry="36" fill="url(#thinker-air)" />
+      <ellipse cx={CENTER_X} cy="70" rx="64" ry="64" fill="url(#thinker-air)" />
 
       <g className="thinker__body">
         <g className="thinker__shape" filter="url(#thinker-soft)">
-          <use href="#thinker-head" />
+          <use href="#thinker-figure" />
         </g>
 
         {/*
@@ -153,7 +166,7 @@ export function Thinker({
           filter="url(#thinker-softer)"
           transform={`matrix(1 0 0 ${-SQUASH} 0 ${WATER_Y * (1 + SQUASH)})`}
         >
-          <use href="#thinker-head" />
+          <use href="#thinker-figure" />
         </g>
       </g>
 
@@ -162,7 +175,7 @@ export function Thinker({
         className="thinker__water"
         cx={CENTER_X}
         cy={WATER_Y}
-        rx="50"
+        rx="58"
         ry="3"
         filter="url(#thinker-soft)"
       />
