@@ -455,7 +455,7 @@ export function ArcBrowser() {
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={isOpen ? 66 : 104} />
+        <Thinker size={isOpen ? 58 : 90} />
       </div>
 
       {!isOpen && <p className="arc__prompt">{heading}</p>}
