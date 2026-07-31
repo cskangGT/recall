@@ -68,9 +68,27 @@ button {
  * which is the point — the calm mode is for looking, the warm one for thinking
  * out loud.
  */
+/*
+ * Browsing is the hilltop after dark, so the sky goes on the whole window rather
+ * than on the middle column. Confined to the column it read as a violet panel
+ * bolted between two black ones — the rail and the inspector sit either side at
+ * #0a0a0b, and the seam was the first thing the eye found. The two of them turn
+ * transparent here and stand in the same weather as everything else.
+ *
+ * The accent is still grey, so pressing G still means colour arriving.
+ */
 .shell--mono {
   --accent: #cfcfd8;
   --accent-dim: #8b8b96;
+  /* The greys were chosen against near-black; low on this sky they lose most of
+     their contrast, and the arc's labels live low on it. */
+  --text-dim: #9d94ad;
+  --text-faint: #6d6480;
+}
+
+.shell--mono .rail,
+.shell--mono .inspector {
+  background: transparent;
 }
 
 .too-small {
@@ -187,16 +205,6 @@ button {
  * The first frame. No rail, no inspector — a welcome screen framed by the app
  * it is welcoming you into is just a modal.
  */
-/*
- * A night sky over a hill, with someone sitting on the crest.
- *
- * The tonal structure is the reference's and it is load-bearing, not decoration:
- * dark violet overhead, opening out to a pale glow at the horizon, then the hill
- * as a near-black band. That is what lets the conversation sit in the upper,
- * darker half — pale text on deep violet — while the figure reads as a
- * silhouette against the lightest part of the frame. Inverting the sky would put
- * the text on the pale end and the figure on the dark one, and lose both.
- */
 .welcome {
   --accent: #d8cbe4;
   --accent-dim: #9a8bab;
@@ -206,8 +214,6 @@ button {
   --text-dim: #cdbbdb;
   --text-faint: #a894b8;
 
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -216,47 +222,6 @@ button {
   height: 100%;
   /* Room for the hill, so the conversation never sits on top of it. */
   padding-bottom: 24vh;
-  background:
-    /* Cloud, drawn as light rather than as shape: wide, weak, and nowhere near
-       an edge. A cloud with an outline reads as a sticker. */
-    radial-gradient(120% 30% at 24% 30%, rgba(226, 208, 236, 0.20), transparent 62%),
-    radial-gradient(90% 22% at 76% 19%, rgba(206, 186, 222, 0.16), transparent 60%),
-    radial-gradient(150% 26% at 46% 57%, rgba(238, 210, 232, 0.22), transparent 66%),
-    radial-gradient(110% 20% at 68% 70%, rgba(240, 214, 226, 0.18), transparent 64%),
-    linear-gradient(
-      180deg,
-      #241b33 0%,
-      #3b2c52 22%,
-      #5c4576 46%,
-      #866297 66%,
-      #ab7fa6 82%,
-      #c99cb4 100%
-    );
-}
-
-/*
- * The hill. A single enormous ellipse cropped by the frame — far wider than the
- * viewport, so what you see is only the top of its curve and it reads as a
- * hillside rather than as a dome sitting on the page.
- */
-.welcome__hill {
-  position: absolute;
-  left: 50%;
-  bottom: -32vh;
-  width: 150vw;
-  height: 56vh;
-  transform: translateX(-50%);
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  background: #0f0b16;
-  pointer-events: none;
-}
-
-/* Sparse on purpose. A field of stars reads as a texture; four read as night. */
-.welcome__star {
-  position: absolute;
-  border-radius: 50%;
-  background: #fff;
-  pointer-events: none;
 }
 
 .welcome__stage {
@@ -264,10 +229,10 @@ button {
   /* Off centre, as in the reference — a figure dead centre on a symmetrical
      hill reads as a diagram of a figure on a hill. */
   left: 46%;
-  /* Sitting on the crest, which is at 24vh. The few pixels are the soft edge:
-     seated means overlapping the hill slightly, never floating above it. */
-  bottom: calc(24vh - 7px);
-  transform: translateX(-50%);
+  /* Sitting on the crest, which is at 76% of the frame. The few pixels are the
+     soft edge: seated means overlapping the hill slightly, never floating. */
+  top: 76%;
+  transform: translate(-50%, calc(-100% + 4px));
   z-index: 1;
   pointer-events: none;
 }
@@ -310,7 +275,94 @@ button {
   color: #fff;
 }
 
+/* ---------------------------------------------------------------------- sky */
+
+/*
+ * A night sky over a hill. The welcome screen is the whole scene; the browsing
+ * screen is the same place an hour later.
+ *
+ * The tonal structure is the reference photograph's, and it is load-bearing
+ * rather than decoration: dark overhead, opening out to a pale glow at the
+ * horizon, then the hill as a near-black band. That is what lets text sit in the
+ * upper, darker half while the figure reads as a silhouette against the lightest
+ * part of the frame. Inverting the sky would put the text on the pale end and
+ * the figure on the dark one, and lose both.
+ */
+.sky {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The welcome screen's sky, at full strength. It is the one frame in the app
+   that is not the app — no rail, no inspector, nothing to operate — which is
+   what earns it a palette of its own. */
+.sky--dusk {
+  background: linear-gradient(
+    180deg,
+    #241b33 0%,
+    #2c2140 11%,
+    #3b2c52 22%,
+    #5c4576 46%,
+    #866297 66%,
+    #ab7fa6 82%,
+    #c99cb4 100%
+  );
+}
+
+/*
+ * The browsing screen's sky. Same evening, an hour later.
+ *
+ * It has to begin at very nearly the shell's own near-black, because the rail
+ * and the inspector sit either side of it at #0a0a0b and any real colour along
+ * that top edge turns the middle column into a visible panel. All of the colour
+ * is spent low down, near the hill, where nothing borders it. It reads as the
+ * same place without turning a working surface into a poster.
+ */
+.sky--night {
+  background: linear-gradient(
+    180deg,
+    #0a0a0c 0%,
+    #100d18 28%,
+    #181226 54%,
+    #221933 74%,
+    #302348 90%,
+    #392a52 100%
+  );
+}
+
+/*
+ * The hill. One enormous rounded box positioned by its crest, far wider than the
+ * viewport, so what you see is only the top of the curve — a hillside rather
+ * than a dome sitting on the page.
+ */
+.sky__hill {
+  position: absolute;
+  left: 50%;
+  width: 170vw;
+  height: 140vh;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0 / 22vh 22vh 0 0;
+  background: #0f0b16;
+  pointer-events: none;
+}
+
+.sky--night .sky__hill {
+  background: #08070c;
+}
+
+.sky__star {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+
 .welcome__chat {
+  /* Above the stars. They are positioned and the chat is not, so without this
+     the field paints on top of the text and the greeting gets freckles. */
+  position: relative;
+  z-index: 2;
   width: min(560px, 92vw);
   display: flex;
   flex-direction: column;
@@ -430,7 +482,7 @@ button {
 @media (prefers-reduced-motion: no-preference) {
   .thinker__body {
     animation: breathe 6.5s ease-in-out infinite;
-    transform-origin: 58px 104px;
+    transform-origin: 57px 116px;
   }
 }
 
@@ -746,10 +798,15 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* Seated on the crest, so its bottom edge lands on the focus rather than its
+   middle — the figure is standing on the hill, not floating at its height. */
 .arc__thinker {
   position: absolute;
   z-index: 1;
-  transform: translate(-50%, -46%);
+  /* The four pixels are the box's own slack below the figure's feet — see
+     GROUND_Y in Thinker.tsx. Seated means overlapping the crest, never hovering
+     a hair above it, which is the tell that gives away a pasted-on figure. */
+  transform: translate(-50%, calc(-100% + 4px));
   transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }

@@ -18,7 +18,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 
 | Key | What happens |
 |---|---|
-| — | The **welcome screen**: a night sky over a hill, someone sitting on the crest. It asks if you want to think something through — type a real question or just press `⏎`. |
+| — | The **welcome screen**: a starfield over a hill, someone sitting on the crest. It asks if you want to think something through — type a real question or just press `⏎`. |
 | — | The **arc browser**: 6 category stones fanned above the seated figure, already populated with 47 memories from 22 sources. The same chat box stays docked at the bottom. |
 | drop | Drag a screenshot anywhere on the window. Recall reads it and tells you what it saw, what was new, what echoes something you already saved, and where it filed it. |
 | `G` | The same corpus as a map, and the colour comes back. Beat 2 needs this — the split animation only plays here. |
@@ -45,8 +45,10 @@ reorganization pass will ever reclaim it. A subcategory can be dragged onto the
 **Move this group under** panel to re-parent it; dropping it on a sibling is refused with
 a shake, because the taxonomy is exactly two levels.
 
-This screen is deliberately **monochrome**. Colour is a mode signal: grey while you are
-looking something up, amber the moment you press `G`.
+It is the same hilltop as the welcome screen, an hour later — the sky runs the width of
+the window, the crest lands on the arc's focus, and the categories fan out into the sky
+above the figure. Everything you operate is still **monochrome**: colour is a mode signal,
+grey while you are looking something up, amber the moment you press `G`.
 
 **Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
 and the only surface where a reorganization is animated.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
+import { Sky } from './components/Sky';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SourcesView } from './components/SourcesView';
 import { Inspector } from './components/Inspector';
@@ -16,6 +17,7 @@ import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
+import { FOCUS_FRACTION } from './arc/layout';
 
 const MIN_VIEWPORT_WIDTH = 1280;
 
@@ -27,6 +29,7 @@ export function App() {
   const askOpen = useUiStore((s) => s.askOpen);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const view = useUiStore((s) => s.view);
+  const openCategoryId = useUiStore((s) => s.openCategoryId);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dropActive = useUiStore((s) => s.dropActive);
 
@@ -187,7 +190,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--night' : ''}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.
@@ -207,6 +210,20 @@ export function App() {
         void capture();
       }}
     >
+      {/*
+        The hilltop, drawn at window level rather than inside the browser.
+        Confined to the middle column it read as a violet panel bolted between
+        two black ones — the seam against the rail and the inspector was the
+        first thing the eye found. The crest lands on the arc's focus, which is
+        where the figure sits, so the two have to agree: both take it from
+        FOCUS_FRACTION rather than from a number typed twice.
+      */}
+      {view === 'browse' && (
+        <Sky
+          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed)}%`}
+        />
+      )}
+
       {dropActive && (
         <div className="dropzone" data-testid="dropzone">
           <div className="dropzone__inner">Drop it anywhere — Recall will read it and file it</div>

@@ -64,6 +64,16 @@ export function arcPositions(count: number, radius: number, spanDeg?: number): A
   });
 }
 
+/**
+ * Where the focus sits, as a fraction of the canvas height.
+ *
+ * Exported because the hill's crest has to land on exactly this line — the
+ * figure sits on it — and the hill is drawn at window level, outside the
+ * component that calls {@link fitArc}. Two hand-copied constants would drift
+ * and the figure would start floating.
+ */
+export const FOCUS_FRACTION = { open: 0.32, closed: 0.64 } as const;
+
 export interface ArcGeometry {
   /** Focus of the arc in canvas coordinates — where the Thinker stands. */
   focus: { x: number; y: number };
@@ -85,7 +95,7 @@ export function fitArc(
 ): ArcGeometry {
   // Browsing, the figure sits low and the arc has the room above it. Open, the
   // whole assembly lifts so the reading list gets the bottom two thirds.
-  const focusY = open ? viewport.h * 0.32 : viewport.h * 0.64;
+  const focusY = viewport.h * (open ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed);
   // Bounded by both axes so a short window narrows the fan instead of pushing
   // the top nodes off-screen.
   const radius = Math.max(

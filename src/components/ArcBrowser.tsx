@@ -450,12 +450,13 @@ export function ArcBrowser() {
         })}
       </div>
 
-      {/* The figure stands at the arc's focus, thinking about what is above. */}
+      {/* The figure sits on the crest, at the arc's focus, looking at what is
+          above it. */}
       <div
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={isOpen ? 76 : 116} />
+        <Thinker size={isOpen ? 78 : 118} />
       </div>
 
       {!isOpen && <p className="arc__prompt">{heading}</p>}
