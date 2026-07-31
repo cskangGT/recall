@@ -140,7 +140,9 @@ Single-page application. Persistent three-region layout at all routes.
 
 **Minimum supported viewport:** 1280×720. Below that, render a single line: *"Recall is desktop-first. Please open on a larger screen."* No responsive reflow, no mobile layout.
 
-**Global capture affordance:** a circular `+` button, 48px, floating bottom-center of the canvas at 32px from the bottom edge. Always visible in Map and Tree views.
+**Global capture affordance:** in **Browse** it is a `+` at the left of the docked composer — the box the cursor is already in. On **Map** and **Sources**, which have no composer, a circular 44px `+` floats at the canvas's bottom-right.
+
+> It was a floating `+` everywhere. Two things were wrong with that. It is absolutely positioned inside the canvas column, so "bottom right" meant the right edge of the *middle column*, next to a blank inspector — an orphan against an invisible seam. And a bare circle in a corner is an affordance you have to be taught, where a `+` at the head of a chat box is one nobody has to be. The placeholder carries the other half: dropping a screenshot on the window has always worked and nothing on screen said so.
 
 ---
 
@@ -192,7 +194,7 @@ The hero screen. Everything else is support.
 
 > **Decision:** capture is a modal overlay on top of the map, never a separate page. Rationale: the user must never lose sight of the map, because the map is where the payoff renders. Navigating away and back would break the causal link between "I added this" and "the map changed."
 
-**Trigger:** `⌘K`, the floating `+` button, or paste (`⌘V`) anywhere on the canvas with nothing focused.
+**Trigger:** `⌘K`, the composer's `+` (Browse) or the floating `+` (Map, Sources), a screenshot dropped anywhere on the window, or paste (`⌘V`) on the canvas with nothing focused.
 
 **Presentation:** centered modal, 640px wide, backdrop blurs and dims the map to 30% opacity. The map remains visible behind it.
 

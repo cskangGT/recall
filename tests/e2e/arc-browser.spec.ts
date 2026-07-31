@@ -227,3 +227,33 @@ test('the capture story says what was read, what was new, and where it went', as
 
   await expect(page.getByTestId('capture-story-destination')).toContainText('AI Tooling');
 });
+
+/**
+ * One home per action.
+ *
+ * `Ask` used to sit in the header next to `See the big picture`, duplicating both
+ * the rail's `?` and the composer that *is* the ask box; the floating `+`
+ * duplicated the rail's `+` and, being absolute inside the middle column, landed
+ * against a blank inspector rather than the window's edge.
+ */
+test('the capture affordance is in the composer, not floating, while browsing', async ({
+  page,
+}) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  await expect(page.getByTestId('fab')).toHaveCount(0);
+  await page.getByTestId('composer-add').click();
+  await expect(page.getByTestId('capture-input')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The map has no composer, so it keeps the floating button.
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('fab')).toBeVisible();
+});
+
+test('the map is still one labelled click away from its new home', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.getByTestId('go-map').click();
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+});

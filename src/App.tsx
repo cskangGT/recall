@@ -7,7 +7,7 @@ import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
 import { Settings } from './components/Settings';
-import { LeftRail, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
+import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
@@ -224,6 +224,7 @@ export function App() {
         </div>
       )}
       <LeftRail />
+      {view === 'browse' && <TopBar />}
       <div className="canvas-wrap">
         {view === 'browse' ? (
           <ArcBrowser />
@@ -244,13 +245,18 @@ export function App() {
         <ChangeBanner />
         <StatusTicker />
         <Toasts />
-        <button
-          className="fab"
-          data-testid="fab"
-          onClick={() => useUiStore.getState().setCaptureOpen(true)}
-        >
-          +
-        </button>
+        {/* Map and Sources have no composer, so they still need a visible way
+            in. Browse has one in the composer, and two `+` on one screen is the
+            duplication this change exists to remove. */}
+        {view !== 'browse' && (
+          <button
+            className="fab"
+            data-testid="fab"
+            onClick={() => useUiStore.getState().setCaptureOpen(true)}
+          >
+            +
+          </button>
+        )}
       </div>
       <Inspector />
       {captureOpen && <CaptureBar onSubmit={capture} />}

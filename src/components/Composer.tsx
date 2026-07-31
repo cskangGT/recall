@@ -15,6 +15,12 @@ import { answerQuestion } from '../ask/scriptedAsk';
  * `firstRun` changes two words and nothing else: the empty-state button offers
  * to look around rather than showing a bare return glyph, because on the first
  * frame there is nothing on the arc yet and pressing it is what puts it there.
+ *
+ * The add button is here rather than floating in a corner because a corner
+ * circle is a thing you have to be taught and a clip in a chat box is not. The
+ * placeholder does the other half: dropping a screenshot on the window has
+ * always worked and nothing on screen said so, which is a discovery problem, not
+ * a missing feature.
  */
 export function Composer({
   firstRun = false,
@@ -55,10 +61,19 @@ export function Composer({
 
   return (
     <div className="composer composer--docked" data-testid="composer">
+      <button
+        className="composer__add"
+        data-testid="composer-add"
+        title="Add a note, link, or screenshot (⌘K)"
+        aria-label="Add a note, link, or screenshot"
+        onClick={() => useUiStore.getState().setCaptureOpen(true)}
+      >
+        +
+      </button>
       <input
         ref={ref}
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
-        placeholder="Ask about anything you've saved…"
+        placeholder="Ask anything, or drop a screenshot to save it…"
         value={text}
         disabled={thinking}
         onChange={(e) => setText(e.target.value)}

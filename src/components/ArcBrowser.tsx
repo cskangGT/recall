@@ -56,8 +56,6 @@ export function ArcBrowser() {
   const setArcLevel = useUiStore((s) => s.setArcLevel);
   const answer = useUiStore((s) => s.answer);
   const lastCapture = useUiStore((s) => s.lastCapture);
-  const setAskOpen = useUiStore((s) => s.setAskOpen);
-  const setView = useUiStore((s) => s.setView);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
@@ -293,28 +291,6 @@ export function ArcBrowser() {
 
   return (
     <div className="arc" data-testid="arc-browser" ref={shellRef}>
-      <div className="arc__head">
-        <span>
-          {effectiveLevelId === null
-            ? 'Everything'
-            : (categoryRows.find((r) => r.id === effectiveLevelId)?.label ?? 'Everything')}
-        </span>
-        <span className="arc__actions">
-          <button className="arc__ask" data-testid="arc-ask" onClick={() => setAskOpen(true)}>
-            Ask ⌘/
-          </button>
-          {/* The map was reachable only by an unlabelled glyph in the rail or by
-              knowing the shortcut. Naming what it is for is the whole fix. */}
-          <button
-            className="arc__ask arc__ask--map"
-            data-testid="go-map"
-            onClick={() => setView('map')}
-          >
-            See the big picture ⇢
-          </button>
-        </span>
-      </div>
-
       <CaptureStoryPanel />
 
       {/*

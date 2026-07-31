@@ -1,5 +1,38 @@
 import { useEffect } from 'react';
 import { useUiStore, STAGE_LABEL } from '../store/uiStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
+
+/**
+ * Where you are, and the one place that is not here.
+ *
+ * It spans the window, not the middle column. Living inside the browser it
+ * stopped at that column's right edge, which is an invisible seam with a blank
+ * inspector on the other side of it — so the controls crowded a line nobody can
+ * see and the window's actual right edge stayed empty.
+ *
+ * There is no `Ask` link. Asking is the box at the bottom of the screen; a
+ * header link to it was a second door onto the same room, and the rail still
+ * has `?` for anyone who wants a button.
+ */
+export function TopBar() {
+  const arcLevelId = useUiStore((s) => s.arcLevelId);
+  const setView = useUiStore((s) => s.setView);
+  const payload = useWorkspaceStore((s) => s.payload);
+
+  const here =
+    arcLevelId === null
+      ? 'Everything'
+      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? 'Everything');
+
+  return (
+    <div className="topbar">
+      <span>{here}</span>
+      <button className="topbar__link" data-testid="go-map" onClick={() => setView('map')}>
+        See the big picture ⇢
+      </button>
+    </div>
+  );
+}
 
 export function LeftRail() {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);

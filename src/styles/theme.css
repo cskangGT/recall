@@ -201,41 +201,7 @@ button {
   color: var(--accent);
 }
 
-/* ------------------------------------------------------------------ welcome */
-
-/*
- * The first frame. No rail, no inspector — a welcome screen framed by the app
- * it is welcoming you into is just a modal.
- */
-.welcome {
-  --accent: #d8cbe4;
-  --accent-dim: #9a8bab;
-  /* The app's greys were chosen against near-black. On a lit sky they vanish —
-     the aside dropped to about 1.6:1 — so the text tokens are re-pointed too. */
-  --text: #f4eff8;
-  --text-dim: #cdbbdb;
-  --text-faint: #a894b8;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 100%;
-  /* Room for the hill, so the conversation never sits on top of it. */
-  padding-bottom: 24vh;
-}
-
-.welcome__stage {
-  position: absolute;
-  left: 50%;
-  /* Sitting on the crest, which is at 76% of the frame. The few pixels are the
-     soft edge: seated means overlapping the hill slightly, never floating. */
-  top: 76%;
-  transform: translate(-50%, calc(-100% + 4px));
-  z-index: 1;
-  pointer-events: none;
-}
+/* ------------------------------------------------------- figure and composer */
 
 /* Backlit. The sky is the light source, so the figure is a silhouette — the
    reference's arrangement, and the reason the sky has to stay lighter than the
@@ -278,8 +244,7 @@ button {
 /* ---------------------------------------------------------------------- sky */
 
 /*
- * A night sky over a hill. The welcome screen is the whole scene; the browsing
- * screen is the same place an hour later.
+ * A night sky over a hill. There is one screen and this is its ground.
  *
  * The tonal structure is the reference photograph's, and it is load-bearing
  * rather than decoration: dark overhead, opening out to a pale glow at the
@@ -362,42 +327,6 @@ button {
   pointer-events: none;
 }
 
-.welcome__chat {
-  /* Above the stars. They are positioned and the chat is not, so without this
-     the field paints on top of the text and the greeting gets freckles. */
-  position: relative;
-  z-index: 2;
-  width: min(560px, 92vw);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-/* A spoken line, not a heading. Left-aligned and unboxed so it reads as the
-   figure talking rather than as a page title. */
-.welcome__bubble {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 22px;
-  font-weight: 450;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  text-align: center;
-  text-wrap: balance;
-}
-
-.welcome__aside {
-  font-size: 13.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--text-dim);
-  line-height: 1.55;
-  max-width: 46ch;
-  margin: 0 auto;
-}
-
 /* ----------------------------------------------------------------- composer */
 
 /*
@@ -409,7 +338,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 16px;
+  padding: 6px 6px 6px 14px;
   border-radius: 14px;
   background: #131318;
   box-shadow: inset 0 0 0 1px #222228, 0 24px 60px -30px #000;
@@ -422,6 +351,31 @@ button {
   transform: translateX(-50%);
   width: min(560px, calc(100% - 140px));
   z-index: 4;
+}
+
+/*
+ * The add button. A circle in the corner is a thing you have to be taught; a
+ * clip at the left of a chat box is not, and this is the box the cursor is
+ * already in.
+ */
+.composer__add {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: -6px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 19px;
+  font-weight: 300;
+  line-height: 1;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.composer__add:hover {
+  color: var(--text);
+  background: rgba(240, 232, 250, 0.14);
 }
 
 .composer input {
@@ -468,9 +422,9 @@ button {
 
 /*
  * Lit, because the browsing screen's ground is nearly black and a silhouette
- * would disappear into it. The welcome screen overrides this to near-black —
- * there the figure is backlit by the sky, which is the reference's whole
- * arrangement. One figure in two lights.
+ * would disappear into it. The browsing shell overrides this to near-black,
+ * because there the figure is backlit by the sky — the reference's whole
+ * arrangement.
  */
 .thinker__shape {
   fill: url(#thinker-tone);
@@ -503,10 +457,21 @@ button {
   overflow: hidden;
 }
 
-.arc__head {
-  position: absolute;
+/* ---------------------------------------------------------------------- topbar */
+
+/*
+ * Window-width, not column-width.
+ *
+ * Living inside the browser this stopped at the middle column's right edge —
+ * an invisible seam with a blank inspector on the far side of it. The controls
+ * crowded a line nobody can see and the window's actual right edge stayed empty.
+ * Fixed positioning, like `.dropzone`, so it spans the grid rather than sitting
+ * in one cell of it.
+ */
+.topbar {
+  position: fixed;
   top: 20px;
-  left: 28px;
+  left: calc(var(--rail-w) + 28px);
   right: 28px;
   display: flex;
   justify-content: space-between;
@@ -515,28 +480,26 @@ button {
   font-size: 11px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  z-index: 3;
+  z-index: 5;
+  pointer-events: none;
 }
 
-.arc__actions {
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
+.topbar > * {
+  pointer-events: auto;
 }
 
-.arc__ask--map {
+/* The map was reachable only by an unlabelled glyph in the rail or by knowing
+   the shortcut. Naming what it is for is the whole fix. */
+.topbar__link {
   color: var(--accent);
-}
-
-.arc__ask {
-  color: var(--text-faint);
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: none;
   transition: color 90ms ease;
 }
 
-.arc__ask:hover {
-  color: var(--accent);
+.topbar__link:hover {
+  color: var(--text);
 }
 
 /* Appears during a subcategory drag, alongside the arc rather than replacing
@@ -1393,7 +1356,7 @@ button {
   bottom: 24px;
   right: 24px;
   width: 44px;
-  height: 48px;
+  height: 44px;
   border-radius: 50%;
   background: var(--accent);
   color: #17130a;
@@ -1405,8 +1368,10 @@ button {
   transition: transform 140ms ease;
 }
 
+/* No translate. It carried `translateX(-50%)` from when it was centred, so
+   hovering shot it 22px to the left. */
 .fab:hover {
-  transform: translateX(-50%) scale(1.06);
+  transform: scale(1.06);
 }
 
 /* ------------------------------------------------------------------ ticker */
@@ -1442,7 +1407,9 @@ button {
   width: var(--inspector-w);
   background: var(--bg-panel);
   overflow-y: auto;
-  padding: 22px 22px 40px;
+  /* The top bar runs across the window at 20px, so the panel starts below it —
+     one band along the top of the frame rather than two things at two heights. */
+  padding: 56px 22px 40px;
 }
 
 .inspector__eyebrow {

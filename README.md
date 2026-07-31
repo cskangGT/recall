@@ -22,7 +22,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | — | Looking around fans **6 category stones** into the sky above the figure — 47 memories from 22 sources. No screen changes; the categories arrive where you already are. |
 | drop | Drag a screenshot anywhere on the window. Recall reads it and tells you what it saw, what was new, what echoes something you already saved, and where it filed it. |
 | `G` | The same corpus as a map, and the colour comes back. Beat 2 needs this — the split animation only plays here. |
-| `⌘K` | Capture bar. Type anything and press `⏎`. |
+| `⌘K` | Capture bar — also the `+` at the head of the chat box. Type anything and press `⏎`. |
 | — | Ghost node → `Reading… → Extracting… → Finding connections… → Reorganizing…` → **AI Tooling splits into Agent Frameworks and Evals & Observability** |
 | `⌘/` | One bar, two modes. A keyword searches as you type; a question is answered. The chip tells you which, and `⏎` does what the chip says. |
 | `⌘Z` | Undo the reorganization. |
