@@ -28,17 +28,17 @@
  */
 const MIRROR_X = 76;
 const VIEW_W = 152;
-const VIEW_H = 180;
+const VIEW_H = 142;
 
 /**
  * Where the water is.
  *
- * The heads stand *in* it, not on it — an earlier pass left 40 units of neck
+ * The heads stand *in* it, not on it — an early pass left 40 units of neck
  * above the line and the two necks merged into a pillar that read louder than
- * either face. Cutting the neck to about a fifth of the head's height puts the
- * attention back where the features are.
+ * either face. Cutting the neck to about a quarter of the head's height puts
+ * the attention back where the features are.
  */
-const WATER_Y = 118;
+const WATER_Y = 88;
 /** A reflection foreshortens; 0.55 is the amount that still reads as the same figure. */
 const SQUASH = 0.55;
 
@@ -74,9 +74,9 @@ export function Thinker({
           id="thinker-tone"
           gradientUnits="userSpaceOnUse"
           x1="32"
-          y1="18"
+          y1="16"
           x2="78"
-          y2="116"
+          y2="88"
         >
           <stop offset="0" stopColor="#C6C6D0" />
           <stop offset="0.45" stopColor="#7C7C88" />
@@ -89,9 +89,9 @@ export function Thinker({
           id="thinker-tone-near"
           gradientUnits="userSpaceOnUse"
           x1="32"
-          y1="18"
+          y1="16"
           x2="78"
-          y2="116"
+          y2="88"
         >
           <stop offset="0" stopColor="#F6F6FB" />
           <stop offset="0.45" stopColor="#B6B6C3" />
@@ -121,26 +121,39 @@ export function Thinker({
           balloon however the outline is proportioned — what says "face" is the
           brow stepping out, the nose leaving it, and the notch under the lip
           before the chin.
+
+          **Crown to chin is 59 units against 58 of width.** That ratio is the
+          whole drawing. Three earlier versions ran 65–79 tall on the same width
+          and read as long, drawn faces, and the tell was in the picture the whole
+          time: the reflection — the same head squashed to 55% — looked better
+          proportioned than the head casting it. A head in profile is close to
+          square; anything much past 1.2 is a portrait stretched vertically, and
+          the eye names that before it can say why.
+
+          Compressing vertically also packs the features closer together without
+          touching their horizontal excursion, which is what real faces do — the
+          nose still reaches out to x=27 and the lip still tucks back to x=41,
+          they just have less room between them.
         */}
         <g id="thinker-head">
           <path
-            d="M60 17
-               Q80 19 85 42
-               Q88 62 83 81
-               Q80 91 78 100
-               L78 124
-               L54 124
-               Q53 113 52 104
-               Q51 99 45 96
-               Q39 93 41 86
-               Q42 82 38 80
-               Q34 78 37 74
-               Q32 70 27 65
-               Q22 61 26 58
-               Q31 56 33 50
-               Q35 43 35 36
-               Q38 24 46 18
-               Q51 15 60 17
+            d="M60 16
+               Q80 18 85 38
+               Q88 54 83 66
+               Q80 72 78 77
+               L78 96
+               L54 96
+               Q53 89 52 82
+               Q51 78 45 75
+               Q39 72 41 68
+               Q42 65 38 63
+               Q34 61 37 59
+               Q32 55 27 52
+               Q22 48 26 46
+               Q31 44 33 41
+               Q35 36 35 31
+               Q38 22 46 17
+               Q51 14 60 16
                Z"
           />
         </g>
@@ -179,7 +192,7 @@ export function Thinker({
       </defs>
 
       {/* Air. Does most of the atmospheric work. */}
-      <ellipse cx={MIRROR_X} cy="78" rx="78" ry="44" fill="url(#thinker-air)" />
+      <ellipse cx={MIRROR_X} cy="54" rx="78" ry="36" fill="url(#thinker-air)" />
 
       <g className="thinker__body">
         <g filter="url(#thinker-soft)">
