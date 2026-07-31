@@ -11,7 +11,24 @@ import { Composer } from './Composer';
  * question, not a door you have to knock on. The same composer stays docked at
  * the bottom of the browsing screen afterwards, so the conversation never ends —
  * it just moves down.
+ *
+ * The scene around it is a night sky over a hill, with the figure sitting on the
+ * crest. Everything about it lives in CSS on `.welcome` — see the note there for
+ * why the sky is dark overhead and pale at the horizon rather than the other way
+ * round. Here there is only the markup the gradients cannot express: the hill,
+ * four stars, and where the figure stands.
  */
+
+/**
+ * Four, placed by hand. Evenly scattered stars read as a texture; a few in an
+ * uneven grouping, one of them clearly brightest, reads as a night sky.
+ */
+const STARS = [
+  { left: '77%', top: '17%', size: 3.4, opacity: 0.95 },
+  { left: '88%', top: '25%', size: 2.1, opacity: 0.6 },
+  { left: '60%', top: '35%', size: 1.8, opacity: 0.5 },
+  { left: '64%', top: '43%', size: 1.6, opacity: 0.42 },
+];
 export function WelcomeScreen() {
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
 
@@ -22,8 +39,24 @@ export function WelcomeScreen() {
 
   return (
     <div className="welcome" data-testid="welcome">
+      {STARS.map((s) => (
+        <span
+          key={s.left + s.top}
+          className="welcome__star"
+          style={{
+            left: s.left,
+            top: s.top,
+            width: s.size,
+            height: s.size,
+            opacity: s.opacity,
+          }}
+        />
+      ))}
+
+      <div className="welcome__hill" />
+
       <div className="welcome__stage">
-        <Thinker size={180} />
+        <Thinker size={124} />
       </div>
 
       <div className="welcome__chat">
