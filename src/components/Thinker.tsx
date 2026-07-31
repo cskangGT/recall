@@ -25,6 +25,13 @@
  *   - **Open the shape.** There is a bag on the ground beside the figure joined
  *     to it by a thin bridge. Erode, keep the largest piece, dilate back: that
  *     severs the bridge and leaves the body, which is thick everywhere.
+ *   - **Then look at it.** An opening only removes what is *loosely* attached.
+ *     A second object at the shin held on across more than the erosion radius
+ *     and came through — ten points of blocky tab that read as a defect, because
+ *     everything else on this outline is a body part and that one was not. It
+ *     was cut by hand afterwards; the giveaway in the path data is an
+ *     out-and-back, where the contour reverses (y ran 71 → 69.6 → 69.8 → 72.2 →
+ *     71.2) instead of advancing. A trace still needs one pass by eye.
  *
  * The two holes are punched from the same path with `evenodd` — sky through the
  * gap between forearm, torso and thigh, and again between the near shin and the
@@ -36,6 +43,8 @@
  * in two lights, not two figures.
  */
 
+import { OUTER, PARTS, VOID, pathD, partPoints } from './thinkerPath';
+
 const VIEW_W = 116;
 const VIEW_H = 120;
 /**
@@ -45,6 +54,16 @@ const VIEW_H = 120;
  * rather than leaving it hovering a hair above.
  */
 const GROUND_Y = 116;
+
+/**
+ * `?figure=debug` paints each named stretch of the outline its own colour, with
+ * a dot on every point. It exists because tuning this shape is a conversation,
+ * and a conversation about "the bump above the knee" goes nowhere until both
+ * people can see which points that is. Read the same way `?skipWelcome=1` is.
+ */
+const DEBUG =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('figure') === 'debug';
 
 export function Thinker({
   size = 116,
@@ -90,13 +109,35 @@ export function Thinker({
           the whole figure stays one shape with no seam anywhere.
         */}
         <g className="thinker__shape" filter="url(#thinker-soft)">
-          <path
-            fillRule="evenodd"
-            d={`M72.8 14.8 L84.9 16.9 L87.5 19.3 L89.8 23.5 L90.3 29.1 L89.4 33.9 L87 38.6 L87 39.8 L90.3 47.5 L94.5 52.1 L101.7 64.5 L104.3 71.7 L105.9 80.6 L108 87.1 L107.5 90.6 L105.7 95 L105.9 100.4 L105.4 102 L102.2 104.6 L100.8 107.8 L98.7 109.2 L65.1 109.7 L64.2 109.5 L54.2 98.8 L53 99.4 L49 104.8 L44.1 108.8 L42.5 111.3 L22 113.9 L10.3 116 L8.2 114.8 L8.2 113 L12.4 109.5 L14.8 106.7 L15.9 106.4 L18.7 103.9 L19.7 101.1 L19 98.1 L19.4 95.3 L20.6 94.1 L21.3 90.8 L25.7 83.6 L22.7 80.6 L22.9 78 L19.2 73.6 L19.2 71 L21.3 69.6 L22.2 69.8 L24.6 72.2 L25.7 71.2 L25.9 67.7 L26.9 65.4 L27.1 60.8 L30.4 55.9 L35 51.2 L39.9 50.5 L43.7 47.2 L47.9 45.8 L50.7 45.6 L58.1 41.2 L59.7 32.8 L59.3 29.3 L63.2 26.5 L65.1 16.7 L67.4 15.3 L72.6 15.1 Z
-                M55.3 60.5 L56.7 60.8 L58.1 65.9 L62.1 71 L62.1 71.7 L58.6 68.4 L54.4 66.1 L50.9 63.1 L51.1 62.4 L55.1 60.8 Z`}
-          />
+          <path fillRule="evenodd" d={pathD()} />
         </g>
       </g>
+
+      {DEBUG && (
+        <g className="thinker__debug">
+          {PARTS.map((part) => (
+            <polyline
+              key={part.name}
+              points={partPoints(part)
+                .map(([x, y]) => `${x},${y}`)
+                .join(' ')}
+              fill="none"
+              stroke={part.colour}
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+          ))}
+          {[...OUTER, ...VOID].map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r="0.7" fill="#fff" />
+          ))}
+          <polyline
+            points={VOID.map(([x, y]) => `${x},${y}`).join(' ')}
+            fill="none"
+            stroke="#ff2f2f"
+            strokeWidth="0.8"
+          />
+        </g>
+      )}
 
       {/* What he is sitting on, where there is no hill behind to do the job. */}
       <ellipse
