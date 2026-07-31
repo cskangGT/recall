@@ -128,6 +128,49 @@ export function Thinker({
           <feGaussianBlur stdDeviation="0.5" />
         </filter>
 
+        {/*
+          The torch, switched on. Its axis is the barrel's — from the fist at
+          (24, 78) to the lamp head at (15.5, 67) — so if the flashlight is
+          redrawn the beam follows instead of having to be re-aimed.
+
+          Two hundred units long, faded to nothing well before it reaches either
+          the greeting or the edge of the column that clips it. Ten degrees of
+          half-angle: a torch, not a searchlight.
+
+          Plain alpha, not `mix-blend-mode: screen`. Screen is the obvious choice
+          and does nothing here — blending composites against the backdrop within
+          the nearest stacking context, and the sky is outside this <svg>
+          entirely, so the beam screened onto transparency and came out exactly
+          as drawn.
+        */}
+        <linearGradient
+          id="thinker-beam"
+          gradientUnits="userSpaceOnUse"
+          x1="17"
+          y1="69"
+          x2="-105.2"
+          y2="-89.2"
+        >
+          <stop offset="0" stopColor="#e8f5ff" stopOpacity="0.8" />
+          <stop offset="0.16" stopColor="#a9d4ff" stopOpacity="0.4" />
+          <stop offset="0.5" stopColor="#79b0ff" stopOpacity="0.15" />
+          <stop offset="1" stopColor="#5a94ff" stopOpacity="0" />
+        </linearGradient>
+
+        <radialGradient id="thinker-lamp">
+          <stop offset="0" stopColor="#f4faff" stopOpacity="0.95" />
+          <stop offset="0.22" stopColor="#a8d2ff" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#5a9dff" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Blurred here rather than with a CSS `filter`, which creates a
+            stacking context and quietly cancels the `screen` blend on the
+            group — the beam was being drawn and then composited as if it were
+            paint. */}
+        <filter id="thinker-haze" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.4" />
+        </filter>
+
         {/* User space, not bounding box, so the ramp is one light across the
             whole figure rather than a private one per element. */}
         <linearGradient
@@ -144,6 +187,18 @@ export function Thinker({
         </linearGradient>
       </defs>
 
+      {/*
+        Drawn before the silhouette, so the body blocks the part of the cone that
+        passes behind it — which is what a body does to a beam.
+      */}
+      <g className="thinker__beam">
+        <polygon
+          points="17,69 -77.3,-110.8 -133.1,-67.6"
+          fill="url(#thinker-beam)"
+          filter="url(#thinker-haze)"
+        />
+      </g>
+
       <g className="thinker__body">
         {/*
           Outer contour clockwise from the crown of the cap, then the two voids
@@ -153,6 +208,12 @@ export function Thinker({
         <g className="thinker__shape" filter="url(#thinker-soft)">
           <path fillRule="evenodd" d={pathD()} />
         </g>
+      </g>
+
+      {/* The lamp itself, over the silhouette: it is on the near side of it. */}
+      <g className="thinker__lamp">
+        <circle cx="15.5" cy="67" r="11" fill="url(#thinker-lamp)" />
+        <circle cx="15.5" cy="67" r="1.6" fill="#f8fcff" />
       </g>
 
       {FIGURE_DEBUG && (
