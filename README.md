@@ -19,7 +19,7 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 | Key | What happens |
 |---|---|
 | — | The **welcome screen** asks if you want to think something through. Type a real question or just press `⏎`. |
-| — | The **arc browser**: 6 category orbs fanned above a seated figure, already populated with 47 memories from 22 sources. The same chat box stays docked at the bottom. |
+| — | The **arc browser**: 6 category stones fanned above the two profiles, already populated with 47 memories from 22 sources. The same chat box stays docked at the bottom. |
 | drop | Drag a screenshot anywhere on the window. Recall reads it and tells you what it saw, what was new, what echoes something you already saved, and where it filed it. |
 | `G` | The same corpus as a map, and the colour comes back. Beat 2 needs this — the split animation only plays here. |
 | `⌘K` | Capture bar. Type anything and press `⏎`. |
@@ -35,11 +35,12 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 something you actually saved. The other two are how you read what it pulled.
 
 **Browse** (`T`, and the landing view) is the manual mode — categories fanned in an arc
-above a figure who is thinking about them, with the open category's memories in a reading
-list below. Each orb is sized by how much is in it. Click one to descend into its
-subcategories; `←`, `Backspace` or `Esc` climbs back out. An answer arrives as an orb of
+above two faces in profile, back to back, with the open category's memories in a reading
+list below. Each stone is sized by how much is in it, and its outline is derived from the
+category's id, so you learn a category by its silhouette. Click one to descend into its
+subcategories; `←`, `Backspace` or `Esc` climbs back out. An answer arrives as a folder of
 its own, the prose on top and the memories it cited below, draggable like anything else.
-**Drag a memory onto any orb to re-file it** — a hand-moved memory locks, and no
+**Drag a memory onto any stone to re-file it** — a hand-moved memory locks, and no
 reorganization pass will ever reclaim it. A subcategory can be dragged onto the
 **Move this group under** panel to re-parent it; dropping it on a sibling is refused with
 a shake, because the taxonomy is exactly two levels.

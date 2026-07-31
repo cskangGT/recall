@@ -159,7 +159,7 @@ test('a renamed category no longer reorganizes — the correction is permanent',
   await expect(named(page, 'Agent Stack')).toBeVisible();
 });
 
-test('an answer becomes a cloud of its own with the citations below it', async ({ page }) => {
+test('an answer becomes a folder of its own with the citations below it', async ({ page }) => {
   await page.keyboard.press('Meta+/');
   await page.getByTestId('ask-input').fill('What did we decide about our eval stack?');
   await page.getByTestId('ask-input').press('Enter');

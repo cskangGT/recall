@@ -23,7 +23,7 @@ export function WelcomeScreen() {
   return (
     <div className="welcome" data-testid="welcome">
       <div className="welcome__stage">
-        <Thinker size={168} />
+        <Thinker size={196} />
       </div>
 
       <div className="welcome__chat">

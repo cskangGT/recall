@@ -306,20 +306,20 @@ button {
 }
 
 /*
- * One shared tone across every limb: where they cross they simply become one
- * mass, which is what a silhouette does.
- *
- * Only inheritable properties are set here — the figure is drawn through <use>,
- * and a descendant selector would never reach inside the clone.
+ * The two heads carry their fills as attributes inside the <defs>, not from
+ * here: the figure is drawn through <use>, and a CSS selector never reaches
+ * inside the clone's shadow tree. Only opacity and masking — both inherited or
+ * applied to the wrapper itself — belong at this level.
  */
-.thinker__shape {
-  fill: url(#thinker-tone);
-}
-
+/*
+ * `to top`, not `to bottom` — see the note on the element in Thinker.tsx. The
+ * group's own vertical flip is applied to the mask as well as the geometry, so
+ * the gradient has to be authored inverted to arrive the right way up.
+ */
 .thinker__reflection {
-  opacity: 0.34;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+  opacity: 0.46;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 78%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 78%);
 }
 
 .thinker__water {
@@ -332,7 +332,7 @@ button {
 @media (prefers-reduced-motion: no-preference) {
   .thinker__body {
     animation: breathe 6.5s ease-in-out infinite;
-    transform-origin: 60px 126px;
+    transform-origin: 76px 112px;
   }
 }
 
@@ -493,31 +493,83 @@ button {
   background: var(--bg-panel);
 }
 
-/* A generous, solid hit area — the orb alone is a small target. */
+/* A generous, solid hit area — the stone alone is a small target. */
 .arc__form {
   display: grid;
   place-items: center;
-  min-width: 62px;
-  min-height: 46px;
+  min-width: 84px;
+  /* Room for the largest stone *and* its reflection, so the reflection never
+     reaches the label underneath. */
+  min-height: 76px;
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), filter 200ms ease;
 }
 
-.arc__orb {
+/*
+ * A water-worn stone. Low and wide, so it reads as resting on the same water
+ * the figure stands in rather than floating over it, and each one's outline is
+ * derived from its category id — see src/arc/pebble.ts for why that matters.
+ *
+ * Matte, not glossy. A tight radial highlight — which is what the sphere used —
+ * puts a specular hot spot on the form and the result reads as polished
+ * plastic; six of them looked like six pills. A stone is a broad soft sheen
+ * over an almost flat body ramp, dark along the lower edge where the light
+ * cannot reach.
+ */
+.arc__pebble {
   position: relative;
-  width: var(--orb);
-  height: var(--orb);
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #F2F2F8 0%, #B9B9C6 38%, #6E6E7C 72%, #2C2C34 100%);
-  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+  width: var(--pebble-w);
+  height: var(--pebble-h);
+  border-radius: var(--pebble-r);
+  background:
+    /* the sheen: wide, weak, and open at the top so it never closes into a dot */
+    radial-gradient(
+      ellipse 130% 150% at 32% 2%,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.14) 38%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    /* the body */
+    linear-gradient(166deg, #CBCBD7 0%, #9C9CAA 40%, #62626F 76%, #33333E 100%);
+  box-shadow:
+    /* the underside, where the stone occludes its own light */
+    inset 0 -3px 6px -3px rgba(0, 0, 0, 0.55),
+    0 10px 22px -14px rgba(0, 0, 0, 0.95);
 }
 
-/* The halo, so an orb sits in the dark rather than on it. */
-.arc__orb::after {
+/* The halo, so a stone sits in the dark rather than on it. */
+.arc__pebble::before {
   content: '';
   position: absolute;
-  inset: -46%;
+  inset: -52% -34%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(210, 210, 226, 0.16) 0%, rgba(210, 210, 226, 0) 68%);
+  background: radial-gradient(ellipse, rgba(210, 210, 226, 0.14) 0%, rgba(210, 210, 226, 0) 66%);
+  pointer-events: none;
+}
+
+/*
+ * Its reflection. The whole point of the stone over the sphere was to put the
+ * arc in the same world as the figure, and the figure's defining feature is
+ * that it stands in water — so every stone gets the same treatment: flipped,
+ * foreshortened, and faded out before it can look like a second object.
+ */
+.arc__pebble::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 46%;
+  border-radius: var(--pebble-r);
+  background: inherit;
+  transform: scaleY(-1);
+  opacity: 0.26;
+  filter: blur(1.6px);
+  /* `to bottom`, which arrives as a top-down fade: this element's own scaleY(-1)
+     flips the mask along with the geometry. Authored the obvious way round it
+     came out opaque at the far end and invisible at the stone, so each label
+     wore a grey smear and no stone had a reflection. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
+  mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
   pointer-events: none;
 }
 
@@ -534,7 +586,7 @@ button {
   filter: brightness(1.7) drop-shadow(0 0 22px rgba(232, 163, 61, 0.8));
 }
 
-/* Back and answer are not categories, so they stay marks rather than orbs. */
+/* Back and answer are not categories, so they stay marks rather than stones. */
 .arc__mark {
   display: grid;
   place-items: center;
@@ -896,7 +948,7 @@ button {
     animation: none;
   }
   .arc__node--reject { animation: none; outline: 1px solid #c2603a; }
-  .arc__orb,
+  .arc__pebble,
   .arc__thinker { transition: none; }
 }
 /* ----------------------------------------------------------------- settings */

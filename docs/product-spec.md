@@ -86,7 +86,7 @@ The journey is designed so **core value is visible within 30 seconds of opening 
 | Time | What happens |
 |---|---|
 | 0–5s | The welcome screen asks whether you want to think something through. It is a chat box, not a splash: whatever you type is answered for real, against your own corpus. `?skipWelcome=1` bypasses it for automation. |
-| 5–12s | The arc browser: 6 category clouds fanned above a seated figure, each sized by how much is in it. |
+| 5–12s | The arc browser: 6 category stones fanned above two faces in profile, each sized by how much is in it. |
 | 12–22s | User opens a category. Its subcategories fan out and its memories fill the reading list below. |
 | 22–30s | User presses `G`. The same corpus as a map, and the colour returns. The structure is now understood two ways. |
 
@@ -1191,7 +1191,7 @@ Three beats: **recognition** → **the magic** → **the payoff**. One idea per 
 > *"This is everything I've saved in the last three months. Instagram posts, screenshots, links, meeting notes. Recall read all of it and filed it — I never tagged anything."*
 
 `[0:00]` The app opens on the **welcome screen** — one line, one text box. Press Enter to go in (or type a real question, which is answered before the arc appears).
-`[0:03]` The **arc browser**: six category clouds fanned above the figure, sized by how much each holds.
+`[0:03]` The **arc browser**: six category stones fanned above the figure, sized by how much each holds.
 `[0:06]` Click **Fundraising** → its three subcategories fan out and 11 memories fill the reading list.
 
 > *"None of these categories are mine."*
@@ -1320,11 +1320,11 @@ The constraint is: **personal intelligence, not SaaS admin dashboard.** Concrete
 
 > **Amended (Phase 1, post-implementation) — the browsing screen is not an instrument.**
 >
-> The direction above still governs the **map**, the capture bar, the change banner, Sources, and the Inspector. It no longer governs the **arc browser**, which was rebuilt against a different reference: soft airbrushed silhouettes, thought-clouds, a water reflection, a muted palette.
+> The direction above still governs the **map**, the capture bar, the change banner, Sources, and the Inspector. It no longer governs the **arc browser**, which was rebuilt against a different reference: two soft airbrushed head profiles back to back over water, their reflection beneath them, a muted palette.
 >
 > Concretely, four rules above are deliberately broken there, and only there:
 >
-> - *"A rainbow taxonomy reads as a chart."* The browsing screen is **monochrome** — the accent tokens are re-pointed to grey on `.shell--mono`. Colour is now a mode signal: calm and grey when you are looking things up, warm and amber the moment you press `G` into the map. Categories are cloud **forms**, not hues, so the single-accent rule is intact everywhere it still applies.
+> - *"A rainbow taxonomy reads as a chart."* The browsing screen is **monochrome** — the accent tokens are re-pointed to grey on `.shell--mono`. Colour is now a mode signal: calm and grey when you are looking things up, warm and amber the moment you press `G` into the map. Categories are stone **forms**, not hues — each outline derived from its id, so a category is recognisable before you have read its label — and the single-accent rule is intact everywhere it still applies.
 > - *"No cartoon illustrations."* A faceless, human-proportioned figure of Rodin's *Thinker* sits at the arc's focus. Faceless is load-bearing: an expression tells you what to feel, a silhouette lets you project.
 > - *"Motion is physical and rare."* The figure breathes and the arc fans out on every descent. Both sit behind `prefers-reduced-motion`.
 > - *"Do not hide information behind progressive disclosure."* A radial menu is progressive disclosure by construction: it shows 6 categories where the list showed all 20. This is the real cost of the change and it is accepted knowingly — the reading list below the arc still carries full density, and search reaches everything from anywhere.

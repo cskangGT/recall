@@ -3,6 +3,7 @@ import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
 import { arcPositions, fitArc } from '../arc/layout';
+import { pebbleShape } from '../arc/pebble';
 import { Thinker } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
@@ -32,16 +33,6 @@ const SOURCE_LABEL: Record<SourceType, string> = {
   link: 'Link',
   screenshot: 'Screenshot',
 };
-
-/**
- * Bigger orb, more in it. Capped so one large category cannot dwarf the arc.
- *
- * Clouds were tried here and read as weather rather than structure — too soft
- * to aim at and too literal. A lit sphere keeps the soft, airbrushed register
- * of the reference while still being an object you can point at.
- */
-const orbSize = (count: number | null): number =>
-  count === null ? 34 : 34 + Math.min(count, 14) * 2.2;
 
 /** A node on the arc. `row` is null for the synthetic back and answer nodes. */
 interface ArcNode {
@@ -380,6 +371,7 @@ export function ArcBrowser() {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
+          const stone = node.kind === 'folder' ? pebbleShape(node.id, node.count) : null;
           return (
             // A div rather than a <button>, deliberately. A <button> that is
             // also an HTML5 drag source leaves Chromium stuck in a drag state
@@ -420,10 +412,10 @@ export function ArcBrowser() {
               onDragStart={(e) => {
                 if (!node.row) return;
                 // Chromium hangs generating a drag image from a subtree that
-                // contains a filtered SVG — and the cloud is exactly that, so
-                // dragging a subcategory locked the browser up entirely. Give it
-                // the plain text label to snapshot instead, which also makes a
-                // better preview than a blurred blob.
+                // carries a blur — the node's form has always had one, and
+                // dragging a subcategory locked the browser up entirely. Give
+                // it the plain text label to snapshot instead, which also makes
+                // a better preview than a blurred blob.
                 const label = e.currentTarget.querySelector('.arc__label');
                 if (label) e.dataTransfer.setDragImage(label as Element, 12, 10);
                 setDragId(node.id);
@@ -436,10 +428,16 @@ export function ArcBrowser() {
               onClick={() => activate(node)}
             >
               <span className="arc__form">
-                {node.kind === 'folder' ? (
+                {stone ? (
                   <span
-                    className="arc__orb"
-                    style={{ '--orb': `${orbSize(node.count)}px` } as React.CSSProperties}
+                    className="arc__pebble"
+                    style={
+                      {
+                        '--pebble-w': `${stone.width}px`,
+                        '--pebble-h': `${stone.height}px`,
+                        '--pebble-r': stone.radius,
+                      } as React.CSSProperties
+                    }
                   />
                 ) : (
                   <span className="arc__mark">{node.kind === 'back' ? '←' : '✦'}</span>
@@ -457,7 +455,10 @@ export function ArcBrowser() {
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={isOpen ? 74 : 122} />
+        {/* Two heads are wider than one at the same height, so the size prop
+            grows to keep each head the scale it was — 144 units across the
+            viewBox now, where a lone profile needed 120. */}
+        <Thinker size={isOpen ? 88 : 140} />
       </div>
 
       {!isOpen && <p className="arc__prompt">{heading}</p>}
