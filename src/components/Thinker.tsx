@@ -61,9 +61,17 @@ const GROUND_Y = 116;
  * and a conversation about "the bump above the knee" goes nowhere until both
  * people can see which points that is. Read the same way `?skipWelcome=1` is.
  */
-const DEBUG =
+export const FIGURE_DEBUG =
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).get('figure') === 'debug';
+
+/**
+ * How much bigger the figure is drawn while debugging. At its real 124px the
+ * overlay is unreadable — a tool you cannot read is not a tool — and the crest
+ * anchors the figure by its bottom edge, so growing it just makes it taller
+ * without moving where it sits.
+ */
+export const DEBUG_SCALE = 3.4;
 
 export function Thinker({
   size = 116,
@@ -113,7 +121,7 @@ export function Thinker({
         </g>
       </g>
 
-      {DEBUG && (
+      {FIGURE_DEBUG && (
         <g className="thinker__debug">
           {PARTS.map((part) => (
             <polyline
@@ -127,8 +135,17 @@ export function Thinker({
               strokeLinejoin="round"
             />
           ))}
-          {[...OUTER, ...VOID].map(([x, y], i) => (
-            <circle key={i} cx={x} cy={y} r="0.7" fill="#fff" />
+          {OUTER.map(([x, y], i) => (
+            <g key={i}>
+              <circle cx={x} cy={y} r="0.7" fill="#fff" />
+              {/* The index, because an instruction is given as a number. */}
+              <text x={x + 1.3} y={y - 1} fontSize="2.2" fill="#fff" opacity="0.7">
+                {i}
+              </text>
+            </g>
+          ))}
+          {VOID.map(([x, y], i) => (
+            <circle key={`v${i}`} cx={x} cy={y} r="0.7" fill="#ff2f2f" />
           ))}
           <polyline
             points={VOID.map(([x, y]) => `${x},${y}`).join(' ')}

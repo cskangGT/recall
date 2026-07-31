@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
 import { arcPositions, fitArc } from '../arc/layout';
 import { pebbleShape } from '../arc/pebble';
-import { Thinker } from './Thinker';
+import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import type { SourceType } from '../core/types';
@@ -440,7 +440,7 @@ export function ArcBrowser() {
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={isOpen ? 78 : 118} />
+        <Thinker size={(isOpen ? 78 : 118) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
       {!isOpen &&
