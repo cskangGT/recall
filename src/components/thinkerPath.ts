@@ -43,18 +43,18 @@ export const OUTER: readonly Pt[] = [
   [105.9, 100.4],
   [105.4, 102],
   [102.2, 104.6],
-  [100.8, 107.8],
-  [98.7, 109.2],
-  [65.1, 109.7],
-  [64.2, 109.5],
-  [54.2, 98.8],
-  [53, 99.4],
-  [49, 104.8],
-  [44.1, 108.8],
-  [42.5, 111.3],
-  [22, 113.9],
+  [100.8, 112.6],
+  [98.7, 115.4],
+  [65.1, 115.9],
+  [64.2, 115.7],
+  [54.2, 103],
+  [53, 103.6],
+  [49, 108.5],
+  [44.1, 113.5],
+  [42.5, 115.6],
+  [22, 115.8],
   [10.3, 116],
-  [8.2, 114.8],
+  [8.2, 115.4],
   [8.2, 113],
   [12.4, 109.5],
   [14.8, 106.7],
@@ -66,12 +66,6 @@ export const OUTER: readonly Pt[] = [
   [20.6, 94.1],
   [21.3, 90.8],
   [25.7, 83.6],
-  // --- the flashlight -----------------------------------------------------
-  // Propped against the shin, lamp head up and to the left. It is in the
-  // reference photograph and it was cut out of an earlier pass as a stray
-  // object; see the note in Thinker.tsx. Redrawn rather than restored from the
-  // trace, because at nine pixels the original six points were a blob — a torch
-  // only reads as one if the head is visibly wider than the barrel.
   [24.2, 79.6],
   [21.2, 76.4],
   [18.4, 73.6],
@@ -80,7 +74,6 @@ export const OUTER: readonly Pt[] = [
   [19.4, 67.4],
   [20.6, 70.4],
   [24.6, 74.8],
-  // --- back to the shin ---------------------------------------------------
   [25.9, 67.7],
   [26.9, 65.4],
   [27.1, 60.8],
