@@ -306,11 +306,15 @@ button {
 }
 
 /*
- * The two heads carry their fills as attributes inside the <defs>, not from
- * here: the figure is drawn through <use>, and a CSS selector never reaches
- * inside the clone's shadow tree. Only opacity and masking — both inherited or
- * applied to the wrapper itself — belong at this level.
+ * One shared tone across the figure and its reflection.
+ *
+ * Only inheritable properties are set here — the head is drawn through <use>,
+ * and a descendant selector would never reach inside the clone's shadow tree.
  */
+.thinker__shape {
+  fill: url(#thinker-tone);
+}
+
 /*
  * `to top`, not `to bottom` — see the note on the element in Thinker.tsx. The
  * group's own vertical flip is applied to the mask as well as the geometry, so
@@ -332,7 +336,7 @@ button {
 @media (prefers-reduced-motion: no-preference) {
   .thinker__body {
     animation: breathe 6.5s ease-in-out infinite;
-    transform-origin: 76px 84px;
+    transform-origin: 56px 84px;
   }
 }
 

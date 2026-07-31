@@ -455,10 +455,7 @@ export function ArcBrowser() {
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        {/* Two heads are wider than one at the same height, so the size prop
-            grows to keep each head the scale it was — 144 units across the
-            viewBox now, where a lone profile needed 120. */}
-        <Thinker size={isOpen ? 88 : 140} />
+        <Thinker size={isOpen ? 66 : 104} />
       </div>
 
       {!isOpen && <p className="arc__prompt">{heading}</p>}

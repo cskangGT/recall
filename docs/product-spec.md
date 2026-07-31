@@ -86,7 +86,7 @@ The journey is designed so **core value is visible within 30 seconds of opening 
 | Time | What happens |
 |---|---|
 | 0–5s | The welcome screen asks whether you want to think something through. It is a chat box, not a splash: whatever you type is answered for real, against your own corpus. `?skipWelcome=1` bypasses it for automation. |
-| 5–12s | The arc browser: 6 category stones fanned above two faces in profile, each sized by how much is in it. |
+| 5–12s | The arc browser: 6 category stones fanned above a face in profile, each sized by how much is in it. |
 | 12–22s | User opens a category. Its subcategories fan out and its memories fill the reading list below. |
 | 22–30s | User presses `G`. The same corpus as a map, and the colour returns. The structure is now understood two ways. |
 
@@ -1320,7 +1320,7 @@ The constraint is: **personal intelligence, not SaaS admin dashboard.** Concrete
 
 > **Amended (Phase 1, post-implementation) — the browsing screen is not an instrument.**
 >
-> The direction above still governs the **map**, the capture bar, the change banner, Sources, and the Inspector. It no longer governs the **arc browser**, which was rebuilt against a different reference: two soft airbrushed head profiles back to back over water, their reflection beneath them, a muted palette.
+> The direction above still governs the **map**, the capture bar, the change banner, Sources, and the Inspector. It no longer governs the **arc browser**, which was rebuilt against a different reference: a soft airbrushed head profile over water, its reflection beneath it, a muted palette. A pair of heads back to back was tried — closer to the reference, and it said something true about the product — but two silhouettes were too much for one focal point at the size this renders, and the second took width the arc wanted.
 >
 > Concretely, four rules above are deliberately broken there, and only there:
 >
