@@ -66,16 +66,18 @@ export const OUTER: readonly Pt[] = [
   [20.6, 94.1],
   [21.3, 90.8],
   [25.7, 83.6],
-  [26.4, 81],
-  [23.2, 79.4],
-  [22.4, 76.4],
-  [18, 72],
-  [14, 70.2],
-  [12.8, 66.8],
-  [16.4, 64.6],
-  [19.6, 66.8],
-  [23, 72.2],
-  [25.2, 75.4],
+  [25, 82.4],
+  [20.8, 81.6],
+  [17.6, 78.8],
+  [17.4, 75],
+  [20.2, 72.6],
+  [14.1, 68.8],
+  [11.3, 66.8],
+  [10.1, 62.7],
+  [14.7, 60.4],
+  [18.2, 63.2],
+  [23.2, 70.4],
+  [25.4, 73.6],
   [25.9, 67.7],
   [26.9, 65.4],
   [27.1, 60.8],
@@ -116,6 +118,32 @@ export const VOID: readonly Pt[] = [
 ];
 
 /**
+ * The lacing, as two hairlines of sky across the instep.
+ *
+ * A silhouette has no interior, so detail on it can only be absence: the same
+ * trick as the gap under the forearm, at a twentieth of the size. Each sliver is
+ * about a unit thick, which is a pixel and a half at the size the figure renders
+ * — enough to break the boot's edge and suggest a lacing, not enough to be read
+ * as damage. They lie across the instep, roughly square to it.
+ *
+ * Punched out by the same `evenodd` as {@link VOID}.
+ */
+export const LACES: readonly (readonly Pt[])[] = [
+  [
+    [11.6, 110.4],
+    [12.5, 109.7],
+    [15.3, 111.9],
+    [14.4, 112.6],
+  ],
+  [
+    [14.2, 107.7],
+    [15.1, 107.0],
+    [17.7, 109.3],
+    [16.8, 110.0],
+  ],
+];
+
+/**
  * Names for stretches of the outline, so that a change can be asked for in
  * words. `from` and `to` are inclusive indices into {@link OUTER}, and together
  * they cover it exactly once — a unit test holds that, because a range off by
@@ -142,21 +170,21 @@ export const PARTS: readonly Part[] = [
   { name: 'Foot', from: 28, to: 30, colour: '#7c7cff' },
   { name: 'Heel', from: 31, to: 35, colour: '#b06bff' },
   { name: 'Shin, lower', from: 36, to: 41, colour: '#ff6bd6' },
-  { name: 'Fist', from: 42, to: 44, colour: '#ffb03f' },
-  { name: 'Flashlight', from: 45, to: 51, colour: '#ffd166' },
-  { name: 'Shin, upper', from: 52, to: 54, colour: '#ff8fdf' },
-  { name: 'Knee', from: 55, to: 56, colour: '#ff4f9a' },
-  { name: 'Forearm', from: 57, to: 61, colour: '#ffffff' },
-  { name: 'Chest', from: 62, to: 63, colour: '#c9a06b' },
-  { name: 'Bill and cap front', from: 64, to: 67, colour: '#6bd0ff' },
+  { name: 'Fist', from: 42, to: 46, colour: '#ffb03f' },
+  { name: 'Flashlight', from: 47, to: 53, colour: '#ffd166' },
+  { name: 'Shin, upper', from: 54, to: 56, colour: '#ff8fdf' },
+  { name: 'Knee', from: 57, to: 58, colour: '#ff4f9a' },
+  { name: 'Forearm', from: 59, to: 63, colour: '#ffffff' },
+  { name: 'Chest', from: 64, to: 65, colour: '#c9a06b' },
+  { name: 'Bill and cap front', from: 66, to: 69, colour: '#6bd0ff' },
 ];
 
 const pt = ([x, y]: Pt) => `${x} ${y}`;
 const ring = (pts: readonly Pt[]) => `M${pts.map(pt).join(' L')} Z`;
 
-/** The `d` attribute: outer contour then hole, for `fill-rule: evenodd`. */
+/** The `d` attribute: outer contour, then every hole, for `fill-rule: evenodd`. */
 export function pathD(): string {
-  return `${ring(OUTER)} ${ring(VOID)}`;
+  return [OUTER, VOID, ...LACES].map(ring).join(' ');
 }
 
 /**

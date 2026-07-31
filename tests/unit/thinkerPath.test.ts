@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { OUTER, VOID, PARTS, pathD, partPoints, spanPolygon } from '../../src/components/thinkerPath';
+import {
+  OUTER,
+  VOID,
+  LACES,
+  PARTS,
+  pathD,
+  partPoints,
+  spanPolygon,
+} from '../../src/components/thinkerPath';
 
 /**
  * The figure is tuned by conversation, and the conversation runs on `PARTS`.
@@ -9,16 +17,33 @@ import { OUTER, VOID, PARTS, pathD, partPoints, spanPolygon } from '../../src/co
  */
 
 describe('pathD', () => {
-  it('emits both rings, each closed', () => {
+  it('emits the outline and every hole, each closed', () => {
     const d = pathD();
+    const rings = 2 + LACES.length;
     expect(d.startsWith('M72.8 14.8')).toBe(true);
-    expect(d.match(/M/g)).toHaveLength(2);
-    expect(d.match(/Z/g)).toHaveLength(2);
+    expect(d.match(/M/g)).toHaveLength(rings);
+    expect(d.match(/Z/g)).toHaveLength(rings);
   });
 
   it('emits every point exactly once', () => {
     const numbers = pathD().match(/-?\d+(\.\d+)?/g)!;
-    expect(numbers).toHaveLength((OUTER.length + VOID.length) * 2);
+    const points = OUTER.length + VOID.length + LACES.reduce((n, r) => n + r.length, 0);
+    expect(numbers).toHaveLength(points * 2);
+  });
+
+  /**
+   * A hole outside the shape is a hole nobody sees. The laces sit on the boot,
+   * so they have to be inside the outline's own bounding box at minimum.
+   */
+  it('keeps the laces on the boot', () => {
+    for (const lace of LACES) {
+      for (const [x, y] of lace) {
+        expect(x).toBeGreaterThan(7);
+        expect(x).toBeLessThan(20);
+        expect(y).toBeGreaterThan(103);
+        expect(y).toBeLessThan(116);
+      }
+    }
   });
 
   /** Trailing zeros would be harmless but they are noise in a file we hand-edit. */

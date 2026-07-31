@@ -130,7 +130,7 @@ export function Thinker({
 
         {/*
           The torch, switched on. Its axis is the barrel's — from the fist at
-          (24, 78) to the lamp head at (15.5, 67) — so if the flashlight is
+          (21, 73) to the lamp head at (13, 63.6) — so if the flashlight is
           redrawn the beam follows instead of having to be re-aimed.
 
           Two hundred units long, faded to nothing well before it reaches either
@@ -146,10 +146,10 @@ export function Thinker({
         <linearGradient
           id="thinker-beam"
           gradientUnits="userSpaceOnUse"
-          x1="17"
-          y1="69"
-          x2="-105.2"
-          y2="-89.2"
+          x1="15"
+          y1="66"
+          x2="-114.6"
+          y2="-86.4"
         >
           <stop offset="0" stopColor="#e8f5ff" stopOpacity="0.8" />
           <stop offset="0.16" stopColor="#a9d4ff" stopOpacity="0.4" />
@@ -193,7 +193,7 @@ export function Thinker({
       */}
       <g className="thinker__beam">
         <polygon
-          points="17,69 -77.3,-110.8 -133.1,-67.6"
+          points="15,66 -87.7,-109.3 -141.5,-63.5"
           fill="url(#thinker-beam)"
           filter="url(#thinker-haze)"
         />
@@ -212,8 +212,8 @@ export function Thinker({
 
       {/* The lamp itself, over the silhouette: it is on the near side of it. */}
       <g className="thinker__lamp">
-        <circle cx="15.5" cy="67" r="11" fill="url(#thinker-lamp)" />
-        <circle cx="15.5" cy="67" r="1.6" fill="#f8fcff" />
+        <circle cx="13" cy="63.6" r="12" fill="url(#thinker-lamp)" />
+        <circle cx="13" cy="63.6" r="1.7" fill="#f8fcff" />
       </g>
 
       {FIGURE_DEBUG && (
