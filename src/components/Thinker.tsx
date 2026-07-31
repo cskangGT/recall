@@ -146,9 +146,9 @@ export function Thinker({
         <linearGradient
           id="thinker-beam"
           gradientUnits="userSpaceOnUse"
-          x1="10.3"
+          x1="11.8"
           y1="60.4"
-          x2="-109.7"
+          x2="-108.2"
           y2="-99.6"
         >
           <stop offset="0" stopColor="#e8f5ff" stopOpacity="0.8" />
@@ -193,7 +193,7 @@ export function Thinker({
       */}
       <g className="thinker__beam">
         <polygon
-          points="10.3,60.4 -81.5,-120.8 -137.9,-78.4"
+          points="11.8,60.4 -80,-120.8 -136.4,-78.4"
           fill="url(#thinker-beam)"
           filter="url(#thinker-haze)"
         />
@@ -212,8 +212,8 @@ export function Thinker({
 
       {/* The lamp itself, over the silhouette: it is on the near side of it. */}
       <g className="thinker__lamp">
-        <circle cx="9.7" cy="59.6" r="12" fill="url(#thinker-lamp)" />
-        <circle cx="9.7" cy="59.6" r="1.7" fill="#f8fcff" />
+        <circle cx="11.2" cy="59.6" r="12" fill="url(#thinker-lamp)" />
+        <circle cx="11.2" cy="59.6" r="1.7" fill="#f8fcff" />
       </g>
 
       {FIGURE_DEBUG && (
