@@ -52,14 +52,15 @@
 import { OUTER, PARTS, VOID, pathD, partPoints, spanPolygon } from './thinkerPath';
 
 const VIEW_W = 116;
-const VIEW_H = 120;
-/**
- * Where the ground is — the row the trace was cut at, and the bottom of the
- * figure. The box stops four units below it so that anything positioning the
- * figure by its bottom edge (both screens sit it on the hill's crest) seats it
- * rather than leaving it hovering a hair above.
+const VIEW_H = 116;
+/*
+ * VIEW_H equals the row the trace was cut at, on purpose. The box used to stop
+ * four units lower to leave room for a soft ellipse under the figure, and those
+ * four units were four pixels of daylight between the feet and the hill:
+ * whatever seats this element by its bottom edge was seating empty space. The
+ * ellipse is gone — there is always a hill behind now — so the box's bottom edge
+ * is the feet.
  */
-const GROUND_Y = 116;
 
 /**
  * `?figure=debug` paints each named stretch of the outline its own colour, with
@@ -219,15 +220,6 @@ export function Thinker({
         </g>
       )}
 
-      {/* What he is sitting on, where there is no hill behind to do the job. */}
-      <ellipse
-        className="thinker__ground"
-        cx="57"
-        cy={GROUND_Y}
-        rx="50"
-        ry="3"
-        filter="url(#thinker-soft)"
-      />
     </svg>
   );
 }
