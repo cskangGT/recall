@@ -156,3 +156,20 @@ export function partPoints(part: Part): readonly Pt[] {
   const start = part.from === 0 ? OUTER.length - 1 : part.from - 1;
   return [OUTER[start]!, ...OUTER.slice(part.from, part.to + 1)];
 }
+
+/**
+ * The points of a stretch of the outline, inclusive of both ends, ready to be
+ * filled as a closed polygon — the chord back from `to` to `from` is the polygon
+ * closing itself.
+ *
+ * Wraps when `to < from`, because the ring's seam sits partway along the top of
+ * the cap and a span across the head has to be able to cross it. Nothing needs
+ * that today, which is exactly why it is the case that would be got wrong.
+ */
+export function spanPolygon(from: number, to: number): readonly Pt[] {
+  const n = OUTER.length;
+  const a = ((from % n) + n) % n;
+  const b = ((to % n) + n) % n;
+  const count = ((b - a + n) % n) + 1;
+  return Array.from({ length: count }, (_, i) => OUTER[(a + i) % n]!);
+}

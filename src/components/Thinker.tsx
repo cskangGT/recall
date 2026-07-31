@@ -43,7 +43,7 @@
  * in two lights, not two figures.
  */
 
-import { OUTER, PARTS, VOID, pathD, partPoints } from './thinkerPath';
+import { OUTER, PARTS, VOID, pathD, partPoints, spanPolygon } from './thinkerPath';
 
 const VIEW_W = 116;
 const VIEW_H = 120;
@@ -72,6 +72,33 @@ export const FIGURE_DEBUG =
  * without moving where it sits.
  */
 export const DEBUG_SCALE = 3.4;
+
+/**
+ * `&span=41-49` fills that stretch of the outline as a closed area, with the
+ * chord that closes it dashed so it is obvious which edge is really there.
+ *
+ * An outline shows boundaries; most questions about this shape are about areas —
+ * "what *is* that part" — and the two are not the same picture. Comma-separated
+ * for several at once, which is how two areas get compared.
+ *
+ * Malformed input is dropped rather than thrown: this is a thing you type into
+ * the address bar, and a blank overlay beats a blank screen.
+ */
+const SPAN_COLOURS = ['#ffe14d', '#4fa8ff', '#3fd6a0', '#ff6bd6'];
+
+const SPANS: readonly (readonly [number, number])[] = FIGURE_DEBUG
+  ? (new URLSearchParams(window.location.search).get('span') ?? '')
+      .split(',')
+      .map((s) => s.trim().match(/^(\d+)-(\d+)$/))
+      .flatMap((m) => {
+        if (!m) return [];
+        const a = Number(m[1]);
+        const b = Number(m[2]);
+        return a < OUTER.length && b < OUTER.length
+          ? [[a, b] as readonly [number, number]]
+          : [];
+      })
+  : [];
 
 export function Thinker({
   size = 116,
@@ -123,6 +150,36 @@ export function Thinker({
 
       {FIGURE_DEBUG && (
         <g className="thinker__debug">
+          {SPANS.map(([from, to], i) => {
+            const pts = spanPolygon(from, to);
+            const colour = SPAN_COLOURS[i % SPAN_COLOURS.length]!;
+            const [ax, ay] = pts[0]!;
+            const [bx, by] = pts[pts.length - 1]!;
+            return (
+              <g key={`${from}-${to}`}>
+                <polygon
+                  points={pts.map(([x, y]) => `${x},${y}`).join(' ')}
+                  fill={colour}
+                  /* Not 0.18. The spans lie on top of a near-black silhouette,
+                     where a light tint is simply not there. */
+                  fillOpacity="0.4"
+                />
+                {/* The closing chord — construction, not contour. */}
+                <line
+                  x1={bx}
+                  y1={by}
+                  x2={ax}
+                  y2={ay}
+                  stroke={colour}
+                  strokeWidth="0.6"
+                  strokeDasharray="2 1.6"
+                />
+                <text x={(ax + bx) / 2} y={(ay + by) / 2 - 1} fontSize="3" fill={colour}>
+                  {from}–{to}
+                </text>
+              </g>
+            );
+          })}
           {PARTS.map((part) => (
             <polyline
               key={part.name}

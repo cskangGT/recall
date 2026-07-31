@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OUTER, VOID, PARTS, pathD, partPoints } from '../../src/components/thinkerPath';
+import { OUTER, VOID, PARTS, pathD, partPoints, spanPolygon } from '../../src/components/thinkerPath';
 
 /**
  * The figure is tuned by conversation, and the conversation runs on `PARTS`.
@@ -73,5 +73,32 @@ describe('PARTS', () => {
       expect(partPoints(p)).toHaveLength(p.to - p.from + 2);
     }
     expect(partPoints(PARTS[0]!)[0]).toEqual(OUTER[OUTER.length - 1]);
+  });
+});
+
+describe('spanPolygon', () => {
+  it('returns the stretch inclusive of both ends', () => {
+    const p = spanPolygon(41, 49);
+    expect(p).toHaveLength(9);
+    expect(p[0]).toEqual(OUTER[41]);
+    expect(p[8]).toEqual(OUTER[49]);
+  });
+
+  /**
+   * The ring's seam sits partway along the top of the cap, so a span across the
+   * head has to cross index 0. Nothing anatomical needs that today, which is
+   * exactly why it is the case that would be got wrong and not noticed.
+   */
+  it('wraps past the start of the ring', () => {
+    const p = spanPolygon(57, 2);
+    expect(p).toHaveLength(5);
+    expect(p[0]).toEqual(OUTER[57]);
+    expect(p[1]).toEqual(OUTER[58]);
+    expect(p[2]).toEqual(OUTER[0]);
+    expect(p[4]).toEqual(OUTER[2]);
+  });
+
+  it('treats a single-point span as one point, not the whole ring', () => {
+    expect(spanPolygon(12, 12)).toEqual([OUTER[12]]);
   });
 });
