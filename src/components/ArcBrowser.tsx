@@ -440,7 +440,7 @@ export function ArcBrowser() {
         className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={(isOpen ? 78 : 118) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
+        <Thinker size={(isOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
       {!isOpen &&
@@ -452,9 +452,8 @@ export function ArcBrowser() {
             {/* The scale belongs in the sentence, where the eye already is —
                 the Inspector used to shout it from the corner instead. */}
             <p className="arc__greeting-aside">
-              Everything you've saved — {payload.memories.length} memories from{' '}
-              {payload.sources.length} sources — is already sorted. Ask me anything about
-              it, or press Enter to look around.
+              {payload.memories.length} memories from {payload.sources.length} sources,
+              already sorted. Ask me anything about them — or press Enter to look around.
             </p>
           </div>
         ))}

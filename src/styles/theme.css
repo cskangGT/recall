@@ -77,7 +77,21 @@ button {
  *
  * The accent is still grey, so pressing G still means colour arriving.
  */
+/*
+ * Symmetric gutters while browsing.
+ *
+ * The shell is rail | canvas | inspector, 56 and 360, so the canvas's centre sat
+ * 152px left of the window's — and everything centred in it (the figure, the
+ * greeting, the composer, the hill's crest) was centred on nothing the eye can
+ * see. Matching the left gutter to the inspector puts the middle column on the
+ * window's centre line. The gutter is empty apart from the rail, which is the
+ * price of the scene being centred, and it is worth paying: this is the one view
+ * that is a picture rather than a workspace.
+ *
+ * Only here. Map and Sources want every pixel of canvas they can get.
+ */
 .shell--mono {
+  grid-template-columns: var(--inspector-w) 1fr var(--inspector-w);
   --accent: #cfcfd8;
   --accent-dim: #8b8b96;
   /* The greys were chosen against near-black. On this sky the arc's labels sit
@@ -93,6 +107,12 @@ button {
   background: transparent;
 }
 
+/* The rail keeps its own width and stays at the far left of the wide gutter,
+   rather than stretching across it. */
+.shell--mono .rail {
+  width: var(--rail-w);
+}
+
 .too-small {
   display: grid;
   place-items: center;
@@ -105,6 +125,10 @@ button {
 /* ------------------------------------------------------------------ rail */
 
 .rail {
+  /* Above the hill. The hill is positioned and the rail was not, so the bottom
+     two buttons — settings and add — were painted over by the landscape. */
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -114,23 +138,26 @@ button {
 }
 
 .rail__mark {
-  width: 26px;
-  height: 26px;
-  margin-bottom: 18px;
-  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 20px;
+  border-radius: 8px;
   background: var(--accent);
   display: grid;
   place-items: center;
   color: #17130a;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 15px;
   letter-spacing: -0.03em;
 }
 
+/* The glyphs inherited 13px body type and read as specks against a full-window
+   scene. They are the only navigation there is; they can afford the pixels. */
 .rail__btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 17px;
   display: grid;
   place-items: center;
   color: var(--text-faint);
@@ -268,9 +295,9 @@ button {
     #3b2c52 22%,
     #55406e 38%,
     #79598e 54%,
-    #9c749c 66%,
-    #b0849f 74%,
-    #c497a8 100%
+    #8f6a93 66%,
+    #a07897 74%,
+    #b98fa4 100%
   );
 }
 
@@ -305,17 +332,13 @@ button {
   /*
    * Centred on the *figure*, not on the window.
    *
-   * The figure stands at the arc's focus, which is the middle column's centre —
-   * 152px left of the window's, with a 56px rail on one side and a 360px
-   * inspector on the other. The hill used to be centred on the window, so the
-   * crest was 152px away from the feet; while the hill was nearly flat that cost
-   * a pixel and hid, and the moment it got its real curvature it became visible
-   * daylight under a figure that is supposed to be sitting on it.
-   *
-   * A hill whose summit is not in the middle of the frame is also just what a
-   * hill looks like.
+   * Centred on the window, which is also the figure — the browsing shell gives
+   * itself symmetric gutters so the middle column sits on the window's centre
+   * line. Before that they disagreed by 152px, and the moment the hill got its
+   * real curvature that became visible daylight under someone who is supposed to
+   * be sitting on it.
    */
-  left: calc((var(--rail-w) + 100% - var(--inspector-w)) / 2);
+  left: 50%;
   /*
    * The curvature is the reference's, measured rather than guessed. There the
    * crest sits at (600, 572) of a 1007x639 frame and the edge falls to about
@@ -382,14 +405,14 @@ button {
  */
 .composer__add {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   margin-left: -6px;
   border-radius: 8px;
   display: grid;
   place-items: center;
   color: var(--text-dim);
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 300;
   line-height: 1;
   transition: color 120ms ease, background 120ms ease;
@@ -503,7 +526,7 @@ button {
   justify-content: space-between;
   align-items: baseline;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   z-index: 5;
@@ -518,7 +541,7 @@ button {
    the shortcut. Naming what it is for is the whole fix. */
 .topbar__link {
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: none;
   transition: color 90ms ease;
@@ -533,11 +556,16 @@ button {
 .reparent {
   transition: opacity 140ms ease, box-shadow 140ms ease;
   /*
-   * Bottom-left. Centred at the top it sat over the category nodes and
-   * swallowed the pointer press that starts a drag, which looked exactly like
-   * the browser hanging. Narrow enough to clear the reading list beside it.
+   * In the left gutter, which the browsing shell leaves empty so the scene can
+   * be centred — the one place on this screen that nothing else wants.
+   *
+   * It has been moved twice for the same reason. Centred at the top it sat over
+   * the category nodes and swallowed the pointer press that starts a drag, which
+   * looks exactly like the browser hanging. Bottom-left inside the arc was fine
+   * until the gutters became symmetric, which pushed it right into the reading
+   * list. Fixed to the window keeps it clear of both.
    */
-  position: absolute;
+  position: fixed;
   left: 16px;
   bottom: 92px;
   opacity: 0.5;
@@ -733,18 +761,18 @@ button {
 .arc__mark {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   color: var(--accent);
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .arc__label {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
   letter-spacing: -0.005em;
   /* Two lines then ellipsis: a long name must not shove its neighbours off
@@ -774,7 +802,7 @@ button {
 
 .arc__label {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
   letter-spacing: -0.005em;
   /* Two lines then ellipsis: "Evals & Observability" must not shove its
@@ -787,7 +815,7 @@ button {
 
 .arc__count {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -829,7 +857,15 @@ button {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 92px;
+  /*
+   * High, in the dark half of the sky — not above the composer as it used to be.
+   * The crest came down to 86% so the hill could be the thin band it is in the
+   * reference, and that is now where the figure sits; text at the old
+   * `bottom: 92px` would straddle the crest, half on sky and half on hill.
+   * Up here the sky is dark enough to carry light type, and the emptiness
+   * between the words and the figure is the sky the reference is mostly made of.
+   */
+  top: 26%;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -855,13 +891,13 @@ button {
   line-height: 1.55;
 }
 
-/* The invitation, only while nothing is open. Sits under the figure so it never
-   collides with the arc. */
+/* The invitation, only while nothing is open. Same slot as the greeting it
+   replaces, so nothing moves when the words change. */
 .arc__prompt {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 92px;
+  top: 26%;
   margin: 0;
   text-align: center;
   color: var(--text-dim);
@@ -1431,6 +1467,8 @@ button {
 /* ------------------------------------------------------------------ inspector */
 
 .inspector {
+  position: relative;
+  z-index: 2;
   width: var(--inspector-w);
   background: var(--bg-panel);
   overflow-y: auto;

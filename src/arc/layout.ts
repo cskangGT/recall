@@ -72,7 +72,7 @@ export function arcPositions(count: number, radius: number, spanDeg?: number): A
  * component that calls {@link fitArc}. Two hand-copied constants would drift
  * and the figure would start floating.
  */
-export const FOCUS_FRACTION = { open: 0.32, closed: 0.72 } as const;
+export const FOCUS_FRACTION = { open: 0.32, closed: 0.86 } as const;
 
 export interface ArcGeometry {
   /** Focus of the arc in canvas coordinates — where the Thinker stands. */
@@ -96,16 +96,36 @@ export function fitArc(
   // Browsing, the figure sits low and the arc has the room above it. Open, the
   // whole assembly lifts so the reading list gets the bottom two thirds.
   //
-  // Closed is 0.72 rather than something nearer the middle because the hill's
-  // crest is drawn on this line, and the sky above it has to include the pale
-  // band at the horizon — put the crest much higher and the glow is behind the
-  // hill and the sky reads as a flat wash.
+  // Closed is 0.86 because the hill's crest is drawn on this line, and the
+  // reference puts its crest at 90% of the frame. That is what makes it a hill:
+  // measured off the photograph the figure is 23% of the frame's height and the
+  // hill below it only 10%, so the person is more than twice the landform. At
+  // 0.72 the ratio was inverted — 13% of figure over 28% of dark ground — and a
+  // small mark on a large mass reads as standing on a plain.
   const focusY = viewport.h * (open ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed);
   // Bounded by both axes so a short window narrows the fan instead of pushing
   // the top nodes off-screen.
+  // The closed arc reaches much further than it used to, for two reasons that
+  // both came from making the scene match the reference. The focus went down to
+  // 0.86 to put the hill's crest where the photograph has it, so a radius sized
+  // for 0.72 leaves the fan in the pale band above the horizon where grey stones
+  // on lilac have almost no contrast. And the figure grew to the reference's
+  // share of the frame, so a short radius puts the inner nodes' labels straight
+  // through its head — the innermost node sits only r·cos(12°) above the focus,
+  // which has to clear the whole figure.
+  //
+  // The width factor is 0.48 rather than 0.32 because the browsing shell gives
+  // itself symmetric gutters, so the column it measures is narrower than the
+  // window. Half the fan is r·sin(60°) plus a node's half-width, which at 0.48
+  // still lands inside the column.
   const radius = Math.max(
     120,
-    Math.min(viewport.w * 0.32, viewport.h * 0.34, focusY - 80, open ? 240 : 330),
+    Math.min(
+      viewport.w * (open ? 0.32 : 0.48),
+      viewport.h * (open ? 0.34 : 0.52),
+      focusY - 80,
+      open ? 240 : 470,
+    ),
   );
   return {
     focus: { x: viewport.w / 2, y: focusY },
