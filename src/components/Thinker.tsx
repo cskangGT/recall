@@ -155,6 +155,12 @@ export function Thinker({
         </g>
       </g>
 
+      {/* Over the silhouette, because the lamp is on the near side of it. */}
+      <g className="thinker__beam">
+        <circle cx="16.2" cy="67.6" r="19" fill="url(#thinker-beam)" />
+        <circle cx="16.2" cy="67.6" r="2.2" fill="#eef8ff" />
+      </g>
+
       {FIGURE_DEBUG && (
         <g className="thinker__debug">
           {SPANS.map(([from, to], i) => {

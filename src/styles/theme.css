@@ -340,22 +340,20 @@ button {
    */
   left: 50%;
   /*
-   * The curvature is the reference's, measured rather than guessed. There the
-   * crest sits at (600, 572) of a 1007x639 frame and the edge falls to about
-   * y=635 by x=200 — a 63px drop over 400px, near a tenth of the frame height.
-   * A 62vw semi-axis against a 28vh radius drops 28 x (1 - sqrt(1 - (50/62)^2))
-   * ~= 11.5vh from crest to frame edge, which is that.
+   * A 56vw semi-axis against a 32vh radius drops 32 x (1 - sqrt(1 - (50/56)^2))
+   * ~= 17.6vh from crest to frame edge, so the ground leaves the frame just past
+   * the bottom corners and what is left is a mound standing in the middle of the
+   * picture rather than a ridge crossing it.
    *
-   * It was 170vw and 22vh, which drops 4.2vh — under half — and read as a floor
-   * with a slight bow rather than as a mound somebody climbed. Only the
-   * curvature is copied: the crest stays on the arc's focus, because the figure
-   * sits on it and the greeting sits below it on the dark slope. At the
-   * reference's 89.5% the greeting would be on the pale sky.
+   * It has been widened and narrowed twice. At 170vw / 22vh it dropped 4.2vh and
+   * read as a floor with a slight bow; at 124vw / 28vh it read as a hillside but
+   * still one that ran off both edges. The crest itself stays on the arc's focus
+   * — the figure sits on it, and the composer sits below it on the dark slope.
    */
-  width: 124vw;
+  width: 112vw;
   height: 140vh;
   transform: translateX(-50%);
-  border-radius: 50% 50% 0 0 / 28vh 28vh 0 0;
+  border-radius: 50% 50% 0 0 / 32vh 32vh 0 0;
   background: #0f0b16;
   pointer-events: none;
 }
