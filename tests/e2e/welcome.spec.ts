@@ -1,19 +1,23 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The welcome screen is a conversation, not a splash.
+ * There is no welcome *screen* any more — the first frame is the app, on the
+ * hilltop, with nothing on the arc yet. "Look around" is a reveal in place, not
+ * a navigation, so the tests here are about state changing under a screen that
+ * never gets replaced.
  *
- * The test that earns its keep is the second one: whatever you type here has to
- * actually be answered, or the chat box is a decorative door.
+ * The one that earns its keep is still the second: whatever you type on the
+ * first frame has to actually be answered, or the chat box is a decorative door.
  */
 
-test('greets you before any data, with nothing else on screen', async ({ page }) => {
+test('greets you on the app itself, with nothing on the arc yet', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('welcome')).toBeVisible();
   await expect(page.getByText('Want to think something through?')).toBeVisible();
-  // No rail and no inspector — a welcome framed by the app is just a modal.
-  await expect(page.getByTestId('arc-browser')).toHaveCount(0);
-  await expect(page.getByTestId('inspector')).toHaveCount(0);
+  // The scene is already the app — no separate frame to leave.
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  // But the categories are not out yet. That is what looking around does.
+  await expect(page.locator('[data-testid^="arc-node-"]')).toHaveCount(0);
 });
 
 test('the first thing you type is answered, not discarded', async ({ page }) => {
@@ -21,7 +25,6 @@ test('the first thing you type is answered, not discarded', async ({ page }) => 
   await page.getByTestId('welcome-input').fill('What did we decide about our eval stack?');
   await page.getByTestId('welcome-input').press('Enter');
 
-  await expect(page.getByTestId('arc-browser')).toBeVisible();
   await expect(page.getByTestId('browser-answer')).toBeVisible();
   await expect(page.getByTestId('arc-node-__answer__')).toBeVisible();
   // The answer reads in the browser, not the Inspector — the Inspector stops
@@ -29,16 +32,24 @@ test('the first thing you type is answered, not discarded', async ({ page }) => 
   await expect(page.getByTestId('browser-answer')).toContainText('LangChain');
 });
 
-test('an empty submit just goes in', async ({ page }) => {
+test('looking around fans the categories in without changing screen', async ({ page }) => {
   await page.goto('/');
+  const browser = page.getByTestId('arc-browser');
+  await expect(browser).toBeVisible();
+
   await page.getByTestId('welcome-send').click();
 
-  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  // Same element, still mounted — the reveal is content, not navigation.
+  await expect(browser).toBeVisible();
+  await expect(page.getByTestId('welcome')).toHaveCount(0);
+  await expect(page.getByText('Where would you like to look?')).toBeVisible();
+  await expect(page.locator('[data-testid^="arc-node-"]').first()).toBeVisible();
   await expect(page.getByTestId('browser-answer')).toHaveCount(0);
 });
 
-test('?skipWelcome=1 bypasses it for automation', async ({ page }) => {
+test('?skipWelcome=1 starts with the categories already out', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="arc-node-"]').first()).toBeVisible();
 });

@@ -80,10 +80,12 @@ button {
 .shell--mono {
   --accent: #cfcfd8;
   --accent-dim: #8b8b96;
-  /* The greys were chosen against near-black; low on this sky they lose most of
-     their contrast, and the arc's labels live low on it. */
-  --text-dim: #9d94ad;
-  --text-faint: #6d6480;
+  /* The greys were chosen against near-black. On this sky the arc's labels sit
+     mid-frame where it is lightest, so they go light rather than dark — a dim
+     grey label on mid violet is the first thing to disappear. */
+  --text: #f6f2fa;
+  --text-dim: #ded3e8;
+  --text-faint: #b2a3c2;
 }
 
 .shell--mono .rail,
@@ -235,14 +237,14 @@ button {
   pointer-events: none;
 }
 
-/* Backlit. The sky is the light source here, so the figure is a silhouette —
-   the reference's arrangement, and the reason the sky has to stay lighter than
-   the figure at every point behind it. */
-.welcome .thinker__shape {
-  fill: #0f0b16;
+/* Backlit. The sky is the light source, so the figure is a silhouette — the
+   reference's arrangement, and the reason the sky has to stay lighter than the
+   figure at every point behind it. */
+.shell--mono .thinker__shape {
+  fill: #100c18;
 }
 
-.welcome .thinker__ground {
+.shell--mono .thinker__ground {
   fill: transparent;
 }
 
@@ -252,23 +254,23 @@ button {
  * panel is a slab of night pasted over a sunset. Here it becomes glass: the sky
  * shows through it, and the edge is light rather than dark.
  */
-.welcome .composer {
+.shell--mono .composer--docked {
   background: rgba(24, 16, 34, 0.46);
   box-shadow: inset 0 0 0 1px rgba(236, 224, 246, 0.18), 0 26px 60px -34px #1a1024;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
-.welcome .composer input::placeholder {
+.shell--mono .composer--docked input::placeholder {
   color: rgba(240, 231, 248, 0.52);
 }
 
-.welcome .composer__send {
+.shell--mono .composer--docked .composer__send {
   background: rgba(240, 232, 250, 0.16);
   color: #f4eefa;
 }
 
-.welcome .composer__send:hover:not(:disabled) {
+.shell--mono .composer--docked .composer__send:hover:not(:disabled) {
   background: rgba(244, 238, 252, 0.32);
   color: #fff;
 }
@@ -291,19 +293,23 @@ button {
   overflow: hidden;
 }
 
-/* The welcome screen's sky, at full strength. It is the one frame in the app
-   that is not the app — no rail, no inspector, nothing to operate — which is
-   what earns it a palette of its own. */
+/*
+ * The stops are placed against the crest, not spread evenly. The hill's top
+ * lands at 72% of the frame, so the pale glow has to be arriving by about 66%
+ * or it is hidden behind the hill and the sky is a flat violet wash. Everything
+ * below 72% is never seen.
+ */
 .sky--dusk {
   background: linear-gradient(
     180deg,
-    #241b33 0%,
-    #2c2140 11%,
+    #221a30 0%,
+    #2c2140 10%,
     #3b2c52 22%,
-    #5c4576 46%,
-    #866297 66%,
-    #ab7fa6 82%,
-    #c99cb4 100%
+    #55406e 38%,
+    #79598e 54%,
+    #9c749c 66%,
+    #b0849f 74%,
+    #c497a8 100%
   );
 }
 
@@ -796,6 +802,21 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * A dark halo behind the arc's type.
+ *
+ * The sky runs from near-black at the top of the frame to a pale glow just above
+ * the hill, and the arc spans most of that — so one text colour cannot work at
+ * both ends. Light type with a soft dark shadow can: it reads as light on the
+ * dark half and stays separated from the pale half, which a colour change at a
+ * fixed height could not do, because the arc's height moves with the viewport.
+ */
+.arc__label,
+.arc__count,
+.arc__prompt {
+  text-shadow: 0 1px 10px rgba(22, 13, 30, 0.85), 0 0 3px rgba(22, 13, 30, 0.7);
+}
+
 /* Seated on the crest, so its bottom edge lands on the focus rather than its
    middle — the figure is standing on the hill, not floating at its height. */
 .arc__thinker {
@@ -807,6 +828,41 @@ button {
   transform: translate(-50%, calc(-100% + 4px));
   transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
+}
+
+/*
+ * The first words, in the same place the invitation appears later. They occupy
+ * one slot, not two — the greeting is what the prompt line says before you have
+ * looked around, so nothing moves when it changes.
+ */
+.arc__greeting {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 92px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.arc__greeting-line {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.arc__greeting-aside {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
 /* The invitation, only while nothing is open. Sits under the figure so it never

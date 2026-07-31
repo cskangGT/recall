@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
-import { WelcomeScreen } from './components/WelcomeScreen';
 import { SourcesView } from './components/SourcesView';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -30,7 +29,6 @@ export function App() {
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const view = useUiStore((s) => s.view);
   const openCategoryId = useUiStore((s) => s.openCategoryId);
-  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dropActive = useUiStore((s) => s.dropActive);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
@@ -183,14 +181,10 @@ export function App() {
 
   if (!wide) return <TooSmall />;
   if (loading) return <Loading />;
-  // Before the greeting is answered there is no chrome at all — no rail, no
-  // inspector. A welcome screen framed by the app it is welcoming you into is
-  // just a modal.
-  if (!welcomeDismissed) return <WelcomeScreen />;
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--night' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : ''}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.

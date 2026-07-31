@@ -18,8 +18,8 @@ npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
 
 | Key | What happens |
 |---|---|
-| — | The **welcome screen**: a starfield over a hill, someone sitting on the crest. It asks if you want to think something through — type a real question or just press `⏎`. |
-| — | The **arc browser**: 6 category stones fanned above the seated figure, already populated with 47 memories from 22 sources. The same chat box stays docked at the bottom. |
+| — | The app opens on a hilltop under a starfield, someone sitting on the crest, the chat box docked at the bottom. Ask a real question, or press `⏎` to look around. |
+| — | Looking around fans **6 category stones** into the sky above the figure — 47 memories from 22 sources. No screen changes; the categories arrive where you already are. |
 | drop | Drag a screenshot anywhere on the window. Recall reads it and tells you what it saw, what was new, what echoes something you already saved, and where it filed it. |
 | `G` | The same corpus as a map, and the colour comes back. Beat 2 needs this — the split animation only plays here. |
 | `⌘K` | Capture bar. Type anything and press `⏎`. |

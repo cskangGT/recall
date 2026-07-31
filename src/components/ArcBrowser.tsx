@@ -58,6 +58,8 @@ export function ArcBrowser() {
   const lastCapture = useUiStore((s) => s.lastCapture);
   const setAskOpen = useUiStore((s) => s.setAskOpen);
   const setView = useUiStore((s) => s.setView);
+  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
 
   const shellRef = useRef<HTMLDivElement>(null);
@@ -367,7 +369,13 @@ export function ArcBrowser() {
         the browser hangs outright. Offsets are added to the focus instead.
       */}
       <div className={`arc__fan${goingBack ? ' arc__fan--back' : ''}`} key={levelSeq}>
-        {nodes.map((node, i) => {
+        {/*
+          Nothing on the arc until you have looked around. There is no second
+          screen to arrive at any more — the categories fan into the sky you are
+          already standing under, which is what makes "look around" mean looking
+          rather than navigating.
+        */}
+        {(welcomeDismissed ? nodes : []).map((node, i) => {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
@@ -459,11 +467,22 @@ export function ArcBrowser() {
         <Thinker size={isOpen ? 78 : 118} />
       </div>
 
-      {!isOpen && <p className="arc__prompt">{heading}</p>}
+      {!isOpen &&
+        (welcomeDismissed ? (
+          <p className="arc__prompt">{heading}</p>
+        ) : (
+          <div className="arc__greeting" data-testid="welcome">
+            <p className="arc__greeting-line">Want to think something through?</p>
+            <p className="arc__greeting-aside">
+              Everything you've saved is already sorted. Ask me anything about it — or press
+              Enter to look around.
+            </p>
+          </div>
+        ))}
 
-      {/* The conversation does not end when you start looking around; it just
-          moves to the bottom of the screen. */}
-      <Composer variant="docked" />
+      {/* The conversation never moves. It is docked here on the first frame and
+          stays docked; there is no welcome screen for it to travel from. */}
+      <Composer firstRun={!welcomeDismissed} onSubmitted={dismissWelcome} />
 
       {isOpen && (
       <div className="reading" data-testid="reading-list" style={{ top: geometry.listTop }}>

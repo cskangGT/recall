@@ -72,7 +72,7 @@ export function arcPositions(count: number, radius: number, spanDeg?: number): A
  * component that calls {@link fitArc}. Two hand-copied constants would drift
  * and the figure would start floating.
  */
-export const FOCUS_FRACTION = { open: 0.32, closed: 0.64 } as const;
+export const FOCUS_FRACTION = { open: 0.32, closed: 0.72 } as const;
 
 export interface ArcGeometry {
   /** Focus of the arc in canvas coordinates — where the Thinker stands. */
@@ -95,6 +95,11 @@ export function fitArc(
 ): ArcGeometry {
   // Browsing, the figure sits low and the arc has the room above it. Open, the
   // whole assembly lifts so the reading list gets the bottom two thirds.
+  //
+  // Closed is 0.72 rather than something nearer the middle because the hill's
+  // crest is drawn on this line, and the sky above it has to include the pale
+  // band at the horizon — put the crest much higher and the glow is behind the
+  // hill and the sky reads as a flat wash.
   const focusY = viewport.h * (open ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed);
   // Bounded by both axes so a short window narrows the fan instead of pushing
   // the top nodes off-screen.
