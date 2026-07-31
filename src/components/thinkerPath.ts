@@ -71,13 +71,15 @@ export const OUTER: readonly Pt[] = [
   [17.6, 78.8],
   [17.4, 75],
   [20.2, 72.6],
-  [14.1, 68.8],
-  [11.3, 66.8],
-  [10.1, 62.7],
-  [14.7, 60.4],
-  [18.2, 63.2],
-  [23.2, 70.4],
-  [25.4, 73.6],
+  [18.6, 73.4],
+  [12, 64.6],
+  [11, 65.4],
+  [8.3, 61.8],
+  [14.1, 57.4],
+  [16.8, 61],
+  [15.8, 61.8],
+  [22.4, 70.6],
+  [25.4, 73.2],
   [25.9, 67.7],
   [26.9, 65.4],
   [27.1, 60.8],
@@ -116,6 +118,21 @@ export const VOID: readonly Pt[] = [
   [51.1, 62.4],
   [55.1, 60.8],
 ];
+
+/*
+ * The flashlight (indices 47–55) is built from an axis, not drawn freehand,
+ * because the three things that say "torch" are all relationships:
+ *
+ *   - the barrel's two sides are **parallel**. They were at 32 degrees and 55,
+ *     so it was a wedge, and a wedge is a spike or a horn but never a cylinder.
+ *     That one mistake is why it did not read.
+ *   - the head **steps** out from the barrel. A smooth swelling is a bulb.
+ *   - the lens end is **cut square**. A rounded end is a match, or a lollipop.
+ *
+ * Grip at (20.5, 72) along (-0.6, -0.8); barrel 11 long by 4.8 across, housing
+ * 4.5 by 7.2. Fifteen and a half units end to end, against the reference's
+ * sixteen.
+ */
 
 /**
  * The lacing, as two hairlines of sky across the instep.
@@ -171,12 +188,12 @@ export const PARTS: readonly Part[] = [
   { name: 'Heel', from: 31, to: 35, colour: '#b06bff' },
   { name: 'Shin, lower', from: 36, to: 41, colour: '#ff6bd6' },
   { name: 'Fist', from: 42, to: 46, colour: '#ffb03f' },
-  { name: 'Flashlight', from: 47, to: 53, colour: '#ffd166' },
-  { name: 'Shin, upper', from: 54, to: 56, colour: '#ff8fdf' },
-  { name: 'Knee', from: 57, to: 58, colour: '#ff4f9a' },
-  { name: 'Forearm', from: 59, to: 63, colour: '#ffffff' },
-  { name: 'Chest', from: 64, to: 65, colour: '#c9a06b' },
-  { name: 'Bill and cap front', from: 66, to: 69, colour: '#6bd0ff' },
+  { name: 'Flashlight', from: 47, to: 55, colour: '#ffd166' },
+  { name: 'Shin, upper', from: 56, to: 58, colour: '#ff8fdf' },
+  { name: 'Knee', from: 59, to: 60, colour: '#ff4f9a' },
+  { name: 'Forearm', from: 61, to: 65, colour: '#ffffff' },
+  { name: 'Chest', from: 66, to: 67, colour: '#c9a06b' },
+  { name: 'Bill and cap front', from: 68, to: 71, colour: '#6bd0ff' },
 ];
 
 const pt = ([x, y]: Pt) => `${x} ${y}`;
