@@ -226,9 +226,7 @@ button {
 
 .welcome__stage {
   position: absolute;
-  /* Off centre, as in the reference — a figure dead centre on a symmetrical
-     hill reads as a diagram of a figure on a hill. */
-  left: 46%;
+  left: 50%;
   /* Sitting on the crest, which is at 76% of the frame. The few pixels are the
      soft edge: seated means overlapping the hill slightly, never floating. */
   top: 76%;
