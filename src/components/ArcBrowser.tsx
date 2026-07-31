@@ -473,9 +473,12 @@ export function ArcBrowser() {
         ) : (
           <div className="arc__greeting" data-testid="welcome">
             <p className="arc__greeting-line">Want to think something through?</p>
+            {/* The scale belongs in the sentence, where the eye already is —
+                the Inspector used to shout it from the corner instead. */}
             <p className="arc__greeting-aside">
-              Everything you've saved is already sorted. Ask me anything about it — or press
-              Enter to look around.
+              Everything you've saved — {payload.memories.length} memories from{' '}
+              {payload.sources.length} sources — is already sorted. Ask me anything about
+              it, or press Enter to look around.
             </p>
           </div>
         ))}

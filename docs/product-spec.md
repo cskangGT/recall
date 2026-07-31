@@ -277,7 +277,9 @@ Right-docked, 360px, contextual to selection. Three modes:
 - `Memories extracted from this` — full list, each clickable
 - Footer action: `Delete source` — with a confirm dialog stating exactly how many memories will be removed
 
-**Empty selection:** panel shows workspace stats — total memories, sources, categories, and the last 3 reorganization events with timestamps. This doubles as a "what has Recall been doing" surface.
+**Empty selection:** on the very first frame the panel is **blank** — the greeting already states the scale in a sentence, and the counts at display size were the loudest thing on a screen whose job is a hilltop and one question. Once you have looked around it shows the workspace counts as a single caption line, plus the last 3 reorganization events. The panel keeps its width throughout: a column that appears on selection shoves the scene sideways, which is worse than one that is briefly empty.
+
+> The counts were three lines of 25px display type until the two screens merged. That size was right while this state could only be reached from inside the browser, after deselecting something — the app opened on a welcome screen that had no inspector at all. Nothing about the panel changed; where it appears did.
 
 ---
 
@@ -428,7 +430,8 @@ Every screen must implement all four. Copy below is final — implement it verba
 | **Map** | Zero memories (only reachable via `Clear all data`) | Centered: *"Nothing saved yet."* / *"Add a note, a link, or a screenshot and Recall will start building your map."* / `Add your first item` button (opens `⌘K`). Behind it, a static ghost graph at 6% opacity suggesting what will appear. |
 | **Tree** | Zero categories | Same message, no ghost. |
 | **Sources** | Zero sources | *"No sources yet."* |
-| **Inspector** | Nothing selected | Workspace stats + last 3 reorganization events (§5.4) |
+| **Inspector** | Nothing selected, first frame | Blank — the greeting carries the scale (§5.4) |
+| **Inspector** | Nothing selected, after looking around | Workspace counts as one caption line + last 3 reorganization events (§5.4) |
 | **Ask results** | Retrieval below relevance floor | *"I don't have anything saved about that yet."* |
 | **Category with no memories** | AI-created category emptied by user corrections | Auto-deleted after the reorganization pass completes. Never render an empty category. |
 

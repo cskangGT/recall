@@ -285,15 +285,35 @@ function AnswerDetail() {
   );
 }
 
+/**
+ * What the panel shows when nothing is selected.
+ *
+ * The counts used to be three lines of 25px display type, and they were right
+ * to be: spec §5.4 asks this state to prove the corpus is real and already
+ * organised, and back then it was only ever reached from *inside* the browser,
+ * after deselecting something. The app opened on a separate welcome screen that
+ * had no inspector at all.
+ *
+ * Merging the two screens put this in the first frame, where it became the
+ * largest, highest-contrast type on a screen whose whole job is a quiet hilltop
+ * and one question — out-shouting the greeting it exists to support. So: nothing
+ * at all until you have looked around, because the greeting is already making
+ * the point in a sentence, and a caption rather than a headline afterwards.
+ *
+ * The panel keeps its width either way. A column that appears when you select
+ * something shoves the scene sideways, which is worse than a column that is
+ * briefly empty.
+ */
 function EmptyDetail({ payload }: { payload: GraphPayload }) {
   const history = useUiStore((s) => s.reorgHistory);
+  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  if (!welcomeDismissed) return null;
   return (
     <>
       <div className="inspector__eyebrow">Workspace</div>
       <div className="stats">
-        <div className="stats__n">{payload.memories.length} memories</div>
-        <div className="stats__n">{payload.sources.length} sources</div>
-        <div className="stats__n">{payload.categories.length} categories</div>
+        {payload.memories.length} memories · {payload.sources.length} sources ·{' '}
+        {payload.categories.length} categories
       </div>
       {history.length > 0 && (
         <>

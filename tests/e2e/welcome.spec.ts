@@ -47,6 +47,22 @@ test('looking around fans the categories in without changing screen', async ({ p
   await expect(page.getByTestId('browser-answer')).toHaveCount(0);
 });
 
+/**
+ * The Inspector's empty state used to be three lines of 25px display type, sized
+ * for a screen you only reached after the welcome. Merging the two screens put
+ * it in the first frame, where it was the loudest thing on it. The greeting
+ * carries the scale now, so the panel has to stay quiet until you are inside.
+ */
+test('the workspace counts stay out of the first frame', async ({ page }) => {
+  await page.goto('/');
+  // The claim is in the sentence you are reading, not in the corner.
+  await expect(page.getByTestId('welcome')).toContainText('47 memories');
+  await expect(page.getByTestId('inspector')).not.toContainText('47 memories');
+
+  await page.getByTestId('welcome-send').click();
+  await expect(page.getByTestId('inspector')).toContainText('47 memories');
+});
+
 test('?skipWelcome=1 starts with the categories already out', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
