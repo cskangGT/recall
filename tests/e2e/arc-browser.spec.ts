@@ -311,10 +311,24 @@ test('the capture story says what was read, what was new, and where it went', as
   await expect(story).toContainText('What Recall saw');
   await expect(page.getByTestId('capture-story-memory')).toHaveCount(2);
 
-  // One of the two echoes an eval memory already in the corpus — that verdict
-  // is real cosine similarity against the pre-capture payload, not a caption.
-  await expect(page.getByTestId('capture-story-echo')).toHaveCount(1);
-  await expect(page.getByTestId('capture-story-new')).toHaveCount(1);
+  /*
+   * Both read as new, and the echo is gone on purpose.
+   *
+   * Under the authored 8-dimensional vectors one of these two echoed a seeded
+   * eval memory, and that line — "You already saved something close to this" —
+   * was the best thing the capture story said. Measured against real
+   * embeddings the pair scores 0.3567 while the 99th percentile of every
+   * ordinary pair in the corpus is 0.4550: it is *less* alike than one random
+   * pair in a hundred. The two sentences were never saying the same thing, they
+   * shared a theme, and a theme is all those vectors encoded.
+   *
+   * A threshold low enough to catch it calls 104 of 1,081 pairs an echo, so
+   * ECHO_SIMILARITY is parked above 1 and the verdict stays honest. The
+   * assertion is kept rather than deleted because this is the thing real
+   * de-duplication has to bring back, and it should fail here when it does.
+   */
+  await expect(page.getByTestId('capture-story-echo')).toHaveCount(0);
+  await expect(page.getByTestId('capture-story-new')).toHaveCount(2);
 
   await expect(page.getByTestId('capture-story-destination')).toContainText('AI Tooling');
 });

@@ -282,10 +282,16 @@ describe('assignMemory — spec 8.3 thresholds', () => {
     const dim = 8;
     const base = new Array(dim).fill(0);
     base[0] = 1;
-    // ~63 degrees off the only member: 0.45, inside the 0.40-0.55 band.
+    /*
+     * Placed relative to the thresholds rather than at a literal 0.45, which was
+     * "inside the 0.40-0.55 band" until that band became 0.24-0.28 and the case
+     * silently turned into an `existing` match. The band is what is under test;
+     * where it happens to sit is the embedder's business.
+     */
+    const target = (ASSIGN.NEW_CHILD + ASSIGN.EXISTING_CATEGORY) / 2;
     const between = new Array(dim).fill(0);
-    between[0] = 0.45;
-    between[6] = Math.sqrt(1 - 0.45 ** 2);
+    between[0] = target;
+    between[6] = Math.sqrt(1 - target ** 2);
 
     const profiles = [{ id: 'cat_parent', parentId: null, vectors: [base] }];
     const decision = assignMemory(between, profiles);

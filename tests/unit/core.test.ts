@@ -73,10 +73,23 @@ describe('validateSeed', () => {
     expect(() => validateSeed(bad)).toThrow(/two levels/);
   });
 
-  it('rejects a vector of the wrong dimension', () => {
-    expect(() =>
-      validateSeed({ ...minimal, memories: [{ ...minimal.memories[0], vector: [1, 0, 0] }] }),
-    ).toThrow(/dimension/);
+  /*
+   * The invariant is agreement, not a number.
+   *
+   * This used to assert a fixed width, which made every change of embedder an
+   * edit here — and the seed has now been 8 and 1024. What actually has to hold
+   * is that no two vectors in one payload disagree: `cosine` walks `a.length`
+   * with `?? 0`, so an 8-wide vector against a 1024-wide one returns a
+   * plausible wrong number instead of failing, and a half-re-embedded corpus
+   * would rank by nonsense while looking perfectly healthy.
+   */
+  it('rejects a payload whose vectors disagree about their width', () => {
+    const [first] = minimal.memories;
+    const bad = {
+      ...minimal,
+      memories: [first, { ...first, id: 'mem_odd', vector: [...first!.vector, 0.1] }],
+    };
+    expect(() => validateSeed(bad)).toThrow(/dimension/);
   });
 });
 

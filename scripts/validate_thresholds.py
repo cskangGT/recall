@@ -243,6 +243,171 @@ def report_distribution(payload, all_memories, vectors):
     print()
 
 
+def write_seed(path, obj):
+    """
+    Pretty-printed, except the vectors.
+
+    `json.dump(indent=2)` puts every array element on its own line, which for a
+    1024-wide vector means 1024 lines of one float each — roughly twenty bytes
+    per number instead of ten, and a 909 KB file where 480 KB says exactly the
+    same thing. seed/workspace.json is a *static import* in the client bundle,
+    so that difference is shipped to every browser.
+
+    The vectors are swapped for placeholders, the rest is formatted normally,
+    and then each vector goes back as one compact line — readable diffs for
+    everything a human reads, one dense line for the part nobody does.
+    """
+    holders = {}
+
+    def stash(container):
+        for m in container.get("memories", []):
+            key = f"__VEC_{m['id']}__"
+            holders[key] = json.dumps(m["vector"], separators=(",", ":"))
+            m["vector"] = key
+
+    stash(obj)
+    text = json.dumps(obj, indent=2)
+    for key, compact in holders.items():
+        text = text.replace(f'"{key}"', compact)
+    with open(path, "w") as fh:
+        fh.write(text + "\n")
+
+
+def propose_thresholds(payload, demo, all_memories, vectors):
+    """
+    A recommended value for each similarity threshold, with what it was read off.
+
+    Eight of the nine were tuned against 8-dimensional authored vectors, where a
+    theme anchor put same-topic memories near 0.9 and pushed everything else out
+    of the plane. A real model has no such geometry — the whole distribution
+    lands in a band around 0.23 — so carrying the numbers across would silence
+    every gate at once: no relates_to edge, no merge, no echo, and an ask that
+    refuses everything.
+
+    Each is derived from the thing it actually has to separate, not from a
+    percentile chosen to look principled.
+    """
+    parent = {c["id"]: c.get("parent_id") for c in payload["categories"]}
+    by_name = {c["name"]: c for c in payload["categories"]}
+    mems_of = lambda cid: [m for m in all_memories if m["category_id"] == cid]
+    vec = lambda m: vectors[m["id"]]
+
+    print("Proposed thresholds, and what each was read off:\n")
+
+    # ---- ECHO_SIMILARITY: the demo's own pair is the floor.
+    #
+    # The capture story's best line — "You already saved something close to
+    # this" — depends on one specific pair firing. Any threshold above it turns
+    # the moment the product is proudest of into silence, so the demo sets the
+    # ceiling and the rest of the corpus sets the floor.
+    demo_pairs = []
+    for d in demo["memories"]:
+        for prior in payload["memories"]:
+            demo_pairs.append((cosine(vectors[d["id"]], vectors[prior["id"]]),
+                               d["text"], prior["text"]))
+    demo_pairs.sort(reverse=True)
+    best_echo = demo_pairs[0]
+    non_demo = sorted(
+        cosine(vectors[a["id"]], vectors[b["id"]])
+        for i, a in enumerate(payload["memories"])
+        for b in payload["memories"][i + 1:]
+    )
+    print(f"  ECHO_SIMILARITY")
+    print(f"    demo's closest echo      {best_echo[0]:.4f}")
+    print(f"      new   {best_echo[1][:64]}")
+    print(f"      prior {best_echo[2][:64]}")
+    print(f"    corpus p99 / p99.5       {percentile(non_demo, 0.99):.4f} / "
+          f"{percentile(non_demo, 0.995):.4f}")
+    echo = round((percentile(non_demo, 0.99) + best_echo[0]) / 2, 2)
+    print(f"    -> {echo}   (below the demo pair, above 99% of everything else)\n")
+
+    # ---- RELATES_TO_MIN_SIMILARITY: keep the edge count the map was drawn for.
+    pairs = sorted(
+        (cosine(vectors[a["id"]], vectors[b["id"]]))
+        for i, a in enumerate(payload["memories"])
+        for b in payload["memories"][i + 1:]
+    )
+    target_edges = len(payload.get("edges", []))
+    print(f"  RELATES_TO_MIN_SIMILARITY")
+    for t in (0.35, 0.38, 0.40, 0.42, 0.45):
+        n = sum(1 for c in pairs if c >= t)
+        print(f"    at {t:.2f}: {n:>4} pairs clear it")
+    print(f"    the map currently draws {target_edges} edges (top-3 per memory, capped)\n")
+
+    # ---- MERGE.MIN_CENTROID_SIMILARITY: above the closest pair that must not merge.
+    sib = []
+    kids = {}
+    for c in payload["categories"]:
+        if c.get("parent_id"):
+            kids.setdefault(c["parent_id"], []).append(c)
+    for group in kids.values():
+        cents = [(c["name"], centroid([vec(m) for m in mems_of(c["id"])]))
+                 for c in group if mems_of(c["id"])]
+        for i in range(len(cents)):
+            for j in range(i + 1, len(cents)):
+                sib.append(cosine(cents[i][1], cents[j][1]))
+    hardest = max(sib) if sib else 0.0
+    print(f"  MERGE.MIN_CENTROID_SIMILARITY")
+    print(f"    closest siblings that must NOT merge   {hardest:.4f}")
+    print(f"    -> {round(hardest + 0.05, 2)}   (clears it by 0.05)\n")
+
+    # ---- PROMOTE.MAX_PARENT_SIMILARITY: below every child that must stay put.
+    child_parent = []
+    for c in payload["categories"]:
+        pid = c.get("parent_id")
+        if not pid:
+            continue
+        cm, pm = mems_of(c["id"]), mems_of(pid)
+        siblings = [m for k in kids.get(pid, []) for m in mems_of(k["id"])]
+        pool = pm + siblings
+        if cm and pool:
+            child_parent.append((cosine(centroid([vec(m) for m in cm]),
+                                        centroid([vec(m) for m in pool])), c["name"]))
+    child_parent.sort()
+    print(f"  PROMOTE.MAX_PARENT_SIMILARITY")
+    for v, n in child_parent[:3]:
+        print(f"    {v:.4f}  {n}  (least like its parent)")
+    floor = child_parent[0][0] if child_parent else 0.0
+    print(f"    -> {round(floor - 0.05, 2)}   (below every child that must stay put)\n")
+
+    # ---- ASSIGN: nearest member, because that is what assignMemory compares.
+    #
+    # Measured against the centroid first, which was wrong and quietly so: the
+    # proposal came out at 0.47, the demo memories scored 0.42 and 0.36 against
+    # AI Tooling's centroid, and the capture stopped attaching to the category
+    # the whole demo splits. `assignMemory` (src/core/assign.ts) ranks by
+    # `bestMemberSimilarity` — one memory against one memory — and a broad
+    # category's centroid is nothing like its closest member.
+    profiles = [(c["name"], c["id"],
+                 [vec(m) for m in payload["memories"] if m["category_id"] == c["id"]])
+                for c in payload["categories"]]
+    profiles = [p for p in profiles if p[2]]
+    right, wrong = [], []
+    for m in payload["memories"]:
+        for _n, cid, vs in profiles:
+            others = [v for v in vs if v is not vec(m)]
+            if not others:
+                continue
+            best = max(cosine(vec(m), v) for v in others)
+            (right if cid == m["category_id"] else wrong).append(best)
+    right.sort(); wrong.sort()
+    demo_best = []
+    for d in demo["memories"]:
+        ranked = sorted(((max(cosine(vectors[d["id"]], v) for v in vs), n)
+                         for n, _cid, vs in profiles), reverse=True)
+        demo_best.append(ranked[0])
+    print(f"  ASSIGN.EXISTING_CATEGORY   (nearest member, not centroid)")
+    print(f"    memory vs its own category   p05 {percentile(right, 0.05):.4f}  "
+          f"p10 {percentile(right, 0.10):.4f}  p50 {percentile(right, 0.50):.4f}")
+    print(f"    memory vs a wrong category   p90 {percentile(wrong, 0.90):.4f}  "
+          f"p99 {percentile(wrong, 0.99):.4f}")
+    for score, cat in demo_best:
+        print(f"    demo capture -> {cat} at {score:.4f}  (must clear the threshold)")
+    ceiling = min(s for s, _ in demo_best)
+    existing = round(min(percentile(right, 0.10), ceiling - 0.03), 2)
+    print(f"    -> {existing}   (under the demo's weaker match, near the bottom decile of right answers)")
+    print(f"    -> NEW_CHILD {round(existing - 0.04, 2)}\n")
+
 def describe(label, mems, vectors):
     vecs = [vectors[m["id"]] for m in mems]
     coh = mean_pairwise_cosine(vecs)
@@ -256,6 +421,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", choices=PROVIDERS, default="voyage")
     ap.add_argument("--model", default=None)
+    ap.add_argument("--relates-to", type=float, default=0.40,
+                    help="cutoff used when rebuilding relates_to with --write-vectors")
+    ap.add_argument("--propose", action="store_true",
+                    help="derive a value for every similarity threshold")
     ap.add_argument("--dimensions", type=int, default=None,
                     help="request a narrower embedding (text-embedding-3-* only)")
     ap.add_argument("--write-vectors", action="store_true",
@@ -280,6 +449,8 @@ def main():
     print(f"  dimension: {dim}\n")
 
     report_distribution(payload, all_memories, vectors)
+    if args.propose:
+        propose_thresholds(payload, demo, all_memories, vectors)
 
     cat_by_id = {c["id"]: c for c in payload["categories"]}
     ai = next(c for c in payload["categories"] if c["name"] == "AI Tooling")
@@ -353,10 +524,43 @@ def main():
             m["vector"] = [round(x, 6) for x in vectors[m["id"]]]
         for m in demo["memories"]:
             m["vector"] = [round(x, 6) for x in vectors[m["id"]]]
-        json.dump(payload, open(os.path.join(SEED_DIR, "workspace.json"), "w"), indent=2)
-        json.dump(demo, open(os.path.join(SEED_DIR, "demo-item.json"), "w"), indent=2)
-        print(f"\nWrote {dim}-dimensional vectors into seed/. Update VECTOR_DIM in")
-        print("src/data/validateSeed.ts and MAX_MEAN_COHESION in src/reorg/thresholds.ts.")
+
+        # Rebuild relates_to from the vectors just written.
+        #
+        # Writing new vectors and leaving the old edges is the subtle version of
+        # the mismatch this whole exercise is about: the map would keep drawing
+        # 46 connections derived from a geometry that no longer exists, and
+        # nothing would complain, because an edge is just two ids. Same rule as
+        # the generator — top 3 per memory, above the cutoff, deduped.
+        mems = payload["memories"]
+        edges, seen = [], set()
+        for m in mems:
+            scored = sorted(
+                ((cosine(m["vector"], o["vector"]), o) for o in mems if o["id"] != m["id"]),
+                key=lambda t: -t[0],
+            )[:3]
+            for sim, other in scored:
+                if sim < args.relates_to:
+                    continue
+                a, b = sorted([m["id"], other["id"]])
+                if (a, b) in seen:
+                    continue
+                seen.add((a, b))
+                edges.append({
+                    "id": f"edg_{len(edges):03d}",
+                    "source_memory_id": a,
+                    "target_memory_id": b,
+                    "similarity": round(sim, 4),
+                })
+        was = len(payload.get("edges", []))
+        payload["edges"] = edges
+
+        write_seed(os.path.join(SEED_DIR, "workspace.json"), payload)
+        write_seed(os.path.join(SEED_DIR, "demo-item.json"), demo)
+        print(f"\nWrote {dim}-dimensional vectors into seed/.")
+        print(f"Rebuilt relates_to at >= {args.relates_to}: {was} edges -> {len(edges)}.")
+        print("Now update VECTOR_DIM in src/data/validateSeed.ts and the")
+        print("thresholds in src/core/thresholds.ts to the proposed values above.")
 
     sys.exit(0 if ok else 1)
 
