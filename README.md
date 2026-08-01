@@ -125,15 +125,27 @@ a network — malformed output, hallucinated citations, illegal category names,
 mis-ordered embedding batches — is covered by `tests/server/prompts.test.ts` (29
 cases). The request round-trip needs a key.
 
-### The threshold is not yet verified against a real model
+### The threshold, measured against a real model
 
-`0.62` was fitted to the seed's hand-generated 8-dimensional vectors. Cosine distributions
-differ enormously between embedding models, so **the number almost certainly does not transfer**.
-Before building the Phase 3 backend, measure it:
+`0.62` was fitted to the seed's hand-generated 8-dimensional vectors, and cosine distributions
+differ enormously between embedding models. Measured on `openai/text-embedding-3-small` (1536-dim):
+
+```
+AI Tooling   seed        n=9   cohesion=0.2620   clusters 7/2
+             after demo  n=11  cohesion=0.2467   clusters 7/4
+Suggested MAX_MEAN_COHESION: 0.2544   (must sit in 0.2467-0.2620, margin 0.0153)
+PASS
+```
+
+So the number does not transfer — 0.25 rather than 0.62 — but the **mechanism** does, and that is
+the part worth checking. It did not, at first: the original seed made cohesion *rise* by 0.0139
+when the demo item landed, and no threshold fixes a direction. The cause was content, not code —
+the minority theme shared vocabulary with the majority, and one demo memory nearly restated a
+seeded one. The two themes are re-authored, and the harness is what proved it.
 
 ```bash
-pip install voyageai && export VOYAGE_API_KEY=...
-npm run thresholds              # embeds the 47 memories, re-runs the gates, suggests a threshold
+pip install openai && export OPENAI_API_KEY=...      # or voyageai + VOYAGE_API_KEY
+npm run thresholds -- --provider openai --model text-embedding-3-small
 npm run thresholds:selfcheck    # no API key: replays the seed vectors to prove the harness agrees
                                 # with src/reorg/vectorMath.ts
 ```
@@ -141,10 +153,12 @@ npm run thresholds:selfcheck    # no API key: replays the seed vectors to prove 
 The harness reports three things, and the third is the one that matters: whether cohesion still
 *drops* when the demo item lands, what `MAX_MEAN_COHESION` should become, and whether that value
 would also fire on some other category — which would break "at most one structural operation per
-ingest" and take the demo with it.
+ingest" and take the demo with it. It cannot here: `SPLIT_MIN_MEMORIES` is 8 and no other category
+holds more than 4.
 
-Anthropic offers no embedding endpoint; its docs recommend Voyage AI (`voyage-4`, 1024-dim by
-default). The harness is dimension-agnostic and also supports OpenAI via `--provider openai`.
+**Still open:** the app is wired to `voyage-4` (1024-dim) and the measurement above is OpenAI's.
+Either add a `server/ai/openai.ts` mirroring `voyage.ts`, or get a Voyage key and re-measure —
+`MAX_MEAN_COHESION` must come from whichever model actually runs.
 
 ## Deploy
 

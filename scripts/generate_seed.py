@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Generates seed/workspace.json, seed/demo-item.json and seed/answers.json.
+Generates seed/workspace.json and seed/demo-item.json.
+
+seed/answers.json is NOT generated — it is hand-maintained, and it quotes these
+memory texts, so changing one here means changing it there too.
 
 Vectors are 8-dimensional unit vectors, one per memory, built from a per-theme
 anchor plus deterministic jitter. Phase 4 swaps these for 1536-dimensional
@@ -177,9 +180,9 @@ MEMORIES = [
      "Structured output enforcement removed an entire class of response parsing failures"),
     # ---- AI Tooling / evals theme (2 — deliberately below MIN_CLUSTER_SIZE)
     ("ai_tooling", "ai-evals", "s_eval_notes", "opinion",
-     "Eval suites need to run on every commit or the team stops trusting them"),
+     "Two reviewers scoring the same eval rubric still land three points apart"),
     ("ai_tooling", "ai-evals", "s_eval_notes", "fact",
-     "Production tracing shows what happened but never whether the output was correct"),
+     "Sampling fifty conversations a week catches more than any dashboard has"),
 
     # ---- Hiring / Engineering Hiring
     ("eng_hiring", "eng-hiring", "s_hiring_retro", "opinion",
@@ -339,7 +342,7 @@ ENTITIES = [
     ("LangChain", "tool"), ("Anthropic SDK", "tool"), ("Braintrust", "tool"),
     ("Langfuse", "tool"), ("Figma", "tool"), ("Discord", "tool"),
     ("agent evals", "concept"), ("tool calling", "concept"), ("structured output", "concept"),
-    ("multi-agent orchestration", "concept"), ("production tracing", "concept"),
+    ("multi-agent orchestration", "concept"), ("graded set", "concept"),
     ("seed round", "concept"), ("dilution", "concept"), ("runway", "concept"),
     ("warm intro", "concept"), ("traction slide", "concept"),
     ("activation", "concept"), ("retention", "concept"), ("onboarding", "concept"),
@@ -360,7 +363,7 @@ MEMORY_ENTITIES = {
     12: ["tool calling"], 13: ["Anthropic SDK"],
     14: ["tool calling"], 15: ["multi-agent orchestration"], 16: ["tool calling"],
     17: ["structured output"],
-    18: ["agent evals"], 19: ["production tracing", "agent evals"],
+    18: ["agent evals"], 19: ["graded set", "agent evals"],
     20: [], 21: ["take-home exercise"], 22: [], 23: ["referral hiring"],
     24: ["pair programming"], 25: [], 26: [],
     27: ["activation", "retention"], 28: ["onboarding"], 29: ["activation"],
@@ -373,10 +376,10 @@ MEMORY_ENTITIES = {
 }
 
 DEMO_MEMORIES = [
-    ("opinion", "Braintrust is the current front-runner for eval tooling over Langfuse",
+    ("opinion", "Braintrust replaced our spreadsheet of scores and Langfuse never got used",
      ["Braintrust", "Langfuse", "agent evals"]),
-    ("fact", "Offline eval suites catch agent regressions that production tracing misses entirely",
-     ["agent evals", "production tracing"]),
+    ("fact", "A frozen set of graded examples is the only thing that survives a rewrite",
+     ["agent evals", "graded set"]),
 ]
 
 # ---------------------------------------------------------------- layout
@@ -540,12 +543,12 @@ def build():
         "type": "screenshot",
         "title": "Thread on eval harnesses",
         "raw_content": (
-            "Everyone reaches for tracing first but tracing only tells you what happened. "
-            "Offline eval suites are what actually catch regressions. Braintrust has been "
-            "better than Langfuse for this in practice."
+            "Two people scoring the same answer will disagree until the rubric is written "
+            "down. Keep the graded set frozen and versioned. Braintrust does this well; "
+            "Langfuse we never really used."
         ),
         "scene_description": (
-            "A screenshot of a social thread comparing eval tooling for agent products."
+            "A screenshot of a social thread about scoring rubrics and graded example sets."
         ),
         "url": None,
         "image_path": "/seed/demo-screenshot.png",

@@ -1,56 +1,140 @@
 [
   {
-    "match": ["eval"],
-    "answer": "You decided to drop LangChain in favour of direct Anthropic SDK calls because the abstraction was making tool-call debugging harder [1]. On evaluation itself, the position saved is that production tracing shows what happened but never whether the output was correct [2]. Braintrust is the current front-runner over Langfuse [3].",
+    "match": [
+      "eval"
+    ],
+    "answer": "You decided to drop LangChain in favour of direct Anthropic SDK calls because the abstraction was making tool-call debugging harder [1]. On evaluation itself, the position saved is that two reviewers scoring the same eval rubric still land three points apart [2]. Braintrust replaced the spreadsheet of scores, and Langfuse never got used [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_11", "source_id": "src_langchain_thread" },
-      { "n": 2, "memory_id": "mem_19", "source_id": "src_eval_notes" },
-      { "n": 3, "memory_id": "mem_demo_1", "source_id": "src_demo" }
+      {
+        "n": 1,
+        "memory_id": "mem_11",
+        "source_id": "src_langchain_thread"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_19",
+        "source_id": "src_eval_notes"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_demo_1",
+        "source_id": "src_demo"
+      }
     ]
   },
   {
-    "match": ["langchain"],
+    "match": [
+      "langchain"
+    ],
     "answer": "You decided to drop LangChain in favour of direct Anthropic SDK calls for tool loops [1]. The reason recorded is that the agent abstraction layer was making tool-call debugging significantly harder [2], and direct calls make streaming and error handling explicit instead of hidden [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_11", "source_id": "src_langchain_thread" },
-      { "n": 2, "memory_id": "mem_12", "source_id": "src_langchain_thread" },
-      { "n": 3, "memory_id": "mem_13", "source_id": "src_langchain_thread" }
+      {
+        "n": 1,
+        "memory_id": "mem_11",
+        "source_id": "src_langchain_thread"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_12",
+        "source_id": "src_langchain_thread"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_13",
+        "source_id": "src_langchain_thread"
+      }
     ]
   },
   {
-    "match": ["seed"],
+    "match": [
+      "seed"
+    ],
     "answer": "Seed rounds at this stage are landing between three and five million on fifteen post [1], with median dilution holding around twenty percent through the last two quarters [2]. Funds expect that round to buy eighteen to twenty four months of runway [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_08", "source_id": "src_benchmark_screenshot" },
-      { "n": 2, "memory_id": "mem_09", "source_id": "src_benchmark_screenshot" },
-      { "n": 3, "memory_id": "mem_10", "source_id": "src_runway_post" }
+      {
+        "n": 1,
+        "memory_id": "mem_08",
+        "source_id": "src_benchmark_screenshot"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_09",
+        "source_id": "src_benchmark_screenshot"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_10",
+        "source_id": "src_runway_post"
+      }
     ]
   },
   {
-    "match": ["hiring"],
+    "match": [
+      "hiring"
+    ],
     "answer": "Referrals from the first five engineers produced every good hire so far [1], and take-home exercises lose candidates who already hold competing offers [2]. Pair programming on real code predicts performance better than algorithm puzzles [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_23", "source_id": "src_referral_thread" },
-      { "n": 2, "memory_id": "mem_21", "source_id": "src_hiring_retro" },
-      { "n": 3, "memory_id": "mem_24", "source_id": "src_interview_doc" }
+      {
+        "n": 1,
+        "memory_id": "mem_23",
+        "source_id": "src_referral_thread"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_21",
+        "source_id": "src_hiring_retro"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_24",
+        "source_id": "src_interview_doc"
+      }
     ]
   },
   {
-    "match": ["pricing"],
+    "match": [
+      "pricing"
+    ],
     "answer": "You decided a single paid tier converts better than three tiers at this stage [1]. The reasoning saved is that usage-based pricing punishes the power users who evangelise the product hardest [2], and anchoring on seat price makes the product feel like team software rather than personal software [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_31", "source_id": "src_pricing_post" },
-      { "n": 2, "memory_id": "mem_30", "source_id": "src_pricing_post" },
-      { "n": 3, "memory_id": "mem_32", "source_id": "src_pricing_post" }
+      {
+        "n": 1,
+        "memory_id": "mem_31",
+        "source_id": "src_pricing_post"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_30",
+        "source_id": "src_pricing_post"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_32",
+        "source_id": "src_pricing_post"
+      }
     ]
   },
   {
-    "match": ["onboarding"],
+    "match": [
+      "onboarding"
+    ],
     "answer": "Users who save their first item within five minutes retain at twice the rate [1]. Removing the signup wall before the first action lifted activation noticeably [2], and the empty state is now doing more onboarding work than the product tour ever did [3].",
     "citations": [
-      { "n": 1, "memory_id": "mem_27", "source_id": "src_activation_screenshot" },
-      { "n": 2, "memory_id": "mem_29", "source_id": "src_onboarding_notes" },
-      { "n": 3, "memory_id": "mem_28", "source_id": "src_onboarding_notes" }
+      {
+        "n": 1,
+        "memory_id": "mem_27",
+        "source_id": "src_activation_screenshot"
+      },
+      {
+        "n": 2,
+        "memory_id": "mem_29",
+        "source_id": "src_onboarding_notes"
+      },
+      {
+        "n": 3,
+        "memory_id": "mem_28",
+        "source_id": "src_onboarding_notes"
+      }
     ]
   }
 ]

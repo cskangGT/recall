@@ -3,8 +3,8 @@
     "id": "src_demo",
     "type": "screenshot",
     "title": "Thread on eval harnesses",
-    "raw_content": "Everyone reaches for tracing first but tracing only tells you what happened. Offline eval suites are what actually catch regressions. Braintrust has been better than Langfuse for this in practice.",
-    "scene_description": "A screenshot of a social thread comparing eval tooling for agent products.",
+    "raw_content": "Two people scoring the same answer will disagree until the rubric is written down. Keep the graded set frozen and versioned. Braintrust does this well; Langfuse we never really used.",
+    "scene_description": "A screenshot of a social thread about scoring rubrics and graded example sets.",
     "url": null,
     "image_path": "/seed/demo-screenshot.png",
     "created_at": "2026-07-25T09:00:00Z"
@@ -13,7 +13,7 @@
     {
       "id": "mem_demo_1",
       "source_id": "src_demo",
-      "text": "Braintrust is the current front-runner for eval tooling over Langfuse",
+      "text": "Braintrust replaced our spreadsheet of scores and Langfuse never got used",
       "kind": "opinion",
       "confidence": 0.88,
       "category_id": "cat_ai_tooling",
@@ -41,7 +41,7 @@
     {
       "id": "mem_demo_2",
       "source_id": "src_demo",
-      "text": "Offline eval suites catch agent regressions that production tracing misses entirely",
+      "text": "A frozen set of graded examples is the only thing that survives a rewrite",
       "kind": "fact",
       "confidence": 0.8200000000000001,
       "category_id": "cat_ai_tooling",

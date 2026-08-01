@@ -697,7 +697,7 @@
     {
       "id": "mem_18",
       "source_id": "src_eval_notes",
-      "text": "Eval suites need to run on every commit or the team stops trusting them",
+      "text": "Two reviewers scoring the same eval rubric still land three points apart",
       "kind": "opinion",
       "confidence": 0.86,
       "category_id": "cat_ai_tooling",
@@ -723,7 +723,7 @@
     {
       "id": "mem_19",
       "source_id": "src_eval_notes",
-      "text": "Production tracing shows what happened but never whether the output was correct",
+      "text": "Sampling fifty conversations a week catches more than any dashboard has",
       "kind": "fact",
       "confidence": 0.89,
       "category_id": "cat_ai_tooling",
@@ -1757,7 +1757,7 @@
     },
     {
       "id": "ent_10",
-      "name": "production tracing",
+      "name": "graded set",
       "kind": "concept",
       "x": 489.26,
       "y": -168.21,

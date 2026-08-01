@@ -303,7 +303,7 @@ describe('assignMemory — spec 8.3 thresholds', () => {
     const payload = repo.getGraphPayload(WS);
     const profiles = categoryProfiles(payload.categories, payload.memories);
     const ai = payload.categories.find((c) => c.name === 'AI Tooling')!;
-    const evalsMemory = payload.memories.find((m) => m.text.startsWith('Eval suites'))!;
+    const evalsMemory = payload.memories.find((m) => m.text.startsWith('Two reviewers'))!;
 
     const decision = assignMemory(evalsMemory.vector, profiles);
     expect(decision.kind).toBe('existing');

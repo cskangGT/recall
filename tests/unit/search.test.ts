@@ -61,7 +61,7 @@ describe('search', () => {
   });
 
   it('ranks an exact phrase above a scattered term match', () => {
-    const phrase = 'production tracing';
+    const phrase = 'eval rubric';
     const results = search(payload, phrase);
     expect(results[0]!.memory.text.toLowerCase()).toContain(phrase);
   });
