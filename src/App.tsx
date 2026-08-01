@@ -281,7 +281,16 @@ export function App() {
           </div>
         )}
         <ChangeBanner />
-        <StatusTicker />
+        {/*
+          The ticker names the stage the pipeline is on. On the browsing screen
+          the capture story already names all four with the current one lit, so
+          both were printing the same word at the same moment — one at the top of
+          the screen and one at the bottom. The story panel's own docstring says
+          it answers "the questions the ticker never did"; it should have taken
+          the ticker's place then. Map and Sources have no story panel, so there
+          it is still the only sign that anything is happening.
+        */}
+        {view !== 'browse' && <StatusTicker />}
         <Toasts />
         {/* Map and Sources have no composer, so they still need a visible way
             in. Browse has one in the composer, and two `+` on one screen is the

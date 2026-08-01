@@ -947,6 +947,7 @@ button {
   left: 50%;
   transform: translateX(-50%);
   z-index: 4;
+  transition: top 260ms cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -955,6 +956,22 @@ button {
   background: #131318;
   box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -32px #000;
   animation: rise 220ms ease;
+}
+
+/*
+ * The banner and the capture story are both top-centre floating surfaces, and
+ * both arrive at the end of a restructuring capture. The banner is z-20 and
+ * ~99px tall starting at 22; the story is z-4 starting at 52 — so the banner
+ * landed across the story's heading and first line, and being translucent it
+ * did not even hide it cleanly: two paragraphs of text superimposed.
+ *
+ * They are siblings inside .canvas-wrap, so the story can simply step down when
+ * the banner exists. Stacked they end at 398px, which still clears the arc's
+ * topmost node. No JS, and nothing to keep in sync — the banner's own dismissal
+ * state stays private to the banner, which is where it belongs.
+ */
+.canvas-wrap:has(> .banner) .capture-story {
+  top: 133px;
 }
 
 .capture-story__title {
@@ -1475,7 +1492,9 @@ button {
 .ticker {
   position: absolute;
   left: 50%;
-  bottom: 96px;
+  /* Above the toasts, which sit at 96. The two used to share the slot exactly,
+     so a re-file confirmation landed on top of the stage it was confirming. */
+  bottom: 140px;
   transform: translateX(-50%);
   color: var(--text-dim);
   letter-spacing: 0.01em;
