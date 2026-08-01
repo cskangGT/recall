@@ -32,6 +32,32 @@ async function stillFigure(page: Page, url: string) {
   await page.goto(url);
 }
 
+/*
+ * Everything that is not the figure, the hill or the sky is hidden — and only
+ * once the page has been driven to the state under test, because you cannot
+ * click what you have made invisible.
+ *
+ * The first version of this lock photographed whatever happened to be in the
+ * frame, and the arc is in the frame: `.arc__fan` is z-index 2 against the
+ * figure's 1, so a category's halo composites over the figure's own box. When
+ * the categories changed from stones to points of light the open-category
+ * snapshot failed — correctly, in that pixels had moved, but for a reason that
+ * has nothing to do with what this file exists to protect. Worse, it then took
+ * a pixel census to establish that the 133 changed pixels inside the figure's
+ * rectangle were scattered halo edges rather than a figure that had shifted.
+ *
+ * A lock that cannot answer "did *the figure* change" without an investigation
+ * is not doing its job. So everything else goes away and the question becomes
+ * exact. `visibility` rather than `display`, so nothing reflows on the way out.
+ */
+async function sceneOnly(page: Page) {
+  await page.addStyleTag({
+    content: `.arc__fan, .arc__greeting, .arc__prompt, .reparent, .reading,
+              .composer, .capture-story, .topbar, .rail, .inspector,
+              .ticker, .toasts, .banner { visibility: hidden !important; }`,
+  });
+}
+
 /**
  * The figure's own box is 190x190, but its `<svg>` is `overflow: visible` and
  * the flashlight beam is drawn well outside it — up and to the left, roughly
@@ -64,6 +90,7 @@ test('the figure is unchanged on the welcome screen', async ({ page }) => {
   // The greeting fades in; the figure does not, but the two share a frame and a
   // half-faded neighbour is not a stable backdrop.
   await page.waitForTimeout(900);
+  await sceneOnly(page);
 
   await expect(page).toHaveScreenshot('figure-welcome.png', {
     clip: await figureRegion(page),
@@ -76,6 +103,7 @@ test('the figure is unchanged with a category open', async ({ page }) => {
   await page.locator('.arc__node').first().click();
   // The arc fans out and the figure travels to the higher crest.
   await page.waitForTimeout(900);
+  await sceneOnly(page);
 
   await expect(page).toHaveScreenshot('figure-open.png', {
     clip: await figureRegion(page),

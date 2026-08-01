@@ -3,7 +3,7 @@ import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
 import { arcPositions, fitArc } from '../arc/layout';
-import { pebbleShape } from '../arc/pebble';
+import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
@@ -384,7 +384,7 @@ export function ArcBrowser() {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
-          const stone = node.kind === 'folder' ? pebbleShape(node.id, node.count) : null;
+          const star = node.kind === 'folder' ? starShape(node.id, node.count) : null;
           return (
             // A div rather than a <button>, deliberately. A <button> that is
             // also an HTML5 drag source leaves Chromium stuck in a drag state
@@ -441,14 +441,15 @@ export function ArcBrowser() {
               onClick={() => activate(node)}
             >
               <span className="arc__form">
-                {stone ? (
+                {star ? (
                   <span
-                    className="arc__pebble"
+                    className="arc__star"
                     style={
                       {
-                        '--pebble-w': `${stone.width}px`,
-                        '--pebble-h': `${stone.height}px`,
-                        '--pebble-r': stone.radius,
+                        '--star-core': `${star.core}px`,
+                        '--star-glow': `${star.glow}px`,
+                        '--star-spikes': `${star.spikes}px`,
+                        '--star-tilt': `${star.tilt}deg`,
                       } as React.CSSProperties
                     }
                   />

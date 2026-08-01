@@ -194,7 +194,7 @@ export function App() {
        *
        * It used to fire in all three views, which was wrong twice over. On the
        * browsing screen `.arc__node` is `role="button" tabIndex={0}`, so Space
-       * is also how you activate the pebble you have tabbed to: both handlers
+       * is also how you activate the star you have tabbed to: both handlers
        * ran, and opening a category with the keyboard silently re-aimed the map
        * camera on the way past. And the viewport it measured subtracted 416px
        * of chrome — the rail plus the inspector — while the browsing shell's

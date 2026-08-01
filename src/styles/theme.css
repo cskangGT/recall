@@ -781,83 +781,94 @@ button {
   background: var(--bg-panel);
 }
 
-/* A generous, solid hit area — the stone alone is a small target. */
+/*
+ * A generous, solid hit area. It mattered when the target was a stone; it
+ * matters more now that it is a five-pixel point of light — the box is the only
+ * reason a star is clickable at all.
+ *
+ * 62 rather than 76: the extra was room for a reflection the star does not have,
+ * and leaving it in put a hand's width of empty sky between the light and the
+ * name it belongs to.
+ */
 .arc__form {
   display: grid;
   place-items: center;
   min-width: 84px;
-  /* Room for the largest stone *and* its reflection, so the reflection never
-     reaches the label underneath. */
-  min-height: 76px;
+  min-height: 62px;
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), filter 200ms ease;
 }
 
 /*
- * A water-worn stone. Low and wide, so it reads as resting on the same water
- * the figure stands in rather than floating over it, and each one's outline is
- * derived from its category id — see src/arc/pebble.ts for why that matters.
+ * A category, as a point of light.
  *
- * Matte, not glossy. A tight radial highlight — which is what the sphere used —
- * puts a specular hot spot on the form and the result reads as polished
- * plastic; six of them looked like six pills. A stone is a broad soft sheen
- * over an almost flat body ramp, dark along the lower edge where the light
- * cannot reach.
+ * Three layers, because one circle is a dot and a dot is not a star: a hard
+ * white core, a soft halo that seats it in the sky rather than on top of it,
+ * and four diffraction spikes that overshoot the halo. The overshoot is the
+ * whole trick — spikes contained inside their own glow read as a blurred dot.
+ *
+ * Sized from the category's count and tilted from its id (src/arc/star.ts), so
+ * a category that holds more burns wider and no two sit at quite the same
+ * angle.
  */
-.arc__pebble {
+.arc__star {
   position: relative;
-  width: var(--pebble-w);
-  height: var(--pebble-h);
-  border-radius: var(--pebble-r);
-  background:
-    /* the sheen: wide, weak, and open at the top so it never closes into a dot */
-    radial-gradient(
-      ellipse 130% 150% at 32% 2%,
-      rgba(255, 255, 255, 0.5) 0%,
-      rgba(255, 255, 255, 0.14) 38%,
-      rgba(255, 255, 255, 0) 62%
-    ),
-    /* the body */
-    linear-gradient(166deg, #CBCBD7 0%, #9C9CAA 40%, #62626F 76%, #33333E 100%);
+  width: var(--star-core);
+  height: var(--star-core);
+  border-radius: 50%;
+  background: #fff;
+  /* Two falloffs: a tight one that makes the core look hot rather than painted,
+     and a wide violet one that ties it to the sky it is in. */
   box-shadow:
-    /* the underside, where the stone occludes its own light */
-    inset 0 -3px 6px -3px rgba(0, 0, 0, 0.55),
-    0 10px 22px -14px rgba(0, 0, 0, 0.95);
+    0 0 calc(var(--star-core) * 0.9) rgba(255, 255, 255, 0.95),
+    0 0 calc(var(--star-core) * 2.6) rgba(214, 202, 255, 0.55);
 }
 
-/* The halo, so a stone sits in the dark rather than on it. */
-.arc__pebble::before {
+.arc__star::before {
   content: '';
   position: absolute;
-  inset: -52% -34%;
+  left: 50%;
+  top: 50%;
+  width: var(--star-glow);
+  height: var(--star-glow);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(210, 210, 226, 0.14) 0%, rgba(210, 210, 226, 0) 66%);
+  background: radial-gradient(
+    circle,
+    rgba(228, 219, 255, 0.28) 0%,
+    rgba(220, 208, 255, 0.1) 36%,
+    rgba(220, 208, 255, 0) 70%
+  );
   pointer-events: none;
 }
 
 /*
- * Its reflection. The whole point of the stone over the sphere was to put the
- * arc in the same world as the figure, and the figure's defining feature is
- * that it stands in water — so every stone gets the same treatment: flipped,
- * foreshortened, and faded out before it can look like a second object.
+ * The spikes. Two crossed gradients rather than four elements: each is a
+ * hairline that fades to nothing at both ends, so the star has points without
+ * having edges.
  */
-.arc__pebble::after {
+.arc__star::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 46%;
-  border-radius: var(--pebble-r);
-  background: inherit;
-  transform: scaleY(-1);
-  opacity: 0.26;
-  filter: blur(1.6px);
-  /* `to bottom`, which arrives as a top-down fade: this element's own scaleY(-1)
-     flips the mask along with the geometry. Authored the obvious way round it
-     came out opaque at the far end and invisible at the stone, so each label
-     wore a grey smear and no stone had a reflection. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
-  mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
+  left: 50%;
+  top: 50%;
+  width: var(--star-spikes);
+  height: var(--star-spikes);
+  transform: translate(-50%, -50%) rotate(var(--star-tilt));
+  background:
+    linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0) 100%
+      )
+      center / 100% 1.1px no-repeat,
+    linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0) 100%
+      )
+      center / 1.1px 100% no-repeat;
   pointer-events: none;
 }
 
@@ -900,6 +911,20 @@ button {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /*
+   * A shadow, because the sky is not one colour.
+   *
+   * The labels were given a light tint so they would not vanish into mid
+   * violet — but the arc spans the gradient, and the lower nodes sit on the
+   * mauve band near the horizon, which is the lightest thing in the frame.
+   * Light-on-light disappears exactly as thoroughly as dark-on-dark. Now that
+   * the stone is gone and the name carries the whole identity of a category,
+   * it cannot be legible only in the middle of its own range.
+   *
+   * Two stops: a tight one that gives the glyph an edge, and a wide soft one
+   * that darkens the sky it sits on without reading as a drop shadow.
+   */
+  text-shadow: 0 1px 2px rgba(18, 10, 28, 0.55), 0 0 14px rgba(18, 10, 28, 0.5);
 }
 
 .arc__node--active .arc__label {
@@ -923,6 +948,8 @@ button {
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  /* The faintest text on the screen, over its lightest region. */
+  text-shadow: 0 1px 2px rgba(18, 10, 28, 0.5), 0 0 12px rgba(18, 10, 28, 0.45);
 }
 
 /*
@@ -1306,7 +1333,7 @@ button {
     animation: none;
   }
   .arc__node--reject { animation: none; outline: 1px solid #c2603a; }
-  .arc__pebble,
+  .arc__star,
   .arc__thinker { transition: none; }
 }
 /* ----------------------------------------------------------------- settings */
