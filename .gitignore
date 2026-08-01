@@ -1,5 +1,9 @@
 node_modules
 dist
+
+# Claude Code's scratch space, including git worktrees. A worktree is a repo
+# inside the repo; committing one produces a directory nobody can check out.
+.claude/
 .DS_Store
 test-results
 playwright-report
