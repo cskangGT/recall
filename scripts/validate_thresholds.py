@@ -111,7 +111,7 @@ def two_means(items):
 # ---------------------------------------------------------------- providers
 
 
-def embed_voyage(texts, model):
+def embed_voyage(texts, model, dimensions=None):
     try:
         import voyageai
     except ImportError:
@@ -127,7 +127,7 @@ def embed_voyage(texts, model):
     return out
 
 
-def embed_openai(texts, model):
+def embed_openai(texts, model, dimensions=None):
     try:
         from openai import OpenAI
     except ImportError:
@@ -137,12 +137,18 @@ def embed_openai(texts, model):
     client = OpenAI()
     out = []
     for i in range(0, len(texts), 128):
-        resp = client.embeddings.create(model=model, input=texts[i:i + 128])
+        kwargs = {"model": model, "input": texts[i:i + 128]}
+        # text-embedding-3-* are Matryoshka: the width is a request parameter,
+        # not a property of the model. 1536 floats per memory is 660 KB in a
+        # bundle that ships seed/workspace.json as a static import.
+        if dimensions:
+            kwargs["dimensions"] = dimensions
+        resp = client.embeddings.create(**kwargs)
         out.extend(d.embedding for d in resp.data)
     return out
 
 
-def embed_seed(_texts, _model):
+def embed_seed(_texts, _model, _dimensions=None):
     """Not a provider — a self-check. Reuses the vectors already in seed/ so the
     whole report path can be exercised with no API key, and so the gate math
     here can be shown to agree with the TypeScript implementation."""
@@ -159,6 +165,84 @@ PROVIDERS = {
 # ---------------------------------------------------------------- report
 
 
+def percentile(sorted_values, q):
+    """Linear-interpolated percentile. No numpy dependency for eleven numbers."""
+    if not sorted_values:
+        return float("nan")
+    k = (len(sorted_values) - 1) * q
+    lo, hi = math.floor(k), math.ceil(k)
+    if lo == hi:
+        return sorted_values[int(k)]
+    return sorted_values[lo] * (hi - k) + sorted_values[hi] * (k - lo)
+
+
+def report_distribution(payload, all_memories, vectors):
+    """
+    The cosine distribution of the whole corpus.
+
+    Eight of the nine similarity thresholds in the app were chosen against
+    8-dimensional hand-authored vectors, where a theme anchor put same-topic
+    memories at 0.9 and everything else far away. A real model has no such
+    geometry — the whole distribution collapses toward the middle — so those
+    numbers cannot be carried across, and they cannot be guessed either. They
+    have to be read off the space they will run in.
+
+    Printed as percentiles because that is how each one is actually defined:
+    "an echo" is the top fraction of a percent of all pairs, "relates to" is the
+    top few percent, and a merge candidate has to sit above the closest pair of
+    siblings that must NOT merge.
+    """
+    ids = [m["id"] for m in all_memories]
+    parent = {c["id"]: c.get("parent_id") for c in payload["categories"]}
+    top_of = {m["id"]: (parent.get(m["category_id"]) or m["category_id"])
+              for m in all_memories}
+
+    every, within, across = [], [], []
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            c = cosine(vectors[ids[i]], vectors[ids[j]])
+            every.append(c)
+            (within if top_of[ids[i]] == top_of[ids[j]] else across).append(c)
+
+    for group in (every, within, across):
+        group.sort()
+
+    print("Cosine distribution — where each threshold has to sit:\n")
+    print(f"  {'':22} {'n':>6} {'p50':>8} {'p90':>8} {'p95':>8} {'p99':>8} {'p99.5':>8} {'max':>8}")
+    for label, group in (("all pairs", every),
+                         ("same top category", within),
+                         ("different category", across)):
+        if not group:
+            continue
+        print(f"  {label:22} {len(group):>6} "
+              f"{percentile(group, 0.50):>8.4f} {percentile(group, 0.90):>8.4f} "
+              f"{percentile(group, 0.95):>8.4f} {percentile(group, 0.99):>8.4f} "
+              f"{percentile(group, 0.995):>8.4f} {group[-1]:>8.4f}")
+
+    # Sibling centroids: the merge gate compares these, and the highest pair
+    # that must not merge is the floor MIN_CENTROID_SIMILARITY has to clear.
+    kids = {}
+    for c in payload["categories"]:
+        if c.get("parent_id"):
+            kids.setdefault(c["parent_id"], []).append(c)
+    pairs = []
+    for parent_id, group in kids.items():
+        cents = []
+        for c in group:
+            vs = [vectors[m["id"]] for m in all_memories if m["category_id"] == c["id"]]
+            if vs:
+                cents.append((c["name"], centroid(vs)))
+        for i in range(len(cents)):
+            for j in range(i + 1, len(cents)):
+                pairs.append((cosine(cents[i][1], cents[j][1]), cents[i][0], cents[j][0]))
+    pairs.sort(reverse=True)
+    if pairs:
+        print("\n  Closest sibling centroids (none of these should merge):")
+        for c, a, b in pairs[:4]:
+            print(f"    {c:.4f}  {a} / {b}")
+    print()
+
+
 def describe(label, mems, vectors):
     vecs = [vectors[m["id"]] for m in mems]
     coh = mean_pairwise_cosine(vecs)
@@ -172,6 +256,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", choices=PROVIDERS, default="voyage")
     ap.add_argument("--model", default=None)
+    ap.add_argument("--dimensions", type=int, default=None,
+                    help="request a narrower embedding (text-embedding-3-* only)")
     ap.add_argument("--write-vectors", action="store_true",
                     help="rewrite seed/*.json with the measured vectors")
     args = ap.parse_args()
@@ -188,10 +274,12 @@ def main():
         raw = [m["vector"] for m in all_memories]
     else:
         print(f"Embedding {len(all_memories)} memories with {args.provider}/{model}…")
-        raw = embed_fn([m["text"] for m in all_memories], model)
+        raw = embed_fn([m["text"] for m in all_memories], model, args.dimensions)
     vectors = {m["id"]: v for m, v in zip(all_memories, raw)}
     dim = len(raw[0])
     print(f"  dimension: {dim}\n")
+
+    report_distribution(payload, all_memories, vectors)
 
     cat_by_id = {c["id"]: c for c in payload["categories"]}
     ai = next(c for c in payload["categories"] if c["name"] == "AI Tooling")
