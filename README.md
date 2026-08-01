@@ -146,6 +146,40 @@ ingest" and take the demo with it.
 Anthropic offers no embedding endpoint; its docs recommend Voyage AI (`voyage-4`, 1024-dim by
 default). The harness is dimension-agnostic and also supports OpenAI via `--provider openai`.
 
+## Deploy
+
+Phase 1 is the whole demo with **no backend and no environment variables**. It is
+a static SPA: build it and serve the folder.
+
+```bash
+npm ci
+npm run build          # -> dist/, self-contained
+```
+
+The bundle makes no requests that leave the page — `npm run rehearse` fails the
+run if one does, so that is a checked property rather than a hope. The
+`example.com` links in `seed/` are source provenance and are never fetched.
+
+Assets are referenced from the site root (`/assets/…`), which is right for
+Vercel, Netlify, Cloudflare Pages or any apex deploy. **Serving from a subpath**
+— GitHub Pages at `/<repo>/`, say — needs `base: './'` in `vite.config.ts`. The
+app has no router, so relative paths are safe here; the reason not to set it
+pre-emptively is that it should be a decision made against a host, not a default
+nobody remembers choosing.
+
+Three things that will otherwise be rediscovered the hard way:
+
+- **The app requires a viewport ≥1280px** and renders "Recall is desktop-first"
+  below it. On a phone a correct deploy looks like a broken one.
+- **Keys belong to the host, never the repo.** The optional API server
+  (`server/`, `npm run dev:api`) reads `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY`
+  from the environment. `.gitignore` covers `.env*` except `.env.example`, and
+  nothing else should change that.
+- **`npm run reembed` before the API server serves anything.** The seed ships
+  8-dimensional hand-authored vectors and Voyage returns 1024. Skipping it does
+  not fail loudly — retrieval quietly stops working, which is the worst kind of
+  broken to debug on a host.
+
 ## Layout
 
 | Path | What |
