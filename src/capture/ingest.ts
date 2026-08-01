@@ -1,4 +1,5 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { partitionDuplicates } from './duplicate';
 import { useUiStore, type CaptureStage } from '../store/uiStore';
 import { evaluateReorg } from '../core/gates';
 import { applyReorg, type ReorgEvent } from '../core/applyReorg';
@@ -30,6 +31,8 @@ export interface IngestResult {
   event: ReorgEvent | null;
   addedMemoryIds: string[];
   targetCategoryId: string | null;
+  /** What the source said that the corpus already held, so it was not written. */
+  alreadyHeld: { text: string; similarity: number }[];
 }
 
 /**
@@ -68,7 +71,7 @@ async function ingestViaApi(
     useUiStore.getState().toast(
       err instanceof Error ? `Couldn't save that — ${err.message}` : "Couldn't save that.",
     );
-    return { event: null, addedMemoryIds: [], targetCategoryId: null };
+    return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld: [] };
   }
 
   if (result.reorg) {
@@ -99,13 +102,15 @@ async function ingestViaApi(
     event,
     addedMemoryIds: result.addedMemoryIds,
     targetCategoryId: result.reorg?.affected_category_ids[0] ?? null,
+    // The server decides this one; it has the corpus and the vectors.
+    alreadyHeld: result.skipped ?? [],
   };
 }
 
 export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
   const ui = useUiStore.getState();
   const ws = useWorkspaceStore.getState();
-  if (!ws.payload) return { event: null, addedMemoryIds: [], targetCategoryId: null };
+  if (!ws.payload) return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld: [] };
 
   if (ws.source.capture) return ingestViaApi(ws.source.capture.bind(ws.source), input);
 
@@ -114,12 +119,36 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
     await wait(STAGE_MS[stage]);
   }
 
-  const newMemories = demoItem.memories as unknown as Memory[];
-  const alreadyIngested = ws.payload.memories.some((m) => m.id === newMemories[0]?.id);
-  if (alreadyIngested) {
+  const extracted = demoItem.memories as unknown as Memory[];
+
+  /*
+   * Nothing already held is written a second time.
+   *
+   * This replaces an exact-id guard, which was the same idea in its narrowest
+   * form: re-capturing the demo item produced memories with ids the payload
+   * already contained. Similarity subsumes it — an identical memory scores 1.0
+   * against itself — and it also covers the case ids cannot, which is the same
+   * thing arriving under new ones.
+   *
+   * The comparison is against the corpus as it stands, which is also what
+   * `buildCaptureStory` compares against, so the story and the decision can
+   * never disagree about what was already there.
+   */
+  const { kept: newMemories, skipped } = partitionDuplicates(extracted, ws.payload.memories);
+
+  const alreadyHeld = skipped.map((sk) => ({
+    text: sk.candidate.text,
+    similarity: sk.similarity,
+  }));
+
+  if (newMemories.length === 0) {
     useUiStore.getState().setCaptureStage('idle');
-    useUiStore.getState().toast('Already saved — this is the demo item.');
-    return { event: null, addedMemoryIds: [], targetCategoryId: null };
+    useUiStore.getState().toast(
+      skipped.length === 1
+        ? 'Already saved — nothing new in this one.'
+        : `Already saved — all ${skipped.length} of these are things you have.`,
+    );
+    return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld };
   }
 
   const attached: GraphPayload = {
@@ -141,6 +170,7 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
       event: null,
       addedMemoryIds: newMemories.map((m) => m.id),
       targetCategoryId: touched[0] ?? null,
+      alreadyHeld,
     };
   }
 
@@ -155,5 +185,6 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
     event,
     addedMemoryIds: newMemories.map((m) => m.id),
     targetCategoryId: candidate.categoryIds[0] ?? null,
+    alreadyHeld,
   };
 }

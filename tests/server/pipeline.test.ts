@@ -337,3 +337,70 @@ describe('assignMemory — spec 8.3 thresholds', () => {
     expect(assignMemory(v, profiles).categoryId).not.toBe('cat_empty');
   });
 });
+
+/**
+ * Not saving the same thing twice.
+ *
+ * The number this needs is already on the ingest path: `assignMemory` takes the
+ * argmax of `bestMemberSimilarity` across every category profile, so its score
+ * is the candidate's nearest neighbour in the whole corpus. The check is a
+ * comparison, not a computation.
+ */
+describe('IngestPipeline — duplicates', () => {
+  it('leaves the demo capture alone — it is not a duplicate of anything', async () => {
+    const result = await capture();
+    // The guard for every count assertion in this file and in api.test.ts.
+    expect(result.addedMemoryIds).toHaveLength(2);
+    expect(result.skipped).toHaveLength(0);
+  });
+
+  it('adds nothing the second time the same source arrives', async () => {
+    await capture();
+    const again = await capture();
+
+    expect(again.addedMemoryIds).toHaveLength(0);
+    expect(again.skipped).toHaveLength(2);
+    expect(again.skipped.every((s) => s.similarity > 0.99)).toBe(true);
+    // And the corpus is the size it was after the first capture, not larger.
+    expect(repo.listMemories(WS)).toHaveLength(49);
+  });
+
+  it('says which text it already had, not merely that it skipped something', async () => {
+    await capture();
+    const again = await capture();
+    expect(again.skipped[0]!.text).toBeTruthy();
+    expect(again.skipped.map((s) => s.text)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Braintrust')]),
+    );
+  });
+
+  /**
+   * The failure that matters. A false positive is silent data loss — something
+   * captured, judged already held, and never written. A second capture must not
+   * be able to reorganize anything either: a duplicate is skipped before the
+   * category branch, so it cannot create a category on its way to being
+   * discarded.
+   */
+  it('creates no category and fires no reorganization for a duplicate', async () => {
+    await capture();
+    const before = repo.getGraphPayload(WS).categories.length;
+    const again = await capture();
+
+    expect(again.reorg).toBeNull();
+    expect(repo.getGraphPayload(WS).categories).toHaveLength(before);
+  });
+
+  it('keeps entities attached to the memory they came from', async () => {
+    // Entities are keyed by extracted index, which stopped matching the written
+    // rows the moment duplicates could be skipped. Indexing the wrong array
+    // hangs every entity on the wrong memory — valid ids, silent corruption.
+    const result = await capture();
+    const payload = repo.getGraphPayload(WS);
+    for (const id of result.addedMemoryIds) {
+      const memory = payload.memories.find((m) => m.id === id)!;
+      for (const entityId of memory.entity_ids) {
+        expect(payload.entities.some((e) => e.id === entityId)).toBe(true);
+      }
+    }
+  });
+});

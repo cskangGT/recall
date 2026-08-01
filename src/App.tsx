@@ -89,10 +89,18 @@ export function App() {
 
     if (before && ws.payload) {
       ui.setLastCapture(
-        buildCaptureStory(before, ws.payload, result.addedMemoryIds, result.event !== null),
+        buildCaptureStory(
+          before,
+          ws.payload,
+          result.addedMemoryIds,
+          result.event !== null,
+          result.alreadyHeld,
+        ),
       );
     }
 
+    // Nothing added is not nothing happened: everything in the source may
+    // already have been held, and the story above says so.
     if (result.addedMemoryIds.length === 0) {
       busy.current = false;
       return;

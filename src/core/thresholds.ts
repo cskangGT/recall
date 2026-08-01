@@ -74,6 +74,58 @@ export const ASSIGN = {
 } as const;
 
 /**
+ * At or above this, a captured memory is one you already have, and the second
+ * copy is never written.
+ *
+ * Measured, like everything else here. Eleven probe re-saves — re-pastes, the
+ * same sentence with a note appended, the same sentence half-typed — score
+ * between 0.7714 and 0.9872 against their original, while the closest pair of
+ * genuinely *distinct* memories anywhere in the corpus reaches 0.5597. 0.68 sits
+ * in that gap with 0.12 above the highest real neighbour and 0.09 below the
+ * weakest real re-save.
+ *
+ * **What it cannot catch, and no amount of tuning will.** A restatement that
+ * swaps the vocabulary — the same claim in different words — measures 0.5657,
+ * which is *beneath* the natural neighbour band. It is not distinguishable from
+ * two unrelated memories that happen to share a topic. So this catches "I saved
+ * that already" and misses "I wrote that thought again", and the copy that
+ * reports it has to say the first thing rather than the second.
+ *
+ * A false positive here is silent data loss — something pasted, judged already
+ * held, and never saved. That is what the 0.12 of headroom is buying, and it
+ * rests on one corpus of 47 memories, so `npm run thresholds -- --propose`
+ * re-measures the gap and complains when it closes.
+ *
+ * Note the spec lists automatic memory de-duplication as a non-goal
+ * (docs/product-spec.md:1163). This is a deliberate addition, and it is
+ * deliberately the timid half of it: nothing is ever removed, a duplicate is
+ * simply not created.
+ */
+export const DUPLICATE_SIMILARITY = num('VITE_DUPLICATE_MIN_SIM', 0.68);
+
+/**
+ * Above this cosine, a new memory is close enough to something already saved
+ * that the capture story shows you what it echoes.
+ *
+ * Parked above the cosine maximum, so it never fires. Under the authored
+ * 8-dimensional vectors this produced the best line the capture story had;
+ * measured against real embeddings the demo's pair scores 0.3567 while the 99th
+ * percentile of ordinary pairs is 0.4550 — the echo was less alike than one
+ * random pair in a hundred, because those vectors encoded a shared theme rather
+ * than a shared claim. A cutoff low enough to catch it calls 104 of 1,081 pairs
+ * an echo.
+ *
+ * DUPLICATE_SIMILARITY is the honest version of the same idea, at the one
+ * distance where the data supports the claim. This constant stays so that the
+ * band between "clearly the same" and "clearly different" has somewhere to live
+ * if it ever becomes measurable.
+ *
+ * It lived in src/capture/story.ts until now, which this file's own header says
+ * it should not have.
+ */
+export const ECHO_SIMILARITY = num('VITE_ECHO_MIN_SIM', 1.01);
+
+/**
  * relates_to edges are materialized above this similarity (spec 8.1).
  *
  * Chosen by edge count rather than by percentile: at 0.40, 45 of the 1,081

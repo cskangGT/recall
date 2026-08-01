@@ -7,7 +7,7 @@ import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
 import { evaluateReorg } from '../../src/core/gates.ts';
 import { applyReorg } from '../../src/core/applyReorg.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
-import { RELATES_TO_MIN_SIMILARITY } from '../../src/core/thresholds.ts';
+import { RELATES_TO_MIN_SIMILARITY, DUPLICATE_SIMILARITY } from '../../src/core/thresholds.ts';
 
 /**
  * The ingest pipeline — spec §5.3, §8.3, §8.4.
@@ -37,6 +37,13 @@ export interface IngestResult {
   status: SourceRow['status'];
   addedMemoryIds: string[];
   touchedCategoryIds: string[];
+  /**
+   * Extracted memories that were not written because the corpus already held
+   * them. Reported rather than dropped in silence: a source that produced four
+   * memories and added one has to be able to say why, or the count looks like a
+   * failure of extraction.
+   */
+  skipped: { text: string; similarity: number }[];
   reorg: ReorgEventRow | null;
   /** Populated when extraction produced nothing or a stage failed. */
   note?: string;
@@ -131,7 +138,8 @@ export class IngestPipeline {
       if (extracted.memories.length === 0) {
         this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
         return {
-          sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [], reorg: null,
+          sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [],
+          skipped: [], reorg: null,
           note: "Saved, but Recall couldn't find anything to remember in this. It's in your Sources.",
         };
       }
@@ -172,7 +180,8 @@ export class IngestPipeline {
         processed_at: now(),
       });
       return {
-        sourceId, status: 'failed', addedMemoryIds: [], touchedCategoryIds: [], reorg: null,
+        sourceId, status: 'failed', addedMemoryIds: [], touchedCategoryIds: [],
+        skipped: [], reorg: null,
         note: "Couldn't process that — it's saved and you can retry.",
       };
     }
@@ -186,17 +195,39 @@ export class IngestPipeline {
     extracted: Awaited<ReturnType<AiProvider['extract']>>,
     vectors: number[][],
     payload: GraphPayload,
-  ): { addedMemoryIds: string[]; touchedCategoryIds: string[] } {
+  ): { addedMemoryIds: string[]; touchedCategoryIds: string[];
+       skipped: { text: string; similarity: number }[] } {
     const profiles = categoryProfiles(payload.categories, payload.memories);
     const tombstones = new Set(this.repo.listTombstones(workspaceId));
     const memories: Memory[] = [];
     const assignments: { memoryId: string; categoryId: string; confidence: number }[] = [];
     const touched = new Set<string>();
+    const skipped: { text: string; similarity: number }[] = [];
+    /** Extracted index -> the row it became. Absent when it was a duplicate. */
+    const memoryIdByExtractedIndex = new Map<number, string>();
 
     extracted.memories.forEach((extractedMemory, i) => {
       const vector = vectors[i]!;
       const memoryId = id('mem');
       const decision = assignMemory(vector, profiles);
+
+      /*
+       * Something already held is not written a second time.
+       *
+       * The number this needs is already here. `assignMemory` takes the argmax
+       * of `bestMemberSimilarity` across every category profile, so
+       * `decision.score` *is* the candidate's nearest neighbour in the entire
+       * corpus — a duplicate check is a comparison, not a computation.
+       *
+       * Skipped before the category branch on purpose: a duplicate must not be
+       * able to create a category on its way to being discarded. And because
+       * `profiles` is mutated as this loop runs, a source that says the same
+       * thing twice catches its own second copy without a separate pass.
+       */
+      if (decision.score >= DUPLICATE_SIMILARITY) {
+        skipped.push({ text: extractedMemory.text, similarity: decision.score });
+        return;
+      }
 
       let categoryId: string;
       if (decision.kind === 'existing') {
@@ -240,6 +271,7 @@ export class IngestPipeline {
         created_at: now(),
       });
       assignments.push({ memoryId, categoryId, confidence: decision.score });
+      memoryIdByExtractedIndex.set(i, memoryId);
       touched.add(categoryId);
     });
 
@@ -248,8 +280,18 @@ export class IngestPipeline {
       this.repo.assign({ ...a, assignedBy: 'ai' });
     }
 
-    // Entities, deduplicated by normalized name so casing variants stay one node.
+    /*
+     * Entities, deduplicated by normalized name so casing variants stay one node.
+     *
+     * Keyed by the extracted memory's index rather than by position in
+     * `memories`. Those were the same array until duplicates started being
+     * skipped; now they are not, and indexing `memories[i]` would silently hang
+     * every entity on the wrong memory — a corruption with no symptom, since
+     * both ids are valid.
+     */
     extracted.memories.forEach((extractedMemory, i) => {
+      const memoryId = memoryIdByExtractedIndex.get(i);
+      if (memoryId === undefined) return;
       for (const entity of extractedMemory.entities) {
         const entityId = this.repo.upsertEntity(workspaceId, {
           id: id('ent'),
@@ -257,13 +299,17 @@ export class IngestPipeline {
           kind: entity.kind,
           normalized_name: entity.name.trim().toLowerCase(),
         });
-        this.repo.linkMemoryEntity(memories[i]!.id, entityId);
+        this.repo.linkMemoryEntity(memoryId, entityId);
       }
     });
 
     this.rebuildEdges(workspaceId);
 
-    return { addedMemoryIds: memories.map((m) => m.id), touchedCategoryIds: [...touched] };
+    return {
+      addedMemoryIds: memories.map((m) => m.id),
+      touchedCategoryIds: [...touched],
+      skipped,
+    };
   }
 
   /**
