@@ -98,12 +98,61 @@ test('dragging a memory onto a category re-files it and locks it (AC-28)', async
 test('dragging a subcategory onto a parent re-parents it', async ({ page }) => {
   await node(page, 'cat_fundraising').click();
 
-  // The parents arrive as an extra strip during the drag. They are added
-  // alongside the arc rather than replacing it — replacing it unmounts the
-  // dragged node's siblings and wedges the browser's drag loop.
-  await named(page, 'Investor Notes').dragTo(page.getByTestId('reparent-target-cat_hiring'));
+  /*
+   * The parents arrive as an extra surface during the drag. They are added
+   * alongside the arc rather than replacing it — replacing it unmounts the
+   * dragged node's siblings and wedges the browser's drag loop.
+   *
+   * Driven by hand rather than with `dragTo` because the targets do not exist
+   * until the drag is under way: at rest the panel is a caption, so `dragTo`
+   * would be waiting for a box to measure that only appears once the mouse is
+   * already down. Which is also the honest version of the gesture.
+   */
+  await named(page, 'Investor Notes').hover();
+  await page.mouse.down();
+  await page.mouse.move(700, 380, { steps: 10 });
+
+  const target = page.getByTestId('reparent-target-cat_hiring');
+  await expect(target).toBeVisible();
+  const box = (await target.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
 
   await expect(page.getByTestId('toast')).toContainText('Moved Investor Notes into Hiring.');
+});
+
+/**
+ * The drop targets used to be 33px tall and 38px apart, in a panel pinned to the
+ * bottom-left corner — about 720px diagonally from the node you had just picked
+ * up. Overshooting by twenty pixels filed the group under the wrong parent,
+ * which is the one mistake this product's trust story says it must not make.
+ */
+test('the re-parent targets are large and near the arc while dragging', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+
+  await named(page, 'Investor Notes').hover();
+  await page.mouse.down();
+  await page.mouse.move(700, 380, { steps: 10 });
+
+  const target = page.getByTestId('reparent-target-cat_hiring');
+  await expect(target).toBeVisible();
+  const box = (await target.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(56);
+  expect(box.width).toBeGreaterThanOrEqual(150);
+
+  // Below the arc, not in a corner: the whole surface is in the upper half.
+  const panel = (await page.getByTestId('reparent-hint').boundingBox())!;
+  expect(panel.y).toBeLessThan(page.viewportSize()!.height * 0.55);
+
+  await page.mouse.up();
+});
+
+/** At rest it is a caption. A menu of six names with nothing to act on reads as
+    something someone left open, and it cannot be dropped on anyway. */
+test('the re-parent targets stay out of the way until something is dragged', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+  await expect(page.getByTestId('reparent-hint')).toBeVisible();
+  await expect(page.getByTestId('reparent-target-cat_hiring')).toBeHidden();
 });
 
 test('a subcategory cannot be nested under another subcategory (AC-31)', async ({ page }) => {

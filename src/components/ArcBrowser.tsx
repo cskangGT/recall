@@ -330,7 +330,12 @@ export function ArcBrowser() {
           aria-hidden={!reparenting}
         >
           <span className="reparent__label">
-            {reparenting ? 'Drop it on the category it belongs under' : 'Move this group under'}
+            {/* "Move this group under" was the head of a sentence the chips
+                below finished. They are gone until something is being dragged,
+                so at rest it has to be a whole thought on its own. */}
+            {reparenting
+              ? 'Drop it on the category it belongs under'
+              : 'Drag a group to file it under another'}
           </span>
           <span className="reparent__targets">
             {categoryRows
