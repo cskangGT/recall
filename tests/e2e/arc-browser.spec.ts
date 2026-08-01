@@ -21,22 +21,52 @@ const arcLabels = (page: Page) =>
     ),
   );
 
+/**
+ * The arc in rank order rather than in screen order. Rank 1 sits at the apex and
+ * the rest alternate outward, so the seating is a mountain — undo it by walking
+ * out from the middle the same way.
+ */
+const arcRanking = async (page: Page) => {
+  const labels = await arcLabels(page);
+  const middle = Math.floor((labels.length - 1) / 2);
+  return [...labels.keys()]
+    .sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || b - a)
+    .map((seat) => labels[seat]!);
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 });
 
-test('opens on the top level with every parent category on the arc', async ({ page }) => {
-  expect(await arcLabels(page)).toEqual([
-    'Fundraising=11',
-    'AI Tooling=9',
+/**
+ * This used to assert the six categories in insertion order, which is a fact
+ * about the database rather than about the person using it. Being on the arc now
+ * means "this is what you have been on lately", so the assertion is about the
+ * ranking: the seed's newest activity is Hiring (27 Jun), then AI Tooling and
+ * Personal Systems (18 Jun), and Fundraising outranks the two categories with
+ * fresher single memories because it holds eleven of them.
+ *
+ * Read by rank rather than left to right, because the arc seats rank 1 at the
+ * apex and works outward — the middle of an upward arc is the position the eye
+ * lands on, and left-to-right would spend it on whatever sorted first.
+ */
+test('opens on the top level ranked by what the user has been on', async ({ page }) => {
+  expect(await arcRanking(page)).toEqual([
     'Hiring=7',
-    'Product=8',
-    'Go-to-Market=6',
+    'AI Tooling=9',
     'Personal Systems=6',
+    'Fundraising=11',
+    'Go-to-Market=6',
+    'Product=8',
   ]);
   // Nothing is open yet, so the reading list stays out of the way.
   await expect(page.getByTestId('reading-list')).toHaveCount(0);
+});
+
+test('seats the strongest at the apex, not at the left end', async ({ page }) => {
+  const labels = await arcLabels(page);
+  expect(labels[Math.floor((labels.length - 1) / 2)]).toBe('Hiring=7');
 });
 
 test('drilling into a category fans out its children and fills the reading list', async ({
@@ -359,4 +389,41 @@ test('Escape in the composer does not discard the answer', async ({ page }) => {
   // A second Escape, now that the window can hear it, does clear it.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('browser-answer')).toHaveCount(0);
+});
+
+/**
+ * The point of the whole thing. Asking is the strongest of the three signals —
+ * framing a question is deliberate in a way that saving and browsing are not —
+ * so the category an answer drew on should be the one at the apex afterwards.
+ *
+ * Until now asking left no trace anywhere: the server wrote `ask_history` and
+ * read it back nowhere, and the client never saw it at all.
+ */
+test('asking about something moves it to the top of the arc', async ({ page }) => {
+  expect((await arcRanking(page))[0]).toBe('Hiring=7');
+
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  expect((await arcRanking(page))[0]).toBe('AI Tooling=9');
+});
+
+/**
+ * And it has to survive a reload, or "lately" means "since you opened the tab".
+ * This is the first thing in the client that persists anything.
+ */
+test('what you asked about is still there after a reload', async ({ page }) => {
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  expect((await arcRanking(page))[0]).toBe('AI Tooling=9');
+});
+
+/** A fresh browser has no history, so the arc ranks on the corpus alone. */
+test('a workspace with no interaction history still ranks, on its saves', async ({ page }) => {
+  expect((await arcRanking(page))[0]).toBe('Hiring=7');
 });

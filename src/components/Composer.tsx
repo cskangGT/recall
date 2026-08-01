@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { answerQuestion } from '../ask/scriptedAsk';
+import { askedCategories } from '../arc/interest';
+import { useInterestStore } from '../store/interestStore';
 
 /**
  * The one place you talk to Recall.
@@ -30,6 +32,7 @@ export function Composer({
   onSubmitted?: () => void;
 }) {
   const setAnswer = useUiStore((s) => s.setAnswer);
+  const recordInterest = useInterestStore((s) => s.record);
   const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
@@ -51,6 +54,16 @@ export function Composer({
       : answerQuestion(question, payload);
 
     setAnswer({ ...result, question });
+    /*
+     * Asking is the strongest of the three signals the arc ranks by, and until
+     * now it left no trace anywhere: the server writes `ask_history` and reads
+     * it back nowhere, and the client never saw it at all. Recorded against the
+     * top-level categories the answer actually drew on, so the arc reflects what
+     * you were thinking about rather than what you happened to click.
+     */
+    for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
+      recordInterest(categoryId, 'asked');
+    }
     setHighlight(result.highlighted_node_ids);
     select(null);
     setText('');

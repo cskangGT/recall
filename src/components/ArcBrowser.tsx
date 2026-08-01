@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
-import { arcPositions, fitArc } from '../arc/layout';
+import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
+import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
+import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
@@ -39,7 +41,7 @@ interface ArcNode {
   id: string;
   label: string;
   count: number | null;
-  kind: 'folder' | 'back' | 'answer';
+  kind: 'folder' | 'back' | 'answer' | 'more';
   row: TreeRow | null;
 }
 
@@ -59,6 +61,8 @@ export function ArcBrowser() {
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
+  const interestEvents = useInterestStore((s) => s.events);
+  const recordInterest = useInterestStore((s) => s.record);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
@@ -67,6 +71,8 @@ export function ArcBrowser() {
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
   const [levelSeq, setLevelSeq] = useState(0);
+  /** Which page of the ranking the arc is showing. Reset on every level change. */
+  const [page, setPage] = useState(0);
   const [goingBack, setGoingBack] = useState(false);
 
   useLayoutEffect(() => {
@@ -115,17 +121,80 @@ export function ArcBrowser() {
   const reparenting = draggedRow?.kind === 'child_category';
   const effectiveLevelId = arcLevelId;
 
+  const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
+  const isOpen = showingAnswer || openRow !== undefined;
+
+  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
+
+  /*
+   * How interesting each top-level category is, right now.
+   *
+   * Computed from the corpus and the interaction log, and only from those — not
+   * from anything that changes as you point at things, so the arc does not
+   * reshuffle under the cursor. `savesFrom` rolls a subcategory memory up to its
+   * parent, which is the level the arc actually shows.
+   */
+  const scores = useMemo(() => {
+    if (!payload) return new Map<string, number>();
+    const saves = savesFrom(payload);
+    return interestScores(saves, interestEvents, corpusNow(saves, new Date()));
+  }, [payload, interestEvents]);
+
   const nodes = useMemo((): ArcNode[] => {
     const level = categoryRows.filter((r) =>
       effectiveLevelId === null ? r.depth === 0 : r.parentId === effectiveLevelId,
     );
-    const folders: ArcNode[] = level.map((row) => ({
+
+    /*
+     * Ranked, not listed.
+     *
+     * The arc used to show every category in the order the database created
+     * them, which is a fact about the database. Being on the arc now means
+     * "this is what you have been on lately" — so the ranking is the content,
+     * and the map is where everything still lives.
+     */
+    const byId = new Map(level.map((r) => [r.id, r]));
+    const ranked = rankByInterest(
+      level.map((r) => r.id),
+      scores,
+    ).map((id) => byId.get(id)!);
+
+    /*
+     * What fits. The way out and the answer folder take a seat like anything
+     * else, so they come off the budget before the categories do — at the
+     * narrowest viewport the open state holds four marks total, which means
+     * three children plus the way back.
+     */
+    const reserved = effectiveLevelId !== null || answer ? 1 : 0;
+    const capacity = arcCapacity(geometry.radius) - reserved;
+    const slice = paginate(ranked.length, capacity, page);
+    const shown = ranked.slice(slice.start, slice.start + slice.count);
+
+    // Seated by rank rather than in order: the apex is the position the eye
+    // lands on, and it belongs to whatever you have been on most.
+    const seats = seatByRank(shown.length);
+    const seated: (typeof shown)[number][] = [];
+    shown.forEach((row, rank) => {
+      seated[seats[rank]!] = row;
+    });
+
+    const folders: ArcNode[] = seated.map((row) => ({
       id: row.id,
       label: row.label,
       count: row.count,
       kind: 'folder',
       row,
     }));
+
+    if (slice.hidden > 0) {
+      folders.push({
+        id: '__more__',
+        label: `${slice.hidden} more`,
+        count: null,
+        kind: 'more',
+        row: null,
+      });
+    }
 
     if (effectiveLevelId !== null) {
       /*
@@ -161,12 +230,8 @@ export function ArcBrowser() {
       });
     }
     return folders;
-  }, [categoryRows, effectiveLevelId, answer, answerMemories.length]);
+  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page]);
 
-  const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
-  const isOpen = showingAnswer || openRow !== undefined;
-
-  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
   const points = useMemo(
     () => arcPositions(nodes.length, geometry.radius),
     [nodes.length, geometry.radius],
@@ -186,6 +251,7 @@ export function ArcBrowser() {
   }, [payload, openRow, showingAnswer, answerMemories]);
 
   const goTo = (levelId: string | null, back: boolean) => {
+    setPage(0);
     setGoingBack(back);
     setArcLevel(levelId);
     setLevelSeq((n) => n + 1);
@@ -204,11 +270,20 @@ export function ArcBrowser() {
       select(null);
       return;
     }
+    // Paging a ranked list is meaningful: the next page is what you have been
+    // on less. It wraps, so the mark is never a dead end.
+    if (node.kind === 'more') {
+      setPage((n) => n + 1);
+      return;
+    }
     // Opening a folder always fills the reading list. It additionally descends
     // when there is something to descend into — `AI Tooling` is flat in the
     // seed, and descending into it would empty the arc.
     openCategory(node.id);
     select(node.id);
+    // Opening a category is the weakest of the three signals the arc ranks by,
+    // and the only one the user performs without meaning to say anything.
+    recordInterest(node.row?.parentId ?? node.id, 'opened');
     if (hasSubfolders(node.id)) goTo(node.id, false);
   };
 
@@ -477,7 +552,9 @@ export function ArcBrowser() {
                     }
                   />
                 ) : (
-                  <span className="arc__mark">{node.kind === 'back' ? '←' : '✦'}</span>
+                  <span className="arc__mark">
+                    {node.kind === 'back' ? '←' : node.kind === 'more' ? '⋯' : '✦'}
+                  </span>
                 )}
               </span>
               <span className="arc__label">{node.label}</span>
