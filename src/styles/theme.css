@@ -151,6 +151,85 @@ button {
   letter-spacing: -0.01em;
 }
 
+/* ------------------------------------------------------------- map search */
+
+/*
+ * Docked at the bottom of the map, where the composer sits on the browsing
+ * screen. The two views each get the input their job needs, in the same place,
+ * so switching between them does not move the thing you type into.
+ */
+.mapsearch {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(560px, calc(100% - 140px));
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
+}
+
+.mapsearch__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mapsearch__glyph {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 15px;
+}
+
+.mapsearch__row input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mapsearch__row input::placeholder {
+  color: var(--text-faint);
+}
+
+.mapsearch__count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mapsearch__filters {
+  display: flex;
+  gap: 6px;
+}
+
+.mapsearch__filter {
+  padding: 5px 11px;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 12px;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.mapsearch__filter:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.mapsearch__filter--on {
+  background: var(--accent);
+  color: #17130a;
+}
+
 /* ------------------------------------------------------------------ rail */
 
 .rail {

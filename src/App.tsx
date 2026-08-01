@@ -3,6 +3,7 @@ import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
+import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -271,6 +272,9 @@ export function App() {
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}
+        {/* The map is everything at once, so it needs a way to find one thing
+            in it. Browse has the composer in the same slot. */}
+        {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
             <h2>Nothing saved yet.</h2>
