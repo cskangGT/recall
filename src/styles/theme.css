@@ -14,6 +14,10 @@
   --text: #e8e8ec;
   --text-dim: #7a7a82;
   --text-faint: #4e4e56;
+  /* Two weights of line: the one that separates rows, and the one that rings a
+     floating surface. They were six literals across three values. */
+  --hairline: #1c1c21;
+  --edge: #222228;
   --rail-w: 56px;
   --inspector-w: 360px;
 
@@ -100,6 +104,31 @@ button {
   --text: #f6f2fa;
   --text-dim: #ded3e8;
   --text-faint: #b2a3c2;
+  /*
+   * The surfaces have to move with the accents.
+   *
+   * Re-pointing only the accent and text tokens left every surface in the app at
+   * its near-black :root value while the ground here is a violet gradient — so
+   * hovering a stone painted an opaque #0e0e10 rectangle on the sky, and a
+   * selected reading-list row was a black slab. Twenty-two rules read these two
+   * tokens; they are all correct once the tokens know what they are sitting on.
+   *
+   * Translucent rather than a lighter opaque violet, because these surfaces
+   * cross a gradient that runs from near-black at the zenith to mauve at the
+   * horizon. A fixed colour can only match one end of it.
+   */
+  --bg-panel: rgb(38 27 52 / 62%);
+  --bg-raised: rgb(56 41 76 / 82%);
+  /* The one saturated blue in the product, chosen against near-black. */
+  --entity: #c3aef0;
+  /*
+   * On near-black a dividing line is a shade lighter than the ground. On the sky
+   * that same near-black line is the darkest thing in the frame — it stops
+   * reading as a division and starts reading as a crack. Light, and low enough
+   * to stay a division rather than becoming a rule.
+   */
+  --hairline: rgb(226 212 248 / 16%);
+  --edge: rgb(236 224 246 / 18%);
 }
 
 .shell--mono .rail,
@@ -245,7 +274,7 @@ button {
  */
 .shell--mono .composer--docked {
   background: rgba(24, 16, 34, 0.46);
-  box-shadow: inset 0 0 0 1px rgba(236, 224, 246, 0.18), 0 26px 60px -34px #1a1024;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -34px #1a1024;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
@@ -388,7 +417,7 @@ button {
   padding: 6px 6px 6px 14px;
   border-radius: 14px;
   background: #131318;
-  box-shadow: inset 0 0 0 1px #222228, 0 24px 60px -30px #000;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
 }
 
 .composer--docked {
@@ -756,7 +785,9 @@ button {
 }
 
 .arc__node--drop .arc__form {
-  filter: brightness(1.7) drop-shadow(0 0 22px rgba(232, 163, 61, 0.8));
+  /* var(), not the literal it used to be: that literal was :root's orange, so
+     the one moment the scene lit up was the one moment it stopped being grey. */
+  filter: brightness(1.7) drop-shadow(0 0 22px var(--accent));
 }
 
 /* Back and answer are not categories, so they stay marks rather than stones. */
@@ -922,7 +953,7 @@ button {
   padding: 14px 20px 16px;
   border-radius: 14px;
   background: #131318;
-  box-shadow: inset 0 0 0 1px #222228, 0 26px 60px -32px #000;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -32px #000;
   animation: rise 220ms ease;
 }
 
@@ -1028,7 +1059,7 @@ button {
 
 .capture-story__dest {
   padding-top: 10px;
-  border-top: 1px solid #222228;
+  border-top: 1px solid var(--hairline);
   color: var(--text-dim);
   font-size: 12.5px;
 }
@@ -1203,7 +1234,7 @@ button {
 }
 
 .settings__row + .settings__row {
-  border-top: 1px solid #1c1c21;
+  border-top: 1px solid var(--hairline);
 }
 
 .settings__body {
@@ -1308,7 +1339,7 @@ button {
   text-align: left;
   padding: 11px 10px;
   border-radius: 8px;
-  border-top: 1px solid #191920;
+  border-top: 1px solid var(--hairline);
   transition: background 90ms ease;
 }
 
@@ -1535,15 +1566,22 @@ button {
 
 .memory-row {
   display: block;
-  width: 100%;
   text-align: left;
-  padding: 9px 0;
+  /* Padded and pulled back out by the same amount, so the hover wash has room
+     to sit behind the text without the row moving when it appears. */
+  padding: 9px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
   color: var(--text);
-  border-top: 1px solid #191920;
+  border-top: 1px solid var(--hairline);
 }
 
+/* A wash, not a colour change. Hover used to re-point the text at --accent,
+   which on the browsing screen resolves to a grey *dimmer* than the text it
+   replaced — so pointing at a row made it recede. Lifting the ground under it
+   works in both palettes, because both define a raised surface. */
 .memory-row:hover {
-  color: var(--accent);
+  background: var(--bg-raised);
 }
 
 .memory-row__text {
