@@ -30,6 +30,19 @@ export const MAX_SPAN_DEG = 120;
 export const DEG_PER_NODE = 22;
 
 /**
+ * Half a node's hit area — `.arc__node` is 88px wide with `margin-left: -44px`,
+ * so it hangs symmetrically off the point it is placed on.
+ *
+ * The fan has to fit the *boxes*, not the centres. `.canvas-wrap` is
+ * `overflow: hidden`, so a node whose centre is comfortably inside the column
+ * can still have its label clipped in half.
+ */
+export const NODE_HALF_W = 44;
+
+/** Room left between the outermost node and the edge of the column. */
+export const EDGE_GUTTER = 12;
+
+/**
  * The fan is only as wide as it needs to be. Three children spread across a
  * half-circle look flung apart rather than related, so the span grows with the
  * count and stops at {@link MAX_SPAN_DEG}.
@@ -118,12 +131,30 @@ export function fitArc(
   // itself symmetric gutters, so the column it measures is narrower than the
   // window. Half the fan is r·sin(60°) plus a node's half-width, which at 0.48
   // still lands inside the column.
+  /*
+   * The width factor above is a proportion, not a guarantee. At the narrowest
+   * viewport the app will render — 1280px, which the browsing shell's symmetric
+   * gutters cut to a 560px column — 0.48 put the outermost node's right edge
+   * 3.2px inside an `overflow: hidden` container. It fit, but by luck rather
+   * than by construction, and nothing in the code said 3.2px was the margin.
+   *
+   * So state it. Half the fan is r·sin(half-span) and the node hangs
+   * NODE_HALF_W past that; the widest the fan ever opens is MAX_SPAN_DEG, so
+   * that half-angle is the case to survive regardless of how many nodes are on
+   * the arc. Above roughly 1300px the proportion is still the smaller number
+   * and this changes nothing.
+   */
+  const widthLimit =
+    (viewport.w / 2 - NODE_HALF_W - EDGE_GUTTER) /
+    Math.sin(((MAX_SPAN_DEG / 2) * Math.PI) / 180);
+
   const radius = Math.max(
     120,
     Math.min(
       viewport.w * (open ? 0.32 : 0.48),
       viewport.h * (open ? 0.34 : 0.52),
       focusY - 80,
+      widthLimit,
       open ? 240 : 470,
     ),
   );

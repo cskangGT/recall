@@ -107,3 +107,27 @@ test('below 1280px it refuses to render the app (AC-41)', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByTestId('map-canvas')).toHaveCount(0);
 });
+
+/**
+ * The width gate alone let the scene render into a window too short to hold it.
+ * At 1280x720 the crest lands at 619px, the 190px figure's head reaches 429px,
+ * the greeting starts at 187px and the arc's innermost node sits between them —
+ * and `body { overflow: hidden }` means none of it can scroll apart.
+ */
+test('a wide but short window is refused too', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto('/?skipWelcome=1');
+  await expect(
+    page.getByText('Recall is desktop-first. Please open on a larger screen.'),
+  ).toBeVisible();
+  await expect(page.getByTestId('arc-browser')).toHaveCount(0);
+});
+
+test('the gate lets go as soon as the window is big enough', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+});

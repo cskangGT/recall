@@ -5,6 +5,8 @@ import {
   fitArc,
   MAX_SPAN_DEG,
   DEG_PER_NODE,
+  NODE_HALF_W,
+  EDGE_GUTTER,
 } from '../../src/arc/layout';
 
 describe('spanFor', () => {
@@ -127,15 +129,53 @@ describe('fitArc', () => {
     expect(viewport.h - open.listTop).toBeGreaterThan(viewport.h * 0.5);
   });
 
-  it('keeps the whole arc on screen at the minimum supported viewport', () => {
-    // The app refuses to render below 1280px wide (AC-41); the canvas is that
-    // minus the rail and the inspector.
-    const tight = { w: 1280 - 56 - 360, h: 700 };
+  /*
+   * This test was measuring a column the browsing screen no longer has.
+   *
+   * It used 1280 - 56 - 360 = 864: the rail plus the inspector, which is the
+   * shell's layout everywhere *except* the view the arc lives in. `.shell--mono`
+   * gives itself symmetric gutters so the scene sits on the window's centre
+   * line, making the column 1280 - 360 - 360 = 560 — thirty-five percent
+   * narrower than the width the guarantee was being checked against.
+   *
+   * It also compared `focus.x + radius` against the edge, but no node is ever
+   * at focus.x + radius: that is the point the arc would reach if it opened a
+   * full half-circle, and MAX_SPAN_DEG caps it at 120. Meanwhile every node
+   * carries an 88px box centred on its point, and `.canvas-wrap` is
+   * `overflow: hidden`. The old assertion was simultaneously too strict about
+   * the angle and too lax about the box.
+   */
+  it('keeps every node box on screen at the minimum supported viewport', () => {
+    // The app refuses to render below 1280px wide (AC-41). Browsing, the canvas
+    // is that minus two inspector-width gutters.
+    const tight = { w: 1280 - 360 - 360, h: 700 };
+
     for (const open of [false, true]) {
       const { focus, radius } = fitArc(tight, open);
-      expect(focus.y - radius).toBeGreaterThan(0);
-      expect(focus.x - radius).toBeGreaterThan(0);
-      expect(focus.x + radius).toBeLessThan(tight.w);
+      // Worst case is a full fan, whatever the node count happens to be.
+      const points = arcPositions(MAX_SPAN_DEG / DEG_PER_NODE, radius);
+
+      for (const p of points) {
+        // Not merely on screen — on screen *by a stated amount*. Before the
+        // width limit existed the outermost node cleared the edge by 3.2px,
+        // which passes a "does it fit" assertion while telling nobody that the
+        // next half-point of radius would have clipped a label in half.
+        expect(focus.x + p.x - NODE_HALF_W).toBeGreaterThanOrEqual(EDGE_GUTTER);
+        expect(focus.x + p.x + NODE_HALF_W).toBeLessThanOrEqual(tight.w - EDGE_GUTTER);
+        // Above the focus and clear of the top edge, label included.
+        expect(focus.y + p.y).toBeGreaterThan(0);
+      }
     }
+  });
+
+  /*
+   * The guarantee above is only worth having if it is the binding constraint
+   * when it needs to be and invisible when it does not — a clamp that quietly
+   * shrank the arc at every size would be a regression dressed as a fix.
+   */
+  it('does not shrink the arc at ordinary window sizes', () => {
+    // A 1512px window, which is what the e2e suite runs at.
+    const roomy = { w: 1512 - 360 - 360, h: 982 };
+    expect(fitArc(roomy, false).radius).toBeCloseTo(roomy.w * 0.48, 5);
   });
 });
