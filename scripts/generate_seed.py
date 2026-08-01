@@ -21,6 +21,7 @@ Run: python3 scripts/generate_seed.py
 """
 
 import json
+from datetime import date, timedelta
 import math
 import os
 import random
@@ -410,6 +411,66 @@ def ring(cx, cy, count, radius, phase=0.0):
 
 # ---------------------------------------------------------------- build
 
+# ---------------------------------------------------------------- timeline
+
+# When things were saved, and why it is authored rather than computed.
+#
+# Dates used to be index arithmetic — f"2026-0{(idx % 3) + 4}-{(idx % 27) + 1}" —
+# a round-robin over April, May and June driven by position in the list. That was
+# fine while nothing read them. The arc now ranks categories by how recently and
+# how often they were touched, so the dates became content, and a round-robin
+# says this person was equally interested in all six things all spring. Counted
+# in a thirty-day window the six came out 3, 3, 3, 2, 2, 2: a tie pretending to
+# be a signal.
+#
+# So the corpus gets a story, and it is the one the demo tells. Lately this
+# person has been hiring and digging into agent tooling; the fundraise was the
+# spring and is over. Hiring leads by a nose *before* the capture, so that
+# dropping a note about evals visibly promotes AI Tooling to the top of the arc
+# rather than confirming something that was already there.
+#
+# Offsets are days before ANCHOR, per top-level category, applied to that
+# category's memories in the order they appear in MEMORIES. Fundraising's tail
+# runs past the 120-day horizon in src/arc/interest.ts on purpose: a finished
+# project should score nothing, not a little.
+ANCHOR = date(2026, 7, 20)
+
+MEMORY_DAYS = {
+    "hiring": [0, 3, 7, 11, 16, 23, 32],
+    "ai_tooling": [2, 5, 9, 13, 18, 25, 34, 46, 58],
+    "product": [18, 24, 30, 37, 44, 52, 61, 70],
+    "personal": [22, 31, 42, 55, 68, 82],
+    "gtm": [26, 34, 43, 53, 64, 76],
+    "fundraising": [58, 63, 68, 73, 78, 84, 90, 96, 103, 110, 117],
+}
+
+
+def top_level_of(cat_key):
+    """The parent a memory's category rolls up to — the level the arc ranks."""
+    for key, _name, parent in CATEGORIES:
+        if key == cat_key:
+            return parent or key
+    raise KeyError(cat_key)
+
+
+def memory_dates():
+    """A date per memory index, drawn from its top-level category's schedule."""
+    used = {}
+    out = {}
+    for idx, entry in enumerate(MEMORIES):
+        top = top_level_of(entry[0])
+        days = MEMORY_DAYS[top]
+        n = used.get(top, 0)
+        used[top] = n + 1
+        assert n < len(days), f"{top} has more memories than MEMORY_DAYS dates"
+        out[idx] = ANCHOR - timedelta(days=days[n])
+    for top, days in MEMORY_DAYS.items():
+        assert used.get(top, 0) == len(days), (
+            f"{top}: {used.get(top, 0)} memories against {len(days)} dates"
+        )
+    return out
+
+
 def build():
     cat_index = {key: i for i, (key, _, _) in enumerate(CATEGORIES)}
     cat_ids = {key: f"cat_{key}" for key, _, _ in CATEGORIES}
@@ -443,6 +504,18 @@ def build():
         })
 
     # ---- sources
+    #
+    # Dated from the earliest memory they produced rather than by their own
+    # round-robin. A source is read and then extracted from, so a source that
+    # postdates its own memories is a small lie that the Sources list — which
+    # sorts newest first — puts on screen.
+    src_dates = {}
+    for idx, entry in enumerate(MEMORIES):
+        src_key = entry[2]
+        when = memory_dates()[idx]
+        if src_key not in src_dates or when < src_dates[src_key]:
+            src_dates[src_key] = when
+
     sources = []
     for i, (key, (title, stype, url, raw, scene)) in enumerate(SOURCES.items()):
         sources.append({
@@ -453,7 +526,7 @@ def build():
             "scene_description": scene,
             "url": url,
             "image_path": f"/seed/{key}.png" if stype == "screenshot" else None,
-            "created_at": f"2026-0{(i % 3) + 4}-{(i % 27) + 1:02d}T09:00:00Z",
+            "created_at": f"{src_dates[key].isoformat()}T09:00:00Z",
         })
 
     # ---- memories, positioned around their category
@@ -466,6 +539,8 @@ def build():
         cat = next(c for c in categories if c["id"] == cat_ids[cat_key])
         for idx, (mx, my) in zip(idxs, ring(cat["x"], cat["y"], len(idxs), 62, 0.4)):
             positions[idx] = (mx, my)
+
+    mem_dates = memory_dates()
 
     memories = []
     for idx, (cat_key, theme, src_key, kind, text) in enumerate(MEMORIES):
@@ -484,7 +559,7 @@ def build():
             "x": float(mx),
             "y": float(my),
             "pinned": False,
-            "created_at": f"2026-0{(idx % 3) + 4}-{(idx % 27) + 1:02d}T10:00:00Z",
+            "created_at": f"{mem_dates[idx].isoformat()}T10:00:00Z",
         })
 
     # ---- entities, placed at the mean of the memories that mention them

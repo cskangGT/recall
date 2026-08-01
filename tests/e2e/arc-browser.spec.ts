@@ -43,9 +43,10 @@ test.beforeEach(async ({ page }) => {
  * This used to assert the six categories in insertion order, which is a fact
  * about the database rather than about the person using it. Being on the arc now
  * means "this is what you have been on lately", so the assertion is about the
- * ranking: the seed's newest activity is Hiring (27 Jun), then AI Tooling and
- * Personal Systems (18 Jun), and Fundraising outranks the two categories with
- * fresher single memories because it holds eleven of them.
+ * ranking, and the seed's dates are authored to make that ranking a story:
+ * lately this person has been hiring and digging into agent tooling, while the
+ * fundraise was the spring and is over — so Fundraising comes last despite
+ * holding the most memories of anything.
  *
  * Read by rank rather than left to right, because the arc seats rank 1 at the
  * apex and works outward — the middle of an upward arc is the position the eye
@@ -55,10 +56,10 @@ test('opens on the top level ranked by what the user has been on', async ({ page
   expect(await arcRanking(page)).toEqual([
     'Hiring=7',
     'AI Tooling=9',
-    'Personal Systems=6',
-    'Fundraising=11',
-    'Go-to-Market=6',
     'Product=8',
+    'Personal Systems=6',
+    'Go-to-Market=6',
+    'Fundraising=11',
   ]);
   // Nothing is open yet, so the reading list stays out of the way.
   await expect(page.getByTestId('reading-list')).toHaveCount(0);
