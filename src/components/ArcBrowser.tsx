@@ -203,6 +203,30 @@ export function ArcBrowser() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+
+      /*
+       * Nothing below this can run before the welcome is dismissed.
+       *
+       * The arc renders `welcomeDismissed ? nodes : []`, but this handler closed
+       * over the full array regardless — so ArrowRight on the greeting opened a
+       * category and dropped a reading list onto an empty sky, with no arc
+       * anywhere to explain where it had come from. Backspace and ArrowUp did
+       * the same.
+       *
+       * Enter is the exception, because the greeting promises it: "press Enter
+       * to look around". It was promising something that did not happen. The
+       * obvious fix is to focus the composer on mount, and it is the wrong one —
+       * G, T, S and `,` are single-key shortcuts, and App's handler steps aside
+       * for INPUT targets, so a focused composer would swallow all four and type
+       * the letters instead. Handling Enter here keeps both.
+       */
+      if (!welcomeDismissed) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        dismissWelcome();
+        return;
+      }
+
       const focusIndex = nodes.findIndex((n) => n.id === openCategoryId);
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -233,7 +257,7 @@ export function ArcBrowser() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, openCategoryId, arcLevelId, categoryRows]);
+  }, [nodes, openCategoryId, arcLevelId, categoryRows, welcomeDismissed, dismissWelcome]);
 
   // ----------------------------------------------------------------- drag
   const finishDrop = (node: ArcNode) => {
@@ -448,13 +472,34 @@ export function ArcBrowser() {
           <p className="arc__prompt">{heading}</p>
         ) : (
           <div className="arc__greeting" data-testid="welcome">
-            <p className="arc__greeting-line">Want to think something through?</p>
-            {/* The scale belongs in the sentence, where the eye already is —
-                the Inspector used to shout it from the corner instead. */}
-            <p className="arc__greeting-aside">
-              {payload.memories.length} memories from {payload.sources.length} sources,
-              already sorted. Ask me anything about them — or press Enter to look around.
-            </p>
+            {/*
+              Two greetings, because there are two ways to arrive.
+              The count was written for the seeded workspace, where it is the
+              whole pitch: value before you have typed anything. Against an
+              empty one it read "0 memories from 0 sources, already sorted" —
+              a claim about nothing, made confidently, which is the worst
+              possible first sentence for a product whose entire proposition is
+              that it can be trusted to file things for you.
+            */}
+            {payload.memories.length === 0 ? (
+              <>
+                <p className="arc__greeting-line">Nothing up here yet.</p>
+                <p className="arc__greeting-aside">
+                  Paste a note, a link, or a screenshot below and Recall will read it and
+                  find it a place. The map builds itself from there.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="arc__greeting-line">Want to think something through?</p>
+                {/* The scale belongs in the sentence, where the eye already is —
+                    the Inspector used to shout it from the corner instead. */}
+                <p className="arc__greeting-aside">
+                  {payload.memories.length} memories from {payload.sources.length} sources,
+                  already sorted. Ask me anything about them — or press Enter to look around.
+                </p>
+              </>
+            )}
           </div>
         ))}
 

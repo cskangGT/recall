@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { answerQuestion } from '../ask/scriptedAsk';
@@ -36,7 +36,6 @@ export function Composer({
 
   const [text, setText] = useState('');
   const [thinking, setThinking] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
 
   const submit = async () => {
     const question = text.trim();
@@ -70,8 +69,14 @@ export function Composer({
       >
         +
       </button>
+      {/*
+        Deliberately not autofocused. The greeting's "press Enter to look
+        around" is answered by a window-level handler in ArcBrowser instead,
+        because G, T, S and `,` are single-key shortcuts and App's keyboard
+        handler steps aside for INPUT targets — a focused composer would swallow
+        every one of them and type the letter.
+      */}
       <input
-        ref={ref}
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
         placeholder="Ask anything, or drop a screenshot to save it…"
         value={text}
@@ -89,7 +94,16 @@ export function Composer({
         disabled={thinking}
         onClick={() => void submit()}
       >
-        {thinking ? 'Thinking…' : text.trim() ? 'Ask' : firstRun ? 'Look around' : '↵'}
+        {/* "Look around" offers to fan the categories out, so it can only be
+            offered when there are categories. On an empty workspace it invited
+            the one gesture in the app guaranteed to do nothing. */}
+        {thinking
+          ? 'Thinking…'
+          : text.trim()
+            ? 'Ask'
+            : firstRun && (payload?.memories.length ?? 0) > 0
+              ? 'Look around'
+              : '↵'}
       </button>
     </div>
   );

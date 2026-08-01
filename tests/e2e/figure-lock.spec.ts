@@ -24,8 +24,13 @@ import { test, expect, type Page } from '@playwright/test';
  * Reduced motion is mandatory: `.thinker__body` carries a 6.5s `breathe`
  * animation (theme.css), so without it two screenshots of an untouched figure
  * differ by a couple of thousand pixels purely from where the breath was caught.
+ * Applied per page rather than through `test.use`, so the reason it is here
+ * sits next to the call that needs it.
  */
-test.use({ reducedMotion: 'reduce' });
+async function stillFigure(page: Page, url: string) {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(url);
+}
 
 /**
  * The figure's own box is 190x190, but its `<svg>` is `overflow: visible` and
@@ -54,7 +59,7 @@ async function figureRegion(page: Page) {
 }
 
 test('the figure is unchanged on the welcome screen', async ({ page }) => {
-  await page.goto('/');
+  await stillFigure(page, '/');
   await expect(page.locator('.arc__thinker')).toBeVisible();
   // The greeting fades in; the figure does not, but the two share a frame and a
   // half-faded neighbour is not a stable backdrop.
@@ -66,7 +71,7 @@ test('the figure is unchanged on the welcome screen', async ({ page }) => {
 });
 
 test('the figure is unchanged with a category open', async ({ page }) => {
-  await page.goto('/?skipWelcome=1');
+  await stillFigure(page, '/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.locator('.arc__node').first().click();
   // The arc fans out and the figure travels to the higher crest.
@@ -86,7 +91,7 @@ test('the figure is unchanged with a category open', async ({ page }) => {
  * edge and reads as a mound rather than a ridge.
  */
 test('the hill keeps its geometry', async ({ page }) => {
-  await page.goto('/?skipWelcome=1');
+  await stillFigure(page, '/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 
   const hill = await page.locator('.sky__hill').evaluate((el) => {
@@ -121,7 +126,7 @@ test('the hill keeps its geometry', async ({ page }) => {
  * still catches a break that comes from the crest moving instead.
  */
 test('the figure sits on the crest, not above it', async ({ page }) => {
-  await page.goto('/?skipWelcome=1');
+  await stillFigure(page, '/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.waitForTimeout(600);
 

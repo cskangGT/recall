@@ -124,6 +124,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     set((s) => ({
       view,
       centerOnId: view === 'map' ? s.selectedId : null,
+      // Leaving for the map or the sources list *is* looking around, so coming
+      // back cannot land on a greeting that asks whether you would like to.
+      // Worse, the top bar renders over it offering "See the big picture" —
+      // which is the picture you just came back from.
+      welcomeDismissed: s.welcomeDismissed || view !== 'browse',
     })),
 
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
