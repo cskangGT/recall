@@ -257,3 +257,46 @@ test('the map is still one labelled click away from its new home', async ({ page
   await page.getByTestId('go-map').click();
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });
+
+/**
+ * The composer is docked and always mounted, so unlike the two command bars
+ * there is no dialog to close — and App's keyboard handler steps aside for INPUT
+ * targets. Clicking the box therefore killed G, T, S and `,` outright: they
+ * typed their letters into it instead of navigating, nothing on screen said so,
+ * and the only way back was the mouse.
+ */
+test('Escape hands the keyboard back after clicking the chat box', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  await page.getByTestId('composer-input').click();
+  await page.keyboard.press('g');
+  // Still browsing, and the shortcut went into the box as a letter.
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await expect(page.getByTestId('composer-input')).toHaveValue('g');
+
+  await page.getByTestId('composer-input').fill('');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+});
+
+/**
+ * Escape in the composer means "give me my keyboard back", not "throw away what
+ * I was reading" — App's Escape also clears the answer and the selection, and
+ * losing an answer because you wanted the arrow keys is not the same gesture.
+ */
+test('Escape in the composer does not discard the answer', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  await page.getByTestId('composer-input').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  // A second Escape, now that the window can hear it, does clear it.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('browser-answer')).toHaveCount(0);
+});

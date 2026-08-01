@@ -83,6 +83,25 @@ export function Composer({
         disabled={thinking}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
+          /*
+           * Escape hands the keyboard back to the app.
+           *
+           * G, T, S and `,` are single-key shortcuts, and App's handler steps
+           * aside for INPUT targets — so the moment you click this box every one
+           * of them stops navigating and starts typing letters into it, with
+           * nothing on screen to say so. Before this there was no way out
+           * without reaching for the mouse: the composer is docked and always
+           * mounted, so unlike the command bars there was no dialog to close.
+           */
+          if (e.key === 'Escape') {
+            // Only blur. App's Escape also clears the answer and the selection,
+            // and losing the answer you were reading because you wanted your
+            // arrow keys back is not the same gesture. Pressing it again does
+            // that, now that the window can hear it.
+            e.stopPropagation();
+            e.currentTarget.blur();
+            return;
+          }
           if (e.key !== 'Enter') return;
           e.preventDefault();
           void submit();
