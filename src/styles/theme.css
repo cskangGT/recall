@@ -872,6 +872,53 @@ button {
   pointer-events: none;
 }
 
+/*
+ * While something is being dragged, every place it can land shows a ring.
+ *
+ * The star is the category; the ring is the target. They are deliberately not
+ * the same size — the hit area was always the 88x62 node box, and the whole
+ * problem was that a point of light gave no hint of it. The ring appears only
+ * during a drag, so at rest the sky stays a sky.
+ *
+ * Only on nodes that will actually accept the thing: `data-droppable` already
+ * carries the answer from validateDrop, so a subfolder that cannot nest under
+ * another subfolder never lights up and the two-levels rule is visible before
+ * you commit to it rather than as a toast afterwards.
+ */
+.arc--dragging .arc__node[data-droppable='yes'] .arc__form::after {
+  content: '';
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px dashed rgba(232, 224, 255, 0.42);
+  background: radial-gradient(circle, rgba(226, 216, 255, 0.09) 0%, rgba(226, 216, 255, 0) 72%);
+  pointer-events: none;
+  animation: ring-in 180ms ease both;
+}
+
+.arc__form {
+  position: relative;
+}
+
+/* The one under the pointer: solid, brighter, and larger than its neighbours,
+   so "which am I on" is answered by size rather than by a border weight. */
+.arc--dragging .arc__node--drop .arc__form::after {
+  width: 70px;
+  height: 70px;
+  border: 1.5px solid var(--accent);
+  background: radial-gradient(circle, rgba(236, 230, 255, 0.2) 0%, rgba(236, 230, 255, 0) 74%);
+}
+
+@keyframes ring-in {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc--dragging .arc__node[data-droppable='yes'] .arc__form::after { animation: none; }
+}
+
 .arc__node:hover .arc__form {
   transform: translateY(-5px);
   filter: brightness(1.22);

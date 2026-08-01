@@ -57,7 +57,7 @@ test('a category with no children opens its memories without descending', async 
   await node(page, 'cat_ai_tooling').click();
 
   await expect(page.locator('.reading .item')).toHaveCount(9);
-  await expect(named(page, 'Back')).toHaveCount(0);
+  await expect(node(page, '__back__')).toHaveCount(0);
   await expect(named(page, 'Fundraising')).toBeVisible();
 });
 
@@ -65,9 +65,20 @@ test('back returns to the top level', async ({ page }) => {
   await node(page, 'cat_fundraising').click();
   await expect(named(page, 'Investor Notes')).toBeVisible();
 
-  await named(page, 'Back').click();
+  await node(page, '__back__').click();
   await expect(named(page, 'Investor Notes')).toHaveCount(0);
   expect(await arcLabels(page)).toHaveLength(6);
+});
+
+/**
+ * It used to read "Back", on the grounds that the breadcrumb already named the
+ * parent. But the breadcrumb names where you *are*; nothing named what is one
+ * level up, and a category's place in the structure is most of what it means
+ * here. It carries the destination, not the direction.
+ */
+test('the way up names where it goes', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+  await expect(node(page, '__back__')).toContainText('Everything');
 });
 
 test('Backspace also climbs a level', async ({ page }) => {

@@ -128,12 +128,25 @@ export function ArcBrowser() {
     }));
 
     if (effectiveLevelId !== null) {
-      // Back sits at the left end, where the eye starts. Labelled just "Back":
-      // the parent's name is already the breadcrumb at the top of the screen,
-      // and a long label here overlapped its neighbour on the arc.
+      /*
+       * Back sits at the left end, where the eye starts, and it says where it
+       * goes rather than which direction it goes in.
+       *
+       * It used to be the word "Back", on the grounds that the parent's name was
+       * already the breadcrumb at the top of the screen. But the breadcrumb
+       * names where you *are*, and the only other place the hierarchy appeared
+       * was that same word repeated over the reading list — so the one thing
+       * nothing on screen told you was what is one level up. A category's place
+       * in the structure is most of what a category means here.
+       *
+       * The destination, note, not the current level: from inside Fundraising
+       * this returns to the top, so it reads "Everything".
+       */
+      const here = categoryRows.find((r) => r.id === effectiveLevelId);
+      const up = here?.parentId ? categoryRows.find((r) => r.id === here.parentId) : undefined;
       folders.unshift({
         id: '__back__',
-        label: 'Back',
+        label: up?.label ?? 'Everything',
         count: null,
         kind: 'back',
         row: null,
@@ -314,7 +327,17 @@ export function ArcBrowser() {
       : 'Where would you like to look?';
 
   return (
-    <div className="arc" data-testid="arc-browser" ref={shellRef}>
+    /*
+     * `--dragging` while something is in the air, so the arc can show where it
+     * can go. A five-pixel point of light is a beautiful category and a hopeless
+     * target: the hit area is the 88x62 box around it, but nothing on screen
+     * said so, and you cannot aim at a box you cannot see.
+     */
+    <div
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}`}
+      data-testid="arc-browser"
+      ref={shellRef}
+    >
       <CaptureStoryPanel />
 
       {/*
@@ -517,10 +540,14 @@ export function ArcBrowser() {
       <div className="reading" data-testid="reading-list" style={{ top: geometry.listTop }}>
         <div className="reading__head">
           <span>{heading}</span>
+          {/* "Folder" was left over from the two-pane list this replaced, and
+              then survived a stone and a star. There is nothing on this screen
+              a person would call a folder; what is above them is a category
+              with a name under it, so the hint says that. */}
           <span className="reading__hint">
             {showingAnswer
-              ? 'Drag any of these onto a folder to keep it'
-              : 'Drag one onto a folder to re-file it'}
+              ? 'Drag any of these up to a category to keep it'
+              : 'Drag one up to a category to re-file it'}
           </span>
         </div>
 
