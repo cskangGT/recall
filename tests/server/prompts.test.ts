@@ -4,7 +4,9 @@ import {
   nameByFallback, resolveAnswer, resolveNames,
 } from '../../server/ai/prompts.ts';
 import { parseVoyageResponse } from '../../server/ai/voyage.ts';
-import { parseOpenAiResponse, OpenAiEmbeddings, DEFAULT_DIMENSIONS } from '../../server/ai/openai.ts';
+import {
+  parseOpenAiResponse, parseChatJson, OpenAiEmbeddings, DEFAULT_DIMENSIONS,
+} from '../../server/ai/openai.ts';
 import { selectAi } from '../../server/ai/select.ts';
 import type { NameCluster, RetrievedMemory } from '../../server/ai/provider.ts';
 
@@ -256,19 +258,44 @@ describe('selectAi', () => {
     expect(s.embeddings.dimensions).toBe(1024);
   });
 
-  it('prefers Voyage when both embedders are available', () => {
+  it('prefers Voyage for the embedding half when both can do it', () => {
     const s = selectAi({
       ANTHROPIC_API_KEY: 'sk-x', VOYAGE_API_KEY: 'v', OPENAI_API_KEY: 'sk-o',
     } as NodeJS.ProcessEnv);
     // Voyage is the one whose document/query asymmetry retrieval was written for.
-    expect(s.reason).toContain('VOYAGE_API_KEY');
-    expect(s.reason).not.toContain('OPENAI_API_KEY');
+    expect(s.reason).toContain('VOYAGE_API_KEY to embed');
   });
 
-  it('still refuses to run an embedder without a namer', () => {
+  /**
+   * The change this pair of tests exists to record. Extraction moved to OpenAI
+   * because a live Anthropic key with no credit answers every request with
+   * "Your credit balance is too low" — indistinguishable, from the outside,
+   * from being broken. One OpenAI key now does both jobs.
+   */
+  it('runs on an OpenAI key alone — it can both read and embed', () => {
     const s = selectAi({ OPENAI_API_KEY: 'sk-o' } as NodeJS.ProcessEnv);
+    expect(s.live).toBe(true);
+    expect(s.ai.name).toBe('openai');
+    expect(s.reason).toBe('OPENAI_API_KEY to read, OPENAI_API_KEY to embed');
+  });
+
+  it('prefers OpenAI to read when both readers are available', () => {
+    const s = selectAi({ ANTHROPIC_API_KEY: 'sk-x', OPENAI_API_KEY: 'sk-o' } as NodeJS.ProcessEnv);
+    expect(s.ai.name).toBe('openai');
+  });
+
+  it('puts Anthropic back when asked for by name', () => {
+    const s = selectAi({
+      ANTHROPIC_API_KEY: 'sk-x', OPENAI_API_KEY: 'sk-o', RECALL_EXTRACTOR: 'anthropic',
+    } as NodeJS.ProcessEnv);
+    expect(s.ai.name).toBe('anthropic');
+    expect(s.reason).toContain('ANTHROPIC_API_KEY to read');
+  });
+
+  it('still refuses to run with no reader at all', () => {
+    const s = selectAi({ VOYAGE_API_KEY: 'v' } as NodeJS.ProcessEnv);
     expect(s.live).toBe(false);
-    expect(s.reason).toContain('ANTHROPIC_API_KEY');
+    expect(s.reason).toContain('ANTHROPIC_API_KEY or OPENAI_API_KEY');
   });
 });
 
@@ -338,5 +365,41 @@ describe('OpenAiEmbeddings', () => {
 
   it('says which key is missing rather than failing at the first request', () => {
     expect(() => new OpenAiEmbeddings({ apiKey: '' })).toThrow(/OPENAI_API_KEY/);
+  });
+});
+
+/**
+ * Two of these failures are specific to this API and both are silent.
+ *
+ * A refusal arrives as a `refusal` field with `content` null, which would parse
+ * as "no memories" rather than as an error. And a reply truncated by the token
+ * limit still comes back with a half-written JSON body — strict mode guarantees
+ * the *shape* of a complete reply, not that the reply completed.
+ */
+describe('parseChatJson', () => {
+  const reply = (content: string, extra: object = {}) => ({
+    choices: [{ message: { content }, finish_reason: 'stop', ...extra }],
+  });
+
+  it('returns the parsed body', () => {
+    expect(parseChatJson(reply('{"memories":[]}'))).toEqual({ memories: [] });
+  });
+
+  it('turns a refusal into an error rather than an empty result', () => {
+    const body = { choices: [{ message: { content: null, refusal: 'I cannot help with that' } }] };
+    expect(() => parseChatJson(body)).toThrow(/refused/);
+  });
+
+  it('catches a reply the token limit cut in half', () => {
+    const body = { choices: [{ message: { content: '{"memories":[' }, finish_reason: 'length' }] };
+    expect(() => parseChatJson(body)).toThrow(/truncated/);
+  });
+
+  it('refuses a body with no choices', () => {
+    expect(() => parseChatJson({})).toThrow(/no choices/);
+  });
+
+  it('refuses unparseable content rather than returning it', () => {
+    expect(() => parseChatJson(reply('not json'))).toThrow(/unparseable/);
   });
 });

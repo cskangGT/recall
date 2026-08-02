@@ -1,4 +1,15 @@
-import type { EmbeddingProvider } from './provider.ts';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import type {
+  AiProvider, AnswerResult, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
+  NormalizeInput, NormalizeResult, RetrievedMemory,
+} from './provider.ts';
+import {
+  answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt, buildNormalizePrompt,
+  coerceExtract, coerceNormalize, extractSchema, nameByFallback, nameSchema, normalizeSchema,
+  resolveAnswer, resolveNames,
+} from './prompts.ts';
+import type { SourceType } from '../../src/core/types.ts';
 
 /**
  * OpenAI embeddings.
@@ -141,4 +152,190 @@ export function parseOpenAiResponse(
     }
     return vector as number[];
   });
+}
+
+// ---------------------------------------------------------------- extraction
+
+/**
+ * The same four jobs as `AnthropicProvider`, on the account that has credit.
+ *
+ * Extraction is where the money goes and where it was blocked: a well-formed,
+ * authenticated request to Anthropic came back
+ * `"Your credit balance is too low"`, while the OpenAI key was already paying
+ * for every embedding in the corpus. Moving the one call is cheaper than
+ * moving the billing.
+ *
+ * Deliberately thin, for the reason `anthropic.ts` gives: the prompts, the
+ * schemas and the coercion live in `prompts.ts` where they are unit-tested
+ * without credentials, so what remains here is one request shape repeated four
+ * times. Both providers share every one of them, which is the point — if the
+ * two ever disagree about what a memory is, it will be because a model
+ * disagreed, not because a file did.
+ *
+ * Structured Outputs with `strict: true`, matching Anthropic's schema
+ * enforcement. The schemas in `prompts.ts` already satisfy what strict mode
+ * demands — every property required, `additionalProperties: false` throughout —
+ * because they were written for an API that asks the same thing.
+ */
+
+const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+
+/** Strong instruction-following, and the "returning none is valid" line in the
+ *  extract prompt needs a model that will actually return none. */
+export const CHAT_MODEL = 'gpt-4.1';
+
+const MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+
+export class OpenAiProvider implements AiProvider {
+  readonly name = 'openai';
+  private readonly apiKey: string;
+  private readonly model: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(options: { apiKey?: string; model?: string; fetchImpl?: typeof fetch } = {}) {
+    const key = options.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!key) {
+      throw new Error('OPENAI_API_KEY is not set. Run without it to use the fixture provider.');
+    }
+    this.apiKey = key;
+    this.model = options.model ?? CHAT_MODEL;
+    this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  private async json(
+    content: unknown,
+    schemaName: string,
+    schema: object,
+    maxTokens: number,
+  ): Promise<unknown> {
+    const response = await this.fetchImpl(CHAT_ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        max_completion_tokens: maxTokens,
+        messages: [{ role: 'user', content }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: schemaName, strict: true, schema },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`OpenAI ${response.status}: ${detail.slice(0, 240)}`);
+    }
+    return parseChatJson(await response.json());
+  }
+
+  async normalize(input: NormalizeInput): Promise<NormalizeResult> {
+    if (!input.imagePath) {
+      // Text and links skip this call entirely (spec §10.1); if one arrives
+      // anyway, answer from what we have rather than inventing a scene.
+      return coerceNormalize({
+        ocr_text: input.text ?? '',
+        scene_description: '',
+        detected_context: 'other',
+        has_meaningful_text: (input.text ?? '').trim().length > 0,
+      });
+    }
+
+    const ext = path.extname(input.imagePath).toLowerCase();
+    const mediaType = MIME[ext];
+    if (!mediaType) throw new Error(`Unsupported image type: ${ext || input.imagePath}`);
+    const data = await readFile(input.imagePath, { encoding: 'base64' });
+
+    const content = [
+      { type: 'text', text: buildNormalizePrompt(input) },
+      { type: 'image_url', image_url: { url: `data:${mediaType};base64,${data}` } },
+    ];
+    return coerceNormalize(await this.json(content, 'normalize', normalizeSchema, 2048));
+  }
+
+  async extract(input: {
+    content: string;
+    sceneDescription?: string;
+    type: SourceType;
+  }): Promise<ExtractResult> {
+    return coerceExtract(
+      await this.json(buildExtractPrompt(input), 'extract', extractSchema, 4096),
+    );
+  }
+
+  async nameClusters(input: {
+    operation: 'split' | 'merge' | 'promote';
+    clusters: NameCluster[];
+    forbiddenNames: string[];
+  }): Promise<NamedCluster[]> {
+    const accepted: NamedCluster[] = [];
+    let pending = input.clusters;
+    let retryReasons: Record<string, string> | undefined;
+
+    // Two attempts, then TF-IDF. The gate has already decided the change is
+    // happening — naming cannot be allowed to veto it (spec §10.4).
+    for (let attempt = 0; attempt < 2 && pending.length > 0; attempt++) {
+      const taken = [...input.forbiddenNames, ...accepted.map((a) => a.name)];
+      const raw = await this.json(
+        buildNamePrompt({ ...input, clusters: pending, forbiddenNames: taken, retryReasons }),
+        'name_clusters',
+        nameSchema,
+        1024,
+      );
+      const { accepted: ok, rejected } = resolveNames(raw, pending, taken);
+      accepted.push(...ok);
+      pending = pending.filter((c) => rejected[c.cluster_id] !== undefined);
+      retryReasons = rejected;
+    }
+
+    for (const cluster of pending) accepted.push(nameByFallback(cluster, input.clusters));
+
+    // Back into the caller's order, so a split's two halves stay predictable.
+    const byId = new Map(accepted.map((a) => [a.cluster_id, a]));
+    return input.clusters
+      .map((c) => byId.get(c.cluster_id))
+      .filter((a): a is NamedCluster => a !== undefined);
+  }
+
+  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+    return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
+  }
+}
+
+/**
+ * Pulled out so the failure modes are testable without a key.
+ *
+ * Two of them are specific to this API and both are silent. A refusal comes
+ * back as a `refusal` field with `content` null, which would otherwise parse as
+ * "no memories" rather than as an error. And a response truncated by the token
+ * limit still arrives with `finish_reason: "length"` and a half-written JSON
+ * body — strict mode guarantees the *shape* of a complete reply, not that the
+ * reply completed.
+ */
+export function parseChatJson(body: unknown): unknown {
+  const choice = (body as { choices?: { message?: Record<string, unknown>; finish_reason?: string }[] })
+    ?.choices?.[0];
+  if (!choice) throw new Error('OpenAI response had no choices');
+
+  const refusal = choice.message?.refusal;
+  if (typeof refusal === 'string' && refusal.length > 0) {
+    throw new Error(`OpenAI refused: ${refusal.slice(0, 160)}`);
+  }
+  if (choice.finish_reason === 'length') {
+    throw new Error('OpenAI response was truncated — raise max_completion_tokens');
+  }
+
+  const content = choice.message?.content;
+  if (typeof content !== 'string') throw new Error('OpenAI response had no content');
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new Error(`OpenAI returned unparseable JSON: ${content.slice(0, 160)}`);
+  }
 }
