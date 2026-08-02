@@ -49,6 +49,8 @@ export interface DataSource {
   ask?(question: string): Promise<AskResult>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
+  /** Removes a memory. Not reversible — see Repository.deleteMemory. */
+  deleteMemory?(memoryId: string): Promise<GraphPayload>;
   updateCategory?(
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
@@ -118,6 +120,14 @@ export class ApiDataSource implements DataSource {
   async undo(reorgId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/reorgs/${encodeURIComponent(reorgId)}/undo`,
+    );
+    return validateSeed(graph);
+  }
+
+  async deleteMemory(memoryId: string): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/memories/${encodeURIComponent(memoryId)}`,
+      { method: 'DELETE' },
     );
     return validateSeed(graph);
   }

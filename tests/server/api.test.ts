@@ -34,6 +34,7 @@ afterEach(() => repo.close());
 const get = (path: string) => handle({ method: 'GET', path, body: null }, deps);
 const post = (path: string, body: unknown = null) => handle({ method: 'POST', path, body }, deps);
 const patch = (path: string, body: unknown) => handle({ method: 'PATCH', path, body }, deps);
+const del = (path: string) => handle({ method: 'DELETE', path, body: null }, deps);
 const base = `/api/workspaces/${WS}`;
 
 describe('GET graph', () => {
@@ -300,3 +301,67 @@ describe('PATCH /settings', () => {
   });
 });
 
+
+/**
+ * The first DELETE this API has had. Nothing at any layer could remove a
+ * memory: no repository method, no route, no DataSource method, no store
+ * action.
+ */
+describe('DELETE memory', () => {
+  it('removes it and returns the graph without it', async () => {
+    const before = repo.getGraphPayload(WS);
+    const victim = before.memories[0]!;
+
+    const res = await del(`${base}/memories/${victim.id}`);
+    expect(res.status).toBe(200);
+
+    const graph = (res.body as { graph: GraphPayload }).graph;
+    expect(graph.memories).toHaveLength(before.memories.length - 1);
+    expect(graph.memories.some((m) => m.id === victim.id)).toBe(false);
+    expect(repo.listMemories(WS)).toHaveLength(before.memories.length - 1);
+  });
+
+  /**
+   * The schema is what makes this one statement: memory_category, memory_entity
+   * and both edge endpoints are ON DELETE CASCADE. A dangling edge would draw a
+   * line to a node that is gone.
+   */
+  it('takes its edges with it', async () => {
+    const before = repo.getGraphPayload(WS);
+    const connected = before.memories.find((m) =>
+      before.edges.some((e) => e.source_memory_id === m.id || e.target_memory_id === m.id),
+    )!;
+    expect(connected).toBeDefined();
+
+    await del(`${base}/memories/${connected.id}`);
+    const graph = repo.getGraphPayload(WS);
+    expect(
+      graph.edges.some(
+        (e) => e.source_memory_id === connected.id || e.target_memory_id === connected.id,
+      ),
+    ).toBe(false);
+  });
+
+  it('404s an id it does not have, and changes nothing', async () => {
+    const before = repo.listMemories(WS).length;
+    const res = await del(`${base}/memories/mem_nope`);
+    expect(res.status).toBe(404);
+    expect(repo.listMemories(WS)).toHaveLength(before);
+  });
+
+  /** Deleting a memory must not take its source, or its siblings, with it. */
+  it('leaves the source and the sibling memories alone', async () => {
+    const before = repo.getGraphPayload(WS);
+    const victim = before.memories[0]!;
+    const siblings = before.memories.filter(
+      (m) => m.source_id === victim.source_id && m.id !== victim.id,
+    ).length;
+
+    await del(`${base}/memories/${victim.id}`);
+    const graph = repo.getGraphPayload(WS);
+    expect(graph.sources.some((s) => s.id === victim.source_id)).toBe(true);
+    expect(
+      graph.memories.filter((m) => m.source_id === victim.source_id).length,
+    ).toBe(siblings);
+  });
+});

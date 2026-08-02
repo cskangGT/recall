@@ -310,6 +310,13 @@ export class SqliteRepository implements Repository {
     this.db.prepare(`UPDATE categories SET ${sets.join(', ')} WHERE id = ?`).run(...values);
   }
 
+  deleteMemory(id: string): void {
+    // One statement, because the schema already describes the consequences:
+    // memory_category, memory_entity and both edge endpoints cascade, and the
+    // FTS row goes with the trigger at schema.sql.
+    this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+  }
+
   deleteCategory(id: string): void {
     // Re-parent members to the category's parent first: deleting a category
     // must never delete memories (spec §5.4, AC-30).

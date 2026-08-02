@@ -298,6 +298,39 @@ button {
   color: #17130a;
 }
 
+/* --------------------------------------------------------------- destructive */
+
+.inspector__footer {
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+/*
+ * Quiet until it is armed. A delete that looks dangerous before you have
+ * reached for it makes the whole panel feel hazardous; the warning belongs at
+ * the moment of the second click, not on the resting state.
+ */
+.danger {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.danger:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.danger--armed,
+.danger--armed:hover {
+  background: color-mix(in srgb, #c2603a 26%, transparent);
+  box-shadow: inset 0 0 0 1px #c2603a;
+  color: #f0c4b2;
+}
+
 /* ---------------------------------------------------------------- legend */
 
 .legend {

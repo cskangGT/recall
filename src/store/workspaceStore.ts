@@ -14,6 +14,8 @@ interface WorkspaceState {
   applyPayload: (payload: GraphPayload) => void;
   /** User re-categorizes a memory. The assignment locks — see spec 6.3. */
   moveMemory: (memoryId: string, categoryId: string) => void;
+  /** Throws a memory away. Not reversible — the UI asks first. */
+  deleteMemory: (memoryId: string) => void;
   /** User re-parents a child category. */
   moveCategory: (categoryId: string, parentId: string) => void;
   /** Renames a category and locks it against future reorganization. */
@@ -38,6 +40,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   applyPayload: (payload) => {
     const { nodes, edges } = buildGraph(payload);
     set({ payload, nodes: runLayout(nodes, edges), edges });
+  },
+
+  deleteMemory: (memoryId) => {
+    const current = get().payload;
+    if (!current) return;
+    /*
+     * Everything that pointed at it goes too, so the client's copy matches what
+     * the schema does on the server — memory_category, memory_entity and both
+     * edge endpoints are ON DELETE CASCADE there. Leaving a dangling edge here
+     * would draw a line to a node that no longer exists.
+     */
+    const next: GraphPayload = {
+      ...current,
+      memories: current.memories.filter((m) => m.id !== memoryId),
+      edges: current.edges.filter(
+        (e) => e.source_memory_id !== memoryId && e.target_memory_id !== memoryId,
+      ),
+    };
+    get().applyPayload(next);
+    const { source } = get();
+    void source
+      .deleteMemory?.(memoryId)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
   },
 
   moveMemory: (memoryId, categoryId) => {
