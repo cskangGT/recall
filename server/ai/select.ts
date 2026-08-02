@@ -2,7 +2,7 @@ import type { AiProvider, EmbeddingProvider } from './provider.ts';
 import { FixtureProvider, FixtureEmbeddings } from './fixture.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { VoyageEmbeddings } from './voyage.ts';
-import { OpenAiEmbeddings } from './openai.ts';
+import { OpenAiEmbeddings, OpenAiProvider } from './openai.ts';
 
 /**
  * Which brain the server runs on.
@@ -55,23 +55,45 @@ export function selectAi(env: NodeJS.ProcessEnv = process.env): Selection {
   const hasVoyage = Boolean(env.VOYAGE_API_KEY);
   const hasOpenAi = Boolean(env.OPENAI_API_KEY);
 
-  if (hasAnthropic && (hasVoyage || hasOpenAi)) {
+  /*
+   * Either supplier can do either job now, so the pair is assembled rather than
+   * chosen as a set.
+   *
+   * `RECALL_EXTRACTOR` exists because the default is a billing fact, not a
+   * quality judgement: the prompts were written for Claude and read best there,
+   * but a live Anthropic key with no credit answers every request with
+   * "Your credit balance is too low", which is indistinguishable from being
+   * broken. Preferring OpenAI when both are present is the arrangement that
+   * actually runs; set RECALL_EXTRACTOR=anthropic to put it back.
+   */
+  const preferred = env.RECALL_EXTRACTOR?.toLowerCase();
+  const useAnthropic = hasAnthropic && (preferred === 'anthropic' || !hasOpenAi);
+  const hasNamer = useAnthropic || hasOpenAi;
+  const hasEmbedder = hasVoyage || hasOpenAi;
+
+  if (hasNamer && hasEmbedder) {
+    const ai = useAnthropic
+      ? new AnthropicProvider(env.ANTHROPIC_API_KEY)
+      : new OpenAiProvider({ apiKey: env.OPENAI_API_KEY });
     const embeddings = hasVoyage
       ? new VoyageEmbeddings({ apiKey: env.VOYAGE_API_KEY })
       : new OpenAiEmbeddings({ apiKey: env.OPENAI_API_KEY });
     return {
-      ai: new AnthropicProvider(env.ANTHROPIC_API_KEY),
+      ai,
       embeddings,
       live: true,
-      reason: `ANTHROPIC_API_KEY with ${hasVoyage ? 'VOYAGE_API_KEY' : 'OPENAI_API_KEY'}`,
+      reason:
+        `${useAnthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'} to read, ` +
+        `${hasVoyage ? 'VOYAGE_API_KEY' : 'OPENAI_API_KEY'} to embed`,
     };
   }
 
-  // Named as one requirement rather than two, because "no embedder" is a single
-  // problem however many suppliers could have solved it.
+  // Named as one requirement each, because "no reader" and "no embedder" are
+  // different problems with different fixes however many suppliers could solve
+  // either one.
   const missing = [
-    hasAnthropic ? null : 'ANTHROPIC_API_KEY',
-    hasVoyage || hasOpenAi ? null : 'VOYAGE_API_KEY or OPENAI_API_KEY',
+    hasNamer ? null : 'ANTHROPIC_API_KEY or OPENAI_API_KEY',
+    hasEmbedder ? null : 'VOYAGE_API_KEY or OPENAI_API_KEY',
   ].filter(Boolean);
 
   return fixture(
