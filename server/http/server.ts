@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { handle, type Deps } from './routes.ts';
+import { serveStatic } from './static.ts';
 
 /**
  * Thin node:http adapter over the pure router in `routes.ts`.
@@ -24,9 +25,15 @@ async function readBody(req: import('node:http').IncomingMessage): Promise<unkno
   return JSON.parse(text);
 }
 
-export function createApiServer(deps: Deps): Server {
+/**
+ * `staticRoot` turns this into the whole deployable: the built client and the
+ * API from one process on one origin, so no CORS header is ever needed. Omit it
+ * and this stays the API-only server the dev proxy expects.
+ */
+export function createApiServer(deps: Deps, staticRoot?: string): Server {
   return createServer((req, res) => {
     void (async () => {
+      if (staticRoot && serveStatic(staticRoot, req, res)) return;
       const send = (status: number, body: unknown) => {
         const payload = JSON.stringify(body);
         res.writeHead(status, {
@@ -51,7 +58,20 @@ export function createApiServer(deps: Deps): Server {
             return;
           }
         }
-        const result = await handle({ method: req.method ?? 'GET', path, body }, deps);
+        const result = await handle(
+          {
+            method: req.method ?? 'GET',
+            path,
+            body,
+            // A header rather than a query parameter: query strings end up in
+            // access logs, browser history and shared links, which is exactly
+            // where a shared secret should not be.
+            invite: typeof req.headers['x-recall-invite'] === 'string'
+              ? req.headers['x-recall-invite']
+              : undefined,
+          },
+          deps,
+        );
         send(result.status, result.body);
       } catch (err) {
         // A handler throwing is a bug, not a client error — say so plainly

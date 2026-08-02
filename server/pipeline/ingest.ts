@@ -336,7 +336,14 @@ export class IngestPipeline {
         if (seen.has(key)) continue;
         seen.add(key);
         edges.push({
-          id: `edg_${seen.size.toString().padStart(4, '0')}`,
+          /*
+           * Namespaced by workspace, because `edges.id` is a global primary key
+           * and this counter only counts within one. It never collided while
+           * exactly one workspace existed — and the moment a second visitor got
+           * their own copy, their first capture died on
+           * `UNIQUE constraint failed: edges.id`.
+           */
+          id: `edg_${workspaceId}_${seen.size.toString().padStart(4, '0')}`,
           source_memory_id: a!,
           target_memory_id: b!,
           similarity: Math.round(sim * 1e4) / 1e4,

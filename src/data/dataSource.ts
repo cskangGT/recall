@@ -189,8 +189,23 @@ export function isOffline(search = typeof window === 'undefined' ? '' : window.l
   return new URLSearchParams(search).get('offline') === '1';
 }
 
+/**
+ * Where the corpus comes from.
+ *
+ * The polarity used to be the wrong way round: the seed fixture was the default
+ * and the real backend was behind `?api=1`, so a deployment that forgot the
+ * flag served 47 hard-coded memories and looked entirely functional. A demo
+ * that is convincingly wrong is worse than one that is obviously broken.
+ *
+ * `VITE_API_DEFAULT` is set at build time by the image that ships with a
+ * server. Local development and the test suite build without it and keep the
+ * fixture, which is what they want — and `?api=1` still forces it on for
+ * checking a local server against the dev build.
+ */
 export function selectDataSource(search = typeof window === 'undefined' ? '' : window.location.search): DataSource {
   if (isOffline(search)) return SeedDataSource;
   const params = new URLSearchParams(search);
-  return params.get('api') === '1' ? new ApiDataSource() : SeedDataSource;
+  if (params.get('api') === '1') return new ApiDataSource();
+  const builtForApi = (import.meta.env ?? {}).VITE_API_DEFAULT === '1';
+  return builtForApi ? new ApiDataSource() : SeedDataSource;
 }

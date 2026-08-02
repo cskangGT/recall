@@ -17,6 +17,8 @@ export interface ApiRequest {
   method: string;
   path: string;
   body: unknown;
+  /** The invite token the caller presented, if any. See `writesAllowed`. */
+  invite?: string;
 }
 
 export interface ApiResponse {
@@ -27,6 +29,7 @@ export interface ApiResponse {
 const ok = (body: unknown): ApiResponse => ({ status: 200, body });
 const badRequest = (message: string): ApiResponse => ({ status: 400, body: { error: message } });
 const notFound = (message = 'not found'): ApiResponse => ({ status: 404, body: { error: message } });
+const forbidden = (message: string): ApiResponse => ({ status: 403, body: { error: message } });
 
 export interface Deps {
   repo: Repository;
@@ -34,14 +37,58 @@ export interface Deps {
   ask: AskPipeline;
   /** Restores a workspace to the seed corpus. */
   reset: (workspaceId: string) => void;
+  /** Mints a fresh workspace seeded from the demo corpus, returning its id. */
+  createWorkspace?: () => string;
+  /**
+   * The token a request must carry to change anything, or undefined to let
+   * every request through — which is what local development and the test suite
+   * want, and what a public deployment must not have.
+   */
+  inviteToken?: string;
 }
 
 const asRecord = (body: unknown): Record<string, unknown> =>
   body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
 
+/**
+ * Reading is free; changing anything is not.
+ *
+ * A public deployment runs extraction and embedding on somebody's paid account,
+ * so an open POST /capture is an open invitation to spend it. The token gates
+ * every method that writes and leaves GET alone, which is enough for the demo
+ * to be shown to anyone while only invited people can add to it.
+ *
+ * Absent `inviteToken` the gate is off entirely. That is what local development
+ * and the test suite want, and it is the setting a deployment must never be
+ * left in — `main.ts` says so out loud when it starts without one.
+ */
+function writesAllowed(req: ApiRequest, deps: Deps): boolean {
+  if (!deps.inviteToken) return true;
+  if (req.method === 'GET' || req.method === 'HEAD') return true;
+  return req.invite === deps.inviteToken;
+}
+
 export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> {
   const segments = req.path.replace(/^\/+|\/+$/g, '').split('/');
   if (segments[0] !== 'api') return notFound();
+
+  if (!writesAllowed(req, deps)) {
+    return forbidden('This demo is read-only without an invite.');
+  }
+
+  /*
+   * POST /api/workspaces — a copy of the corpus, for one visitor.
+   *
+   * Everyone shared `ws_demo` before this, which is fine until the first person
+   * deletes something and every visitor after them sees the gap. The schema was
+   * always multi-tenant — every table carries a workspace_id with a foreign key
+   * and an index — so this is a seed import under a new id rather than a
+   * migration.
+   */
+  if (req.method === 'POST' && segments[1] === 'workspaces' && !segments[2]) {
+    if (!deps.createWorkspace) return notFound();
+    return ok({ workspaceId: deps.createWorkspace() });
+  }
 
   // /api/workspaces/:id/...
   if (segments[1] === 'workspaces' && segments[2]) {
