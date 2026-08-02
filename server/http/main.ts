@@ -29,14 +29,38 @@ const STATIC_ROOT = process.env.RECALL_STATIC;
 /** Required for a public deployment; absent means every request may write. */
 const INVITE = process.env.RECALL_INVITE;
 
+/**
+ * An empty workspace, or the fictional 47.
+ *
+ * Seeding on first run is right for the demo and wrong for you: your own
+ * instance should not open holding somebody else's notes, and the first thing
+ * you would do is delete them one at a time. `npm start` leaves this unset;
+ * `npm run demo` sets it.
+ */
+const SEED_ON_FIRST_RUN = process.env.RECALL_SEED === '1';
+
+/**
+ * Localhost unless told otherwise.
+ *
+ * `server.listen(port)` with no host binds 0.0.0.0, which was harmless while
+ * the corpus was fictional and in RAM. The moment this process holds real notes
+ * on a disk, that default puts them on whatever network the machine is on, with
+ * no auth in front — because the design assumed localhost and never said so.
+ * Becoming reachable should take a deliberate act.
+ */
+const HOST = process.env.RECALL_HOST ?? '127.0.0.1';
+
 const repo = new SqliteRepository(DB_PATH);
 repo.migrate();
 
-if (!repo.getWorkspace(WORKSPACE)) {
+if (repo.getWorkspace(WORKSPACE)) {
+  console.log(`reusing ${WORKSPACE} (${repo.listMemories(WORKSPACE).length} memories)`);
+} else if (SEED_ON_FIRST_RUN) {
   importSeed(repo, WORKSPACE);
   console.log(`seeded ${WORKSPACE} with ${repo.listMemories(WORKSPACE).length} memories`);
 } else {
-  console.log(`reusing ${WORKSPACE} (${repo.listMemories(WORKSPACE).length} memories)`);
+  repo.createWorkspace({ id: WORKSPACE, name: 'Recall', isDemo: false });
+  console.log(`created ${WORKSPACE}, empty — nothing in it but what you put there`);
 }
 
 const { ai: provider, embeddings, live, reason } = selectAi();
@@ -56,11 +80,20 @@ if (live && seededWidth > 0 && seededWidth !== embeddings.dimensions) {
   );
 }
 
-if (STATIC_ROOT && !INVITE) {
-  console.warn(
-    'RECALL_STATIC is set without RECALL_INVITE: anyone who finds this URL can ' +
-      'spend the API keys it holds. Set RECALL_INVITE before exposing it.',
+/*
+ * Reachable and unguarded is a combination to refuse rather than warn about.
+ *
+ * On localhost the absent invite token is correct — it is your machine. Bound
+ * anywhere else it means a durable corpus and a paid API key are on a network
+ * behind nothing at all, and a warning printed to a terminal nobody is looking
+ * at is not a control.
+ */
+if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !INVITE) {
+  console.error(
+    `refusing to bind ${HOST} without RECALL_INVITE — that would put this ` +
+      'corpus and the API keys behind it on the network with nothing in front.',
   );
+  process.exit(1);
 }
 
 const server = createApiServer(
@@ -89,9 +122,9 @@ const server = createApiServer(
   STATIC_ROOT,
 );
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(
-    `Recall on http://localhost:${PORT}  ` +
+    `Recall on http://${HOST}:${PORT}  ` +
       `(db: ${DB_PATH}, provider: ${provider.name}, ` +
       `${STATIC_ROOT ? 'serving the client' : 'api only'}, ` +
       `${INVITE ? 'invite required to write' : 'writes open'})`,

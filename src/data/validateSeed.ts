@@ -49,8 +49,18 @@ export function validateSeed(raw: unknown): GraphPayload {
     }
   }
 
+  /*
+   * An empty workspace is a legitimate state, not a malformed payload.
+   *
+   * This used to fail when there was no memory to take a width from, which was
+   * safe while every payload came from the seed. It stopped being safe the
+   * moment a personal instance could start with nothing in it: the API returned
+   * a perfectly good empty graph and the app refused to boot on it.
+   *
+   * With no vectors there is nothing to disagree about, which is the only thing
+   * the width was ever checked for.
+   */
   const dim = vectorDimOf(p);
-  if (dim === 0) fail('seed has no memories to take a vector width from');
 
   for (const m of p.memories) {
     if (!categoryIds.has(m.category_id)) fail(`memory ${m.id} has unknown category ${m.category_id}`);

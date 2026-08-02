@@ -12,6 +12,7 @@ import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './com
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
+import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
 import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
@@ -76,7 +77,7 @@ export function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const capture = useCallback(async () => {
+  const capture = useCallback(async (input?: CaptureInput) => {
     if (busy.current) return;
     busy.current = true;
     const ui = useUiStore.getState();
@@ -84,8 +85,19 @@ export function App() {
     // Snapshotted before the ingest so novelty is measured against the corpus
     // as it was, not one that already contains the new memories.
     const before = useWorkspaceStore.getState().payload;
-    const result = await ingestItem();
+    const result = await ingestItem(input);
     const ws = useWorkspaceStore.getState();
+
+    /*
+     * Putting something in is looking around.
+     *
+     * The arc renders `welcomeDismissed ? nodes : []`, so on a fresh instance
+     * the first capture landed in the database and nothing appeared — the
+     * greeting was still up, and the greeting is what suppresses the arc. The
+     * tool looked like it had done nothing at the exact moment it had done the
+     * only thing it is for.
+     */
+    if (result.addedMemoryIds.length > 0) ui.dismissWelcome();
 
     if (before && ws.payload) {
       ui.setLastCapture(

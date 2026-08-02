@@ -7,6 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "start": "node scripts/start.mjs",
+    "demo": "RECALL_SEED=1 node scripts/start.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

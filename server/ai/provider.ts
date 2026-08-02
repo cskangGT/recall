@@ -165,10 +165,28 @@ export function fallbackName(sampleTexts: string[], allTexts: string[][]): strin
     for (const w of new Set(doc.flatMap(tokens))) df.set(w, (df.get(w) ?? 0) + 1);
   }
 
+  /*
+   * IDF only means something across several documents, and this is called with
+   * one whenever a capture opens a brand-new category.
+   *
+   * With a single document every term has df 1, so the weight collapses to
+   * log(1/2) — negative for everything. Sorted descending that ranks the
+   * *rarest* words first and breaks ties alphabetically, which is how a note
+   * about lowering a pricing tier came out named "Because Consider".
+   *
+   * One document has no comparison to make, so rank by frequency, and prefer
+   * the longer word on a tie: in a single sentence almost everything appears
+   * once, and "pricing" carries more than "try".
+   */
   const n = Math.max(1, allTexts.length);
-  const scored = [...tf.entries()]
-    .map(([w, freq]) => ({ w, score: freq * Math.log(n / (1 + (df.get(w) ?? 0))) }))
-    .sort((a, b) => (b.score - a.score) || a.w.localeCompare(b.w));
+  const scored =
+    n <= 1
+      ? [...tf.entries()]
+          .map(([w, freq]) => ({ w, score: freq }))
+          .sort((a, b) => b.score - a.score || b.w.length - a.w.length || a.w.localeCompare(b.w))
+      : [...tf.entries()]
+          .map(([w, freq]) => ({ w, score: freq * Math.log(n / (1 + (df.get(w) ?? 0))) }))
+          .sort((a, b) => b.score - a.score || a.w.localeCompare(b.w));
 
   const title = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
   const picked = scored.slice(0, 2).map((s) => title(s.w));

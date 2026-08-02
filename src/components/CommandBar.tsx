@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -9,7 +10,7 @@ import type { SourceType } from '../core/types';
 import { askedCategories } from '../arc/interest';
 import { useInterestStore } from '../store/interestStore';
 
-export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
+export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
   const [hasImage, setHasImage] = useState(false);
@@ -22,7 +23,31 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
   const submit = () => {
     if (!text.trim() && !hasImage) return;
     setCaptureOpen(false);
-    onSubmit();
+    /*
+     * What you typed, sent on.
+     *
+     * This box collected text, detected its type, showed you the verdict — and
+     * then called `onSubmit()` with nothing, so every capture ingested the same
+     * hard-coded demo item regardless. Harmless while the only backend was the
+     * fixture; the moment a personal instance ran against real extraction it
+     * meant the tool could not save anything you actually wrote.
+     *
+     * A screenshot still has no path to send: there is no upload, so an image
+     * capture falls back to the demo's own file (spec §10.1's OCR path is
+     * implemented server-side and unreachable without object storage).
+     */
+    onSubmit(
+      hasImage
+        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+        : {
+            type: detected.type,
+            content: text.trim(),
+            url: detected.type === 'link' ? text.trim() : undefined,
+            // Already parsed out of the text for the type verdict; the server
+            // stores them rather than parsing the same string a second time.
+            referencedUrls: detected.referencedUrls,
+          },
+    );
   };
 
   return (

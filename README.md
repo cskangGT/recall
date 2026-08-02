@@ -9,10 +9,36 @@ vectors — Phase 4 swaps the data source and the gate code does not change.
 
 ## Run it
 
+There are two things you might mean by that, and they are different commands.
+
+### Your own instance
+
 ```bash
 npm install
-npm run dev          # http://localhost:5173 — desktop only, 1280px minimum
+npm start            # http://127.0.0.1:5170 — desktop only, 1280px minimum
 ```
+
+Empty on first run. Paste something and it reads it, files it, and a star
+appears. Needs `OPENAI_API_KEY` in `.env.local` — extraction costs roughly a
+cent a capture, embeddings a rounding error beside it.
+
+**Your memories live in `~/.recall/recall.db`.** Not in this checkout, which is
+a directory you might delete or re-clone. Nothing backs that file up: copying it
+somewhere is how you keep it, deleting it is how you erase everything, and it is
+the one file worth knowing the location of.
+
+It binds `127.0.0.1` and refuses to bind anything else unless `RECALL_INVITE` is
+set. A tool holding your notes should take a deliberate act to become reachable.
+
+### The demo
+
+```bash
+npm run dev          # http://localhost:5173 — the seeded 47, no backend, no keys
+npm run demo         # the same corpus, but through the real server
+```
+
+The seed is fictional and committed, which is what makes the demo reproducible
+and what makes it the wrong thing to open your own instance with.
 
 ## The demo
 
