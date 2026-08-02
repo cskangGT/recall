@@ -161,3 +161,41 @@ test('confirmations are announced', async ({ page }) => {
 
   await expect(page.locator('.toasts[aria-live="polite"]')).toBeVisible();
 });
+
+/**
+ * Contrast, measured on the rendered page rather than trusted from the tokens.
+ *
+ * `--text-faint` was 2.34:1 — failing not only the 4.5 AA asks for but the 3.0
+ * allowed for large text, and it is used at 11 to 12.5px so no size exemption
+ * applies. It is the colour of every eyebrow, every meta line and the rail's
+ * resting glyphs, which is to say most of the quiet text in the product.
+ */
+test('the quietest text still clears AA', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('s');
+  await expect(page.getByTestId('sources-view')).toBeVisible();
+
+  const ratios = await page.evaluate(() => {
+    const lum = (rgb: string) => {
+      const [r, g, b] = rgb.match(/\d+/g)!.slice(0, 3).map(Number).map((c) => c / 255) as number[];
+      const f = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(r!) + 0.7152 * f(g!) + 0.0722 * f(b!);
+    };
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number];
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const out: Record<string, number> = {};
+    for (const sel of ['.sources__head', '.source-row__meta', '.rail__btn']) {
+      const el = document.querySelector(sel);
+      if (el) out[sel] = ratio(getComputedStyle(el).color, bg);
+    }
+    return out;
+  });
+
+  expect(Object.keys(ratios).length).toBeGreaterThan(0);
+  for (const [selector, ratio] of Object.entries(ratios)) {
+    expect(ratio, `${selector} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+  }
+});
