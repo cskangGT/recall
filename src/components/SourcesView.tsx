@@ -152,6 +152,23 @@ export function SourcesView() {
           ]
             .filter(Boolean)
             .join(' ')}
+          /*
+           * Reachable by keyboard. It was a div with an onClick, so the whole
+           * of this view — every row of it — could only be operated with a
+           * mouse. Not a <button>, deliberately: the arc's nodes learned the
+           * same lesson, that a button which is also an HTML5 drag source
+           * leaves Chromium stuck in a drag the pointer release never clears.
+           * The role and the key handler put back by hand what the element
+           * would have given for free.
+           */
+          role="button"
+          tabIndex={0}
+          aria-pressed={selectedId === source.id}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            select(source.id);
+          }}
           onClick={() => select(source.id)}
         >
           <span className="source-row__icon" title={SOURCE_LABEL[source.type]}>

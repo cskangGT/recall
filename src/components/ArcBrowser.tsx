@@ -650,6 +650,19 @@ export function ArcBrowser() {
                 .filter(Boolean)
                 .join(' ')}
               draggable
+              /* Reachable by keyboard — this is the surface the arc exists to
+                 fill, and it could only be operated with a mouse. A <button>
+                 is not an option here for the same reason it is not on the arc:
+                 a button that is also a drag source wedges Chromium's drag. */
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedId === memory.id}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                select(memory.id);
+              }}
               onDragStart={() => setDragId(memory.id)}
               onDragEnd={() => setDragId(null)}
               onClick={() => select(memory.id)}

@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
 
@@ -34,10 +35,26 @@ export function Settings() {
   };
 
   return (
-    <div className="overlay" onPointerDown={() => setSettingsOpen(false)}>
-      <div className="bar settings" data-testid="settings" onPointerDown={(e) => e.stopPropagation()}>
+    /*
+     * A dialog, and dismissed on click rather than on pointerdown.
+     *
+     * Neither of these was true. Without `role="dialog"` and `aria-modal` a
+     * reader treats this as more page — it reads the map behind it, and there
+     * is nothing to say you have entered anything. And closing on
+     * *pointerdown* meant selecting text inside the box and releasing a few
+     * pixels outside it threw the panel away along with everything typed into
+     * it, which is a gesture people make constantly.
+     */
+    <div className="overlay" {...useDismissable(() => setSettingsOpen(false))}>
+      <div
+        className="bar settings"
+        data-testid="settings"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
         <div className="bar__head">
-          <span>Settings</span>
+          <span id="settings-title">Settings</span>
           <span>esc</span>
         </div>
 

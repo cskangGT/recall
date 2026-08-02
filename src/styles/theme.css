@@ -45,6 +45,27 @@ body {
   overflow: hidden;
 }
 
+/*
+ * One focus ring, everywhere.
+ *
+ * The stylesheet had two focus styles in it — the arc's nodes and one search
+ * result — so everything else fell back to whatever the UA drew, which on this
+ * ground is a thin blue box that reads as a rendering fault. And the rows that
+ * just became keyboard-reachable had nothing at all.
+ *
+ * `:focus-visible` rather than `:focus`, so a mouse click does not leave a ring
+ * behind. Two layers: a dark one first, then the light one over it, so the ring
+ * survives both the near-black of the map and the pale mauve at the horizon —
+ * a single colour disappears into one end or the other of that gradient.
+ */
+:where(a, button, input, textarea, [role='button'], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgb(12 8 20 / 75%),
+    0 0 0 4px var(--accent);
+  border-radius: 6px;
+}
+
 button {
   font: inherit;
   color: inherit;

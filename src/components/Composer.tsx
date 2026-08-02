@@ -91,6 +91,10 @@ export function Composer({
       */}
       <input
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
+        /* A placeholder is not a name. It disappears the moment you type, and
+           several readers do not announce it at all — this input had no
+           accessible name whatsoever. */
+        aria-label="Ask a question, or paste something to save"
         placeholder="Ask anything, or drop a screenshot to save it…"
         value={text}
         disabled={thinking}
@@ -123,6 +127,17 @@ export function Composer({
       <button
         className="composer__send"
         data-testid={firstRun ? 'welcome-send' : 'composer-send'}
+        /* The label is a glyph two thirds of the time, so the name is spelled
+           out and kept in step with what the button will actually do. */
+        aria-label={
+          thinking
+            ? 'Thinking'
+            : text.trim()
+              ? 'Ask'
+              : firstRun && (payload?.memories.length ?? 0) > 0
+                ? 'Look around'
+                : 'Send'
+        }
         disabled={thinking}
         onClick={() => void submit()}
       >
