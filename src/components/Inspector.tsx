@@ -307,6 +307,7 @@ function AnswerDetail() {
 function EmptyDetail({ payload }: { payload: GraphPayload }) {
   const history = useUiStore((s) => s.reorgHistory);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const view = useUiStore((s) => s.view);
   if (!welcomeDismissed) return null;
   return (
     <>
@@ -315,6 +316,34 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
         {payload.memories.length} memories · {payload.sources.length} sources ·{' '}
         {payload.categories.length} categories
       </div>
+
+      {/*
+        A legend, on the one screen that needs one.
+        The map draws four kinds of thing in four colours and never said which
+        was which — a viewer has no way to learn that the blue dots are people
+        and companies rather than more memories. It also puts the 360px column
+        to work: with nothing selected it was one line of text and an empty
+        panel, which is the complaint the browsing screen already answered.
+      */}
+      {view === 'map' && (
+        <>
+          <div className="inspector__eyebrow">What you are looking at</div>
+          <ul className="legend">
+            {[
+              ['#E8A33D', 'Category', 'bigger the more it holds'],
+              ['#B0782E', 'Sub-category', 'a group inside one'],
+              ['#C9C9CE', 'Memory', 'one thing you saved'],
+              ['#5B8FB0', 'Entity', 'a name that recurs'],
+            ].map(([colour, name, note]) => (
+              <li key={name} className="legend__row">
+                <span className="legend__dot" style={{ background: colour }} />
+                <span className="legend__name">{name}</span>
+                <span className="legend__note">{note}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {history.length > 0 && (
         <>
           <div className="inspector__eyebrow">Recent changes</div>

@@ -260,10 +260,32 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
       n.kind === 'parent_category'
         ? '600 13px Inter, system-ui, -apple-system, sans-serif'
         : '11px Inter, system-ui, -apple-system, sans-serif';
+    const y = sy + n.radius * camera.zoom * scale + 14;
+
+    /*
+     * A halo, drawn before the glyphs.
+     *
+     * A label sits 14px under its own node, which keeps it clear of *that* one
+     * — but this is a force layout, so it lands wherever the memory dots of
+     * three other categories happen to be. "AI Tooling" was running through a
+     * node and "Personal Systems" through two.
+     *
+     * Stroking the text in the ground colour first is what cartographic labels
+     * have always done: nothing moves, nothing is hidden, the name simply stops
+     * competing with whatever is behind it. `round` joins so the outline does
+     * not grow spikes at the corners of letters.
+     */
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = n.kind === 'parent_category' ? 4 : 3;
+    ctx.strokeStyle = withAlpha('#07070a', alphaFor(n.id) * 0.92);
+    ctx.strokeText(n.label, sx, y);
+    ctx.restore();
+
     ctx.fillStyle = withAlpha(
       s.hoveredId === n.id || s.selectedId === n.id ? COLORS.label : COLORS.labelDim,
       alphaFor(n.id),
     );
-    ctx.fillText(n.label, sx, sy + n.radius * camera.zoom * scale + 14);
+    ctx.fillText(n.label, sx, y);
   }
 }
