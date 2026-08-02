@@ -75,6 +75,18 @@ export interface Repository {
    */
   replaceMemoryVectors(workspaceId: string, vectors: Map<string, number[]>): void;
 
+  /**
+   * Removes a memory outright. The schema does the rest: its assignment, its
+   * entity links and both ends of its edges are ON DELETE CASCADE, and an FTS
+   * trigger clears the index (server/db/schema.sql).
+   *
+   * Deliberately not reversible. `IngestPipeline.undo` re-assigns the memories
+   * in a reorg's before_state rather than re-inserting them, so a row this took
+   * away cannot be put back by it — which is why the UI asks first rather than
+   * offering an undo it could not honour.
+   */
+  deleteMemory(id: string): void;
+
   insertCategory(workspaceId: string, category: Category): void;
   updateCategory(id: string, fields: Partial<Pick<Category,
     'name' | 'parent_id' | 'name_locked' | 'user_created' | 'x' | 'y' | 'pinned'>>): void;

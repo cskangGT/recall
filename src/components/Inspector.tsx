@@ -229,7 +229,48 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
         </div>
       )}
       {source && <SourceCard source={source} />}
+      <div className="inspector__footer">
+        <DeleteButton
+          label="this memory"
+          onConfirm={() => {
+            useWorkspaceStore.getState().deleteMemory(memory.id);
+            select(null);
+            useUiStore.getState().toast('Deleted.');
+          }}
+        />
+      </div>
     </>
+  );
+}
+
+/**
+ * Delete, as two clicks rather than a dialog.
+ *
+ * There is no undo to offer. `IngestPipeline.undo` re-assigns the memories in a
+ * reorganization's before_state instead of re-inserting them, so a row this
+ * takes away cannot be put back — and an Undo button that quietly fails is
+ * worse than no Undo button. So the affordance asks first.
+ *
+ * Inline rather than a modal because a modal for one row is a interruption out
+ * of proportion to the act, and because the confirm needs to say *what* is
+ * about to go, which it can do in place. It disarms on blur, so a stray click
+ * does not leave a loaded button sitting on the screen.
+ */
+function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <button
+      className={`danger${armed ? ' danger--armed' : ''}`}
+      data-testid="delete-button"
+      onBlur={() => setArmed(false)}
+      onClick={() => {
+        if (!armed) return setArmed(true);
+        setArmed(false);
+        onConfirm();
+      }}
+    >
+      {armed ? `Delete ${label} — click again` : 'Delete'}
+    </button>
   );
 }
 

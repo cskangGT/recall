@@ -168,6 +168,27 @@ async function handleWorkspace(
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
+  /*
+   * DELETE /api/workspaces/:id/memories/:memoryId — throw one away.
+   *
+   * The first DELETE this API has had. Nothing at any layer could remove a
+   * memory: no repository method, no route, no DataSource method, no store
+   * action — which meant a user who saved the wrong thing had no way to unsave
+   * it, and the first minute of a tester's life is full of wrong things.
+   *
+   * Returns the whole graph like every other mutation here, rather than a
+   * status: the client keeps no delta machinery, and a fresh payload is what
+   * every other route has taught it to expect.
+   */
+  if (req.method === 'DELETE' && resource === 'memories' && resourceId && !action) {
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    if (!payload.memories.some((m) => m.id === resourceId)) {
+      return notFound(`unknown memory ${resourceId}`);
+    }
+    deps.repo.deleteMemory(resourceId);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
   // PATCH /api/workspaces/:id/categories/:categoryId — rename or re-parent.
   if (req.method === 'PATCH' && resource === 'categories' && resourceId && !action) {
     const body = asRecord(req.body);

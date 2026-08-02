@@ -194,6 +194,27 @@ export function App() {
         ui.setView('sources');
         return;
       }
+      /*
+       * Backspace deletes what is selected (spec 6.1). It was bound only inside
+       * the arc, where it climbs a level, and nowhere else — so the keyboard
+       * had no way to remove anything, which matched the rest of the app: until
+       * now nothing at any layer could.
+       *
+       * Only memories, and only from the Inspector's selection. Deleting a
+       * category is a different act with an unanswered question behind it —
+       * where its memories go when it has no parent to inherit them.
+       */
+      if (e.key === 'Backspace' && ui.selectedId) {
+        const ws = useWorkspaceStore.getState();
+        const memory = ws.payload?.memories.find((m) => m.id === ui.selectedId);
+        if (memory) {
+          e.preventDefault();
+          ws.deleteMemory(memory.id);
+          ui.select(null);
+          ui.toast('Deleted.');
+          return;
+        }
+      }
       if (e.key === ',') {
         ui.setSettingsOpen(true);
         return;
