@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
@@ -25,10 +26,26 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
   };
 
   return (
-    <div className="overlay" onPointerDown={() => setCaptureOpen(false)}>
-      <div className="bar" data-testid="capture-bar" onPointerDown={(e) => e.stopPropagation()}>
+    /*
+     * A dialog, and dismissed on click rather than on pointerdown.
+     *
+     * Neither of these was true. Without `role="dialog"` and `aria-modal` a
+     * reader treats this as more page — it reads the map behind it, and there
+     * is nothing to say you have entered anything. And closing on
+     * *pointerdown* meant selecting text inside the box and releasing a few
+     * pixels outside it threw the panel away along with everything typed into
+     * it, which is a gesture people make constantly.
+     */
+    <div className="overlay" {...useDismissable(() => setCaptureOpen(false))}>
+      <div
+        className="bar"
+        data-testid="capture-bar"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="capture-bar-title"
+      >
         <div className="bar__head">
-          <span>Add to Recall</span>
+          <span id="capture-bar-title">Add to Recall</span>
           <span>esc</span>
         </div>
         <textarea
@@ -143,10 +160,18 @@ export function AskBar() {
   };
 
   return (
-    <div className="overlay" onPointerDown={() => setAskOpen(false)}>
-      <div className="bar" data-testid="ask-bar" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="overlay" {...useDismissable(() => setAskOpen(false))}>
+      <div
+        className="bar"
+        data-testid="ask-bar"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-bar-title"
+      >
         <div className="bar__head">
-          <span data-testid="bar-mode">{searching ? 'Search' : 'Ask'}</span>
+          <span id="ask-bar-title" data-testid="bar-mode">
+            {searching ? 'Search' : 'Ask'}
+          </span>
           <span>esc</span>
         </div>
         <input

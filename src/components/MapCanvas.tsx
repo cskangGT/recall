@@ -39,8 +39,36 @@ export interface RunningAnimation {
   travelling: { id: string; fromX: number; fromY: number }[];
 }
 
-const ENTRY_MS = 800;
-const PAN_MS = 400;
+/*
+ * Honoured by the map, which is the one place motion was unconditional.
+ *
+ * The stylesheet respects `prefers-reduced-motion` in five places, but the map
+ * animates in requestAnimationFrame — an 800ms entry zoom, a 400ms camera pan,
+ * and a 2.4s reorganization — and CSS cannot reach any of it. `matchMedia`
+ * appeared nowhere in src/, so a user who has asked their operating system to
+ * stop moving things got the full choreography anyway.
+ *
+ * Zeroed rather than skipped: the same code path runs, the tween just completes
+ * on its first frame. Nothing else has to know.
+ */
+const REDUCED =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const ENTRY_MS = REDUCED ? 0 : 800;
+const PAN_MS = REDUCED ? 0 : 400;
+
+/**
+ * Progress through a tween, 0 to 1.
+ *
+ * A zero duration has to return 1 rather than divide by it: on the very first
+ * frame `now` and the start are the same instant, so the obvious arithmetic is
+ * 0/0, and `Math.min(1, NaN)` is NaN — which would leave the camera stuck
+ * rather than finished.
+ */
+const progress = (now: number, start: number, duration: number): number =>
+  duration === 0 ? 1 : Math.min(1, (now - start) / duration);
 
 export function MapCanvas({
   animation,
@@ -93,7 +121,7 @@ export function MapCanvas({
       const target = fitToBounds(current.nodes, viewport, 0.1);
       if (!cameraRef.current && current.nodes.length > 0) {
         entryStart.current ??= now;
-        const t = Math.min(1, (now - entryStart.current) / ENTRY_MS);
+        const t = progress(now, entryStart.current, ENTRY_MS);
         const from: Camera = { ...target, zoom: target.zoom * 0.85 };
         const cam = lerpCamera(from, target, easeInOutCubic(t));
         if (t >= 1) {
@@ -122,7 +150,7 @@ export function MapCanvas({
       // ---- camera pan: pan only, never zoom (AC-20).
       // Drives both the reorganization pan and a centre-on from the tree.
       if (panStart.current !== null && panFrom.current && panTo.current) {
-        const t = Math.min(1, (now - panStart.current) / PAN_MS);
+        const t = progress(now, panStart.current, PAN_MS);
         camera = lerpCamera(panFrom.current, panTo.current, easeInOutCubic(t));
         cameraRef.current = camera;
         if (t >= 1) {

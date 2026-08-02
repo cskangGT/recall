@@ -11,9 +11,21 @@
   --accent: #e8a33d;
   --accent-dim: #b0782e;
   --entity: #5b8fb0;
+  /*
+   * Three steps of quiet, all of which pass AA on this ground.
+   *
+   * Measured: --text-faint was 2.34:1 against --bg-panel, failing not only the
+   * 4.5 AA needs but the 3.0 allowed for large text — and it is used at 11 to
+   * 12.5px, so no size exemption applies. It is the colour of every eyebrow,
+   * every source and memory meta line, and the rail's resting glyphs.
+   *
+   * Raising it alone would have collapsed it into --text-dim, which was itself
+   * only 4.65, so both moved and the ladder is now 15.78 / 7.09 / 4.55. The
+   * hierarchy is the same; it is legible at each step.
+   */
   --text: #e8e8ec;
-  --text-dim: #7a7a82;
-  --text-faint: #4e4e56;
+  --text-dim: #9c9ca6;
+  --text-faint: #7a7a86;
   /* Two weights of line: the one that separates rows, and the one that rings a
      floating surface. They were six literals across three values. */
   --hairline: #1c1c21;
@@ -43,6 +55,27 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+}
+
+/*
+ * One focus ring, everywhere.
+ *
+ * The stylesheet had two focus styles in it — the arc's nodes and one search
+ * result — so everything else fell back to whatever the UA drew, which on this
+ * ground is a thin blue box that reads as a rendering fault. And the rows that
+ * just became keyboard-reachable had nothing at all.
+ *
+ * `:focus-visible` rather than `:focus`, so a mouse click does not leave a ring
+ * behind. Two layers: a dark one first, then the light one over it, so the ring
+ * survives both the near-black of the map and the pale mauve at the horizon —
+ * a single colour disappears into one end or the other of that gradient.
+ */
+:where(a, button, input, textarea, [role='button'], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgb(12 8 20 / 75%),
+    0 0 0 4px var(--accent);
+  border-radius: 6px;
 }
 
 button {
