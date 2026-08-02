@@ -30,6 +30,41 @@
      floating surface. They were six literals across three values. */
   --hairline: #1c1c21;
   --edge: #222228;
+  /*
+   * Scales, because there were none.
+   *
+   * Seventeen distinct font sizes, eleven radii and two unrelated elevation
+   * recipes had accumulated — the browsing screen grew one set (12/14/16px
+   * corners, a hairline edge over a long soft shadow) while everything older
+   * kept another (5 through 13px corners, a bare drop shadow with no edge), and
+   * nothing named either. That is why the two halves of the app read as two
+   * products even where the colours agree.
+   *
+   * These are the sizes already in use, rounded to a ladder rather than
+   * invented: each step is far enough from the last to be a decision rather
+   * than a wobble. Rules keep their literals where a value is genuinely
+   * one-off; what the tokens are for is the ninety percent that was not.
+   */
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /*
+   * One elevation recipe, at two heights. The edge is what the older surfaces
+   * were missing: a bare drop shadow on a dark ground reads as a smudge,
+   * because there is nothing to say where the surface stops.
+   */
+  --lift-1: inset 0 0 0 1px var(--edge), 0 10px 26px -12px rgb(0 0 0 / 70%);
+  --lift-2: inset 0 0 0 1px var(--edge), 0 24px 60px -30px rgb(0 0 0 / 85%);
+
   --rail-w: 56px;
   --inspector-w: 360px;
 
@@ -51,7 +86,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -75,7 +110,7 @@ body {
   box-shadow:
     0 0 0 2px rgb(12 8 20 / 75%),
     0 0 0 4px var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 button {
@@ -180,7 +215,7 @@ button {
   place-items: center;
   height: 100%;
   color: var(--text-dim);
-  font-size: 15px;
+  font-size: var(--text-md);
   letter-spacing: -0.01em;
 }
 
@@ -201,9 +236,9 @@ button {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
-  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
+  box-shadow: var(--lift-2);
 }
 
 .mapsearch__row {
@@ -215,7 +250,7 @@ button {
 .mapsearch__glyph {
   flex: none;
   color: var(--text-faint);
-  font-size: 15px;
+  font-size: var(--text-md);
 }
 
 .mapsearch__row input {
@@ -226,7 +261,7 @@ button {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .mapsearch__row input::placeholder {
@@ -236,7 +271,7 @@ button {
 .mapsearch__count {
   flex: none;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -247,9 +282,9 @@ button {
 
 .mapsearch__filter {
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--text-sm);
   transition: background 110ms ease, color 110ms ease;
 }
 
@@ -261,6 +296,44 @@ button {
 .mapsearch__filter--on {
   background: var(--accent);
   color: #17130a;
+}
+
+/* ---------------------------------------------------------------- legend */
+
+.legend {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.legend__row {
+  display: grid;
+  grid-template-columns: 12px auto 1fr;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Sized and lit like the thing it stands for, rather than a flat swatch — the
+   nodes on the map glow, and a legend that does not will not read as the same
+   object. */
+.legend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  align-self: center;
+  box-shadow: 0 0 8px -1px currentColor;
+}
+
+.legend__name {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.legend__note {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
 }
 
 /* ------------------------------------------------------------------ rail */
@@ -282,13 +355,13 @@ button {
   width: 30px;
   height: 30px;
   margin-bottom: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   display: grid;
   place-items: center;
   color: #17130a;
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--text-md);
   letter-spacing: -0.03em;
 }
 
@@ -297,8 +370,8 @@ button {
 .rail__btn {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  font-size: 17px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-lg);
   display: grid;
   place-items: center;
   color: var(--text-faint);
@@ -353,7 +426,7 @@ button {
 
 .canvas-empty h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-lg);
   font-weight: 500;
 }
 
@@ -527,9 +600,9 @@ button {
   align-items: center;
   gap: 8px;
   padding: 6px 6px 6px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: #131318;
-  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
+  box-shadow: var(--lift-2);
 }
 
 .composer--docked {
@@ -551,7 +624,7 @@ button {
   width: 32px;
   height: 32px;
   margin-left: -6px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   color: var(--text-dim);
@@ -574,7 +647,7 @@ button {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-md);
   padding: 10px 0;
 }
 
@@ -585,10 +658,10 @@ button {
 .composer__send {
   flex: none;
   padding: 9px 15px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: #22222a;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   transition: background 120ms ease, color 120ms ease;
 }
 
@@ -669,7 +742,7 @@ button {
   justify-content: space-between;
   align-items: baseline;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--text-sm);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   z-index: 5;
@@ -684,7 +757,7 @@ button {
    the shortcut. Naming what it is for is the whole fix. */
 .topbar__link {
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--text-sm);
   letter-spacing: 0.04em;
   text-transform: none;
   transition: color 90ms ease;
@@ -719,7 +792,7 @@ button {
   gap: 8px;
   max-width: 158px;
   padding: 12px 13px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: #131318;
   box-shadow: inset 0 0 0 1px #26262e, 0 24px 60px -30px #000;
 }
@@ -768,11 +841,11 @@ button {
 
 .reparent__label {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .reparent--active .reparent__label {
-  font-size: 13px;
+  font-size: var(--text-base);
   text-align: center;
 }
 
@@ -811,10 +884,10 @@ button {
 
 .reparent__target {
   padding: 7px 12px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: #1d1d24;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 
 .reparent--active .reparent__target {
@@ -823,8 +896,8 @@ button {
   text-align: center;
   min-height: 62px;
   padding: 10px 12px;
-  border-radius: 12px;
-  font-size: 13.5px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   background: rgb(58 43 78 / 78%);
   transition: background 110ms ease, box-shadow 110ms ease, transform 110ms ease;
 }
@@ -866,7 +939,7 @@ button {
   margin-left: -44px;
   margin-top: -30px;
   padding: 6px 4px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   text-align: center;
   transition: background 110ms ease, transform 110ms ease;
   animation: fan-out 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
@@ -1054,14 +1127,14 @@ button {
   height: 48px;
   border-radius: 50%;
   color: var(--accent);
-  font-size: 18px;
+  font-size: var(--text-xl);
   line-height: 1;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .arc__label {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.35;
   letter-spacing: -0.005em;
   /* Two lines then ellipsis: a long name must not shove its neighbours off
@@ -1105,7 +1178,7 @@ button {
 
 .arc__count {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   /* The faintest text on the screen, over its lightest region. */
   text-shadow: 0 1px 2px rgba(18, 10, 28, 0.5), 0 0 12px rgba(18, 10, 28, 0.45);
@@ -1179,7 +1252,7 @@ button {
   margin: 0;
   max-width: 46ch;
   color: var(--text-dim);
-  font-size: 13.5px;
+  font-size: var(--text-base);
   line-height: 1.55;
 }
 
@@ -1193,7 +1266,7 @@ button {
   margin: 0;
   text-align: center;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: var(--text-md);
   letter-spacing: -0.01em;
   z-index: 2;
 }
@@ -1211,7 +1284,7 @@ button {
   flex-direction: column;
   gap: 10px;
   padding: 14px 20px 16px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: #131318;
   box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -32px #000;
   animation: rise 220ms ease;
@@ -1235,7 +1308,7 @@ button {
 
 .capture-story__title {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 550;
 }
 
@@ -1252,7 +1325,7 @@ button {
   align-items: center;
   gap: 7px;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--text-sm);
   transition: color 200ms ease;
 }
 
@@ -1290,13 +1363,13 @@ button {
 
 .capture-story__close {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .capture-story__saw {
   margin: 0;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   font-style: italic;
 }
@@ -1316,7 +1389,7 @@ button {
 
 .capture-story__text {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.45;
 }
 
@@ -1324,12 +1397,12 @@ button {
    is the interesting one and gets the accent. */
 .capture-story__new {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .capture-story__echo {
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.45;
 }
 
@@ -1337,7 +1410,7 @@ button {
   padding-top: 10px;
   border-top: 1px solid var(--hairline);
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 
 .capture-story__dest strong {
@@ -1364,10 +1437,10 @@ button {
 
 .dropzone__inner {
   padding: 22px 30px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--text-md);
   letter-spacing: -0.01em;
 }
 
@@ -1396,7 +1469,7 @@ button {
   gap: 16px;
   padding: 0 10px 10px;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 550;
   letter-spacing: -0.012em;
 }
@@ -1404,7 +1477,7 @@ button {
 .reading__hint {
   flex: none;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 400;
   letter-spacing: 0.02em;
 }
@@ -1413,7 +1486,7 @@ button {
   margin: 2px 0 18px;
   padding: 0 10px;
   color: var(--text);
-  font-size: 14.5px;
+  font-size: var(--text-md);
   line-height: 1.6;
   letter-spacing: -0.005em;
   text-wrap: pretty;
@@ -1426,7 +1499,7 @@ button {
   align-items: flex-start;
   gap: 11px;
   padding: 9px 10px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   cursor: default;
   transition: background 90ms ease;
 }
@@ -1447,7 +1520,7 @@ button {
   flex: none;
   width: 15px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 20px;
 }
 
@@ -1466,7 +1539,7 @@ button {
 
 .item__meta {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1522,22 +1595,22 @@ button {
 
 .settings__label {
   color: var(--text);
-  font-size: 13.5px;
+  font-size: var(--text-base);
 }
 
 .settings__hint {
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   line-height: 1.5;
 }
 
 .settings__action {
   flex: none;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
   text-decoration: none;
   transition: background 110ms ease, color 110ms ease;
 }
@@ -1553,6 +1626,65 @@ button {
   height: 17px;
   margin-top: 2px;
   accent-color: var(--accent);
+}
+
+/*
+ * A switch, not a tick-box.
+ *
+ * The one native control left in the product, and it showed: a white square
+ * with a black check, drawn by the operating system, sitting in a panel where
+ * every other surface is glass. `accent-color` recolours the tick and nothing
+ * else — the box stays the box.
+ *
+ * `appearance: none` takes the rendering back, and the rest is the same
+ * vocabulary as everything around it: a pill, a knob, the accent to say on.
+ * The input keeps being an input, so it stays focusable, labelled by its
+ * <label>, and announced as a checkbox.
+ */
+.settings input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  position: relative;
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.settings input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms ease;
+}
+
+/*
+ * On is said with brightness, not with hue.
+ *
+ * The first version tinted the track with --accent, which the browsing shell
+ * re-points to grey on purpose — so "on" and "off" came out the same colour and
+ * the only difference was which end the knob sat at. Moving the signal to
+ * lightness works in both palettes: the knob goes from the dimmest text on the
+ * screen to the brightest, and the track lifts behind it.
+ */
+.settings input[type='checkbox']:checked {
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.settings input[type='checkbox']:checked::after {
+  transform: translateX(16px);
+  background: var(--text);
 }
 
 /* ------------------------------------------------------------------ sources */
@@ -1573,7 +1705,7 @@ button {
   justify-content: space-between;
   align-items: center;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   padding-bottom: 14px;
@@ -1586,11 +1718,11 @@ button {
 
 .sources__filter {
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
   letter-spacing: 0.02em;
   text-transform: none;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .sources__filter:hover {
@@ -1614,7 +1746,7 @@ button {
   max-width: var(--sources-width);
   text-align: left;
   padding: 11px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border-top: 1px solid var(--hairline);
   transition: background 90ms ease;
 }
@@ -1631,7 +1763,7 @@ button {
   flex: none;
   width: 16px;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .source-row__body {
@@ -1649,7 +1781,7 @@ button {
 
 .source-row__meta {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 /* A capture that produced nothing is the case the "It's in your Sources" toast
@@ -1666,10 +1798,10 @@ button {
 .source-row__retry {
   flex: none;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
   transition: background 110ms ease, color 110ms ease;
 }
 
@@ -1701,20 +1833,33 @@ button {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--accent);
-  color: #17130a;
+  /*
+   * The same surface as everything else that floats, rather than the one solid
+   * orange disc in the product.
+   *
+   * It was `background: var(--accent)` with a brown glyph — a colour chosen
+   * against the warm accent, which the browsing shell re-points to grey, so it
+   * came out brown-on-grey there. And because it only appears on Map and
+   * Sources, pressing G swapped a glass composer for an orange circle in the
+   * opposite corner: two entry points to one action that looked nothing alike.
+   * The accent now marks the glyph rather than flooding the disc.
+   */
+  background: var(--bg-raised);
+  color: var(--accent);
   display: grid;
   place-items: center;
   font-size: 22px;
   font-weight: 300;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 55%);
-  transition: transform 140ms ease;
+  box-shadow: var(--lift-1);
+  transition: transform 140ms ease, background 140ms ease, color 140ms ease;
 }
 
 /* No translate. It carried `translateX(-50%)` from when it was centred, so
    hovering shot it 22px to the left. */
 .fab:hover {
   transform: scale(1.06);
+  background: var(--accent);
+  color: var(--bg);
 }
 
 /* ------------------------------------------------------------------ ticker */
@@ -1761,7 +1906,7 @@ button {
 
 .inspector__eyebrow {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   margin-bottom: 10px;
@@ -1771,7 +1916,7 @@ button {
    panel stays a reading surface rather than a form. */
 .inspector__name {
   cursor: text;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   margin: 0 -6px 4px;
   padding: 0 6px;
   transition: background 110ms ease;
@@ -1789,14 +1934,14 @@ button {
   outline: 1px solid var(--accent);
   color: var(--text);
   font: inherit;
-  font-size: 19px;
+  font-size: var(--text-xl);
   font-weight: 550;
   letter-spacing: -0.02em;
 }
 
 .inspector h2 {
   margin: 0 0 4px;
-  font-size: 19px;
+  font-size: var(--text-xl);
   font-weight: 550;
   letter-spacing: -0.015em;
 }
@@ -1807,7 +1952,7 @@ button {
 }
 
 .memory-text {
-  font-size: 16px;
+  font-size: var(--text-lg);
   line-height: 1.45;
   letter-spacing: -0.01em;
   margin: 0 0 18px;
@@ -1842,7 +1987,7 @@ button {
 
 .memory-row__meta {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   margin-top: 3px;
 }
 
@@ -1855,10 +2000,10 @@ button {
 
 .chip {
   padding: 3px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .chip--entity {
@@ -1871,14 +2016,14 @@ button {
 
 .source-card {
   background: var(--bg-raised);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   padding: 12px;
   margin-bottom: 18px;
 }
 
 .source-card__type {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 5px;
@@ -1890,7 +2035,7 @@ button {
 
 .source-card__body {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--text-sm);
   max-height: 120px;
   overflow-y: auto;
 }
@@ -1900,21 +2045,21 @@ button {
 .stats {
   margin-bottom: 22px;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 
 /* ------------------------------------------------------------------ answer */
 
 .answer {
-  font-size: 15px;
+  font-size: var(--text-md);
   line-height: 1.55;
   margin: 0 0 20px;
 }
 
 .citation {
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   vertical-align: super;
   padding: 0 1px;
 }
@@ -1940,16 +2085,16 @@ button {
   width: 640px;
   max-width: calc(100vw - 48px);
   background: var(--bg-raised);
-  border-radius: 13px;
+  border-radius: var(--radius-lg);
   padding: 16px 18px 12px;
-  box-shadow: 0 24px 70px rgb(0 0 0 / 66%);
+  box-shadow: var(--lift-2);
 }
 
 .bar__head {
   display: flex;
   justify-content: space-between;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 10px;
@@ -1963,7 +2108,7 @@ button {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-md);
   resize: none;
 }
 
@@ -1978,7 +2123,7 @@ button {
   align-items: center;
   margin-top: 12px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .bar__types {
@@ -1988,7 +2133,7 @@ button {
 
 .bar__type {
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 .bar__type--on {
@@ -2013,7 +2158,7 @@ button {
 
 .bar__group-name {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 4px 0 2px;
@@ -2025,7 +2170,7 @@ button {
   width: 100%;
   text-align: left;
   padding: 7px 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
 }
 
@@ -2052,7 +2197,7 @@ button {
 
 .bar__result-meta {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .bar__suggestions {
@@ -2080,9 +2225,9 @@ button {
   transform: translateX(-50%);
   width: 480px;
   background: var(--bg-raised);
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   padding: 14px 16px;
-  box-shadow: 0 16px 48px rgb(0 0 0 / 62%);
+  box-shadow: var(--lift-2);
   z-index: 20;
   animation: drop 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -2095,14 +2240,14 @@ button {
 .banner__title {
   margin: 0 0 3px;
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .banner__body {
   margin: 0 0 11px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .banner__body strong {
@@ -2137,10 +2282,10 @@ button {
 
 .toast {
   background: var(--bg-raised);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 8px 14px;
   color: var(--text-dim);
-  box-shadow: 0 8px 26px rgb(0 0 0 / 55%);
+  box-shadow: var(--lift-1);
   animation: rise 220ms ease;
 }
 
@@ -2158,7 +2303,7 @@ button {
 .loading__mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   animation: pulse 1.4s ease-in-out infinite;
 }
