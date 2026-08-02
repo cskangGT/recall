@@ -14,6 +14,10 @@
   --text: #e8e8ec;
   --text-dim: #7a7a82;
   --text-faint: #4e4e56;
+  /* Two weights of line: the one that separates rows, and the one that rings a
+     floating surface. They were six literals across three values. */
+  --hairline: #1c1c21;
+  --edge: #222228;
   --rail-w: 56px;
   --inspector-w: 360px;
 
@@ -100,6 +104,31 @@ button {
   --text: #f6f2fa;
   --text-dim: #ded3e8;
   --text-faint: #b2a3c2;
+  /*
+   * The surfaces have to move with the accents.
+   *
+   * Re-pointing only the accent and text tokens left every surface in the app at
+   * its near-black :root value while the ground here is a violet gradient — so
+   * hovering a stone painted an opaque #0e0e10 rectangle on the sky, and a
+   * selected reading-list row was a black slab. Twenty-two rules read these two
+   * tokens; they are all correct once the tokens know what they are sitting on.
+   *
+   * Translucent rather than a lighter opaque violet, because these surfaces
+   * cross a gradient that runs from near-black at the zenith to mauve at the
+   * horizon. A fixed colour can only match one end of it.
+   */
+  --bg-panel: rgb(38 27 52 / 62%);
+  --bg-raised: rgb(56 41 76 / 82%);
+  /* The one saturated blue in the product, chosen against near-black. */
+  --entity: #c3aef0;
+  /*
+   * On near-black a dividing line is a shade lighter than the ground. On the sky
+   * that same near-black line is the darkest thing in the frame — it stops
+   * reading as a division and starts reading as a crack. Light, and low enough
+   * to stay a division rather than becoming a rule.
+   */
+  --hairline: rgb(226 212 248 / 16%);
+  --edge: rgb(236 224 246 / 18%);
 }
 
 .shell--mono .rail,
@@ -120,6 +149,85 @@ button {
   color: var(--text-dim);
   font-size: 15px;
   letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------- map search */
+
+/*
+ * Docked at the bottom of the map, where the composer sits on the browsing
+ * screen. The two views each get the input their job needs, in the same place,
+ * so switching between them does not move the thing you type into.
+ */
+.mapsearch {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(560px, calc(100% - 140px));
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
+}
+
+.mapsearch__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mapsearch__glyph {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 15px;
+}
+
+.mapsearch__row input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mapsearch__row input::placeholder {
+  color: var(--text-faint);
+}
+
+.mapsearch__count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mapsearch__filters {
+  display: flex;
+  gap: 6px;
+}
+
+.mapsearch__filter {
+  padding: 5px 11px;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 12px;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.mapsearch__filter:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.mapsearch__filter--on {
+  background: var(--accent);
+  color: #17130a;
 }
 
 /* ------------------------------------------------------------------ rail */
@@ -245,7 +353,7 @@ button {
  */
 .shell--mono .composer--docked {
   background: rgba(24, 16, 34, 0.46);
-  box-shadow: inset 0 0 0 1px rgba(236, 224, 246, 0.18), 0 26px 60px -34px #1a1024;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -34px #1a1024;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
@@ -388,7 +496,7 @@ button {
   padding: 6px 6px 6px 14px;
   border-radius: 14px;
   background: #131318;
-  box-shadow: inset 0 0 0 1px #222228, 0 24px 60px -30px #000;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 24px 60px -30px #000;
 }
 
 .composer--docked {
@@ -583,9 +691,44 @@ button {
   box-shadow: inset 0 0 0 1px #26262e, 0 24px 60px -30px #000;
 }
 
+/*
+ * Once the drag has started, stop being a hint and become somewhere to drop.
+ *
+ * Resting in the gutter, the targets were 33px tall and 38px apart, and the
+ * nearest one sat about 720px diagonally from the arc node you had just picked
+ * up. Fitts's law aside, 38px of pitch means overshooting by twenty pixels
+ * files the group under the wrong parent — and a wrong re-file is the one
+ * mistake this product's whole trust story says it must not make.
+ *
+ * The reason it was banished to the gutter is real but narrower than it looks:
+ * a panel over the category nodes swallows the pointer press that *starts* a
+ * drag, which reads as the browser hanging. That constraint only binds before
+ * the drag. `--active` is exactly the state where it no longer does, so the
+ * panel takes the middle column — over the reading list, which is not a drop
+ * target for a group anyway — and the travel becomes a short move down onto
+ * tiles big enough to aim at. Same element throughout, only restyled: unmounting
+ * anything mid-drag is what wedged an earlier attempt at this.
+ */
 .reparent--active {
   opacity: 1;
-  background: #17171d;
+  left: 50%;
+  /*
+   * Just under the arc, where the hand already is — not at the bottom of the
+   * window. The reading list starts around 44% of the height (fitArc's listTop),
+   * so this lands on it rather than on the figure, and shortens the trip from
+   * the node you picked up from ~450px to ~150px.
+   */
+  top: 46%;
+  bottom: auto;
+  transform: translateX(-50%);
+  max-width: none;
+  width: min(720px, calc(100vw - 780px));
+  padding: 18px 20px 20px;
+  gap: 14px;
+  align-items: stretch;
+  background: rgb(28 20 40 / 82%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
     0 24px 60px -30px #000;
 }
@@ -595,10 +738,42 @@ button {
   font-size: 12px;
 }
 
+.reparent--active .reparent__label {
+  font-size: 13px;
+  text-align: center;
+}
+
+/*
+ * At rest this is a caption, not a control.
+ *
+ * It used to list every top-level category as a row of chips before anything
+ * was being dragged — six names in a box in the corner, with no subject and
+ * nothing to act on, which reads as a menu someone left open. The targets only
+ * mean anything once something is in the air.
+ */
+.reparent:not(.reparent--active) .reparent__targets {
+  display: none;
+}
+
+/* With nothing to drop on, it is text — and text that cannot be clicked cannot
+   swallow the pointer press that starts a drag, which is the accident that
+   exiled this panel to the corner in the first place. */
+.reparent:not(.reparent--active) {
+  pointer-events: none;
+}
+
 .reparent__targets {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Tiles, not chips. Wide enough that the longest category name still sits on
+   one line, and tall enough to be a place rather than a word. */
+.reparent--active .reparent__targets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
 .reparent__target {
@@ -609,9 +784,28 @@ button {
   font-size: 12.5px;
 }
 
+.reparent--active .reparent__target {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 62px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  background: rgb(58 43 78 / 78%);
+  transition: background 110ms ease, box-shadow 110ms ease, transform 110ms ease;
+}
+
 .reparent__target--drop {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The one you are about to hit lifts, so the answer to "which of these am I on"
+   never depends on reading a one-pixel border. */
+.reparent--active .reparent__target--drop {
+  transform: translateY(-3px);
+  box-shadow: inset 0 0 0 2px var(--accent), 0 10px 26px -12px #000;
 }
 
 /* The fan is positioned at the arc's focus; every node offsets from there. */
@@ -666,84 +860,142 @@ button {
   background: var(--bg-panel);
 }
 
-/* A generous, solid hit area — the stone alone is a small target. */
+/*
+ * A generous, solid hit area. It mattered when the target was a stone; it
+ * matters more now that it is a five-pixel point of light — the box is the only
+ * reason a star is clickable at all.
+ *
+ * 62 rather than 76: the extra was room for a reflection the star does not have,
+ * and leaving it in put a hand's width of empty sky between the light and the
+ * name it belongs to.
+ */
 .arc__form {
   display: grid;
   place-items: center;
   min-width: 84px;
-  /* Room for the largest stone *and* its reflection, so the reflection never
-     reaches the label underneath. */
-  min-height: 76px;
+  min-height: 62px;
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), filter 200ms ease;
 }
 
 /*
- * A water-worn stone. Low and wide, so it reads as resting on the same water
- * the figure stands in rather than floating over it, and each one's outline is
- * derived from its category id — see src/arc/pebble.ts for why that matters.
+ * A category, as a point of light.
  *
- * Matte, not glossy. A tight radial highlight — which is what the sphere used —
- * puts a specular hot spot on the form and the result reads as polished
- * plastic; six of them looked like six pills. A stone is a broad soft sheen
- * over an almost flat body ramp, dark along the lower edge where the light
- * cannot reach.
+ * Three layers, because one circle is a dot and a dot is not a star: a hard
+ * white core, a soft halo that seats it in the sky rather than on top of it,
+ * and four diffraction spikes that overshoot the halo. The overshoot is the
+ * whole trick — spikes contained inside their own glow read as a blurred dot.
+ *
+ * Sized from the category's count and tilted from its id (src/arc/star.ts), so
+ * a category that holds more burns wider and no two sit at quite the same
+ * angle.
  */
-.arc__pebble {
+.arc__star {
   position: relative;
-  width: var(--pebble-w);
-  height: var(--pebble-h);
-  border-radius: var(--pebble-r);
-  background:
-    /* the sheen: wide, weak, and open at the top so it never closes into a dot */
-    radial-gradient(
-      ellipse 130% 150% at 32% 2%,
-      rgba(255, 255, 255, 0.5) 0%,
-      rgba(255, 255, 255, 0.14) 38%,
-      rgba(255, 255, 255, 0) 62%
-    ),
-    /* the body */
-    linear-gradient(166deg, #CBCBD7 0%, #9C9CAA 40%, #62626F 76%, #33333E 100%);
+  width: var(--star-core);
+  height: var(--star-core);
+  border-radius: 50%;
+  background: #fff;
+  /* Two falloffs: a tight one that makes the core look hot rather than painted,
+     and a wide violet one that ties it to the sky it is in. */
   box-shadow:
-    /* the underside, where the stone occludes its own light */
-    inset 0 -3px 6px -3px rgba(0, 0, 0, 0.55),
-    0 10px 22px -14px rgba(0, 0, 0, 0.95);
+    0 0 calc(var(--star-core) * 0.9) rgba(255, 255, 255, 0.95),
+    0 0 calc(var(--star-core) * 2.6) rgba(214, 202, 255, 0.55);
 }
 
-/* The halo, so a stone sits in the dark rather than on it. */
-.arc__pebble::before {
+.arc__star::before {
   content: '';
   position: absolute;
-  inset: -52% -34%;
+  left: 50%;
+  top: 50%;
+  width: var(--star-glow);
+  height: var(--star-glow);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(210, 210, 226, 0.14) 0%, rgba(210, 210, 226, 0) 66%);
+  background: radial-gradient(
+    circle,
+    rgba(228, 219, 255, 0.28) 0%,
+    rgba(220, 208, 255, 0.1) 36%,
+    rgba(220, 208, 255, 0) 70%
+  );
   pointer-events: none;
 }
 
 /*
- * Its reflection. The whole point of the stone over the sphere was to put the
- * arc in the same world as the figure, and the figure's defining feature is
- * that it stands in water — so every stone gets the same treatment: flipped,
- * foreshortened, and faded out before it can look like a second object.
+ * The spikes. Two crossed gradients rather than four elements: each is a
+ * hairline that fades to nothing at both ends, so the star has points without
+ * having edges.
  */
-.arc__pebble::after {
+.arc__star::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 46%;
-  border-radius: var(--pebble-r);
-  background: inherit;
-  transform: scaleY(-1);
-  opacity: 0.26;
-  filter: blur(1.6px);
-  /* `to bottom`, which arrives as a top-down fade: this element's own scaleY(-1)
-     flips the mask along with the geometry. Authored the obvious way round it
-     came out opaque at the far end and invisible at the stone, so each label
-     wore a grey smear and no stone had a reflection. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
-  mask-image: linear-gradient(to bottom, transparent 8%, #000 92%);
+  left: 50%;
+  top: 50%;
+  width: var(--star-spikes);
+  height: var(--star-spikes);
+  transform: translate(-50%, -50%) rotate(var(--star-tilt));
+  background:
+    linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0) 100%
+      )
+      center / 100% 1.1px no-repeat,
+    linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0) 100%
+      )
+      center / 1.1px 100% no-repeat;
   pointer-events: none;
+}
+
+/*
+ * While something is being dragged, every place it can land shows a ring.
+ *
+ * The star is the category; the ring is the target. They are deliberately not
+ * the same size — the hit area was always the 88x62 node box, and the whole
+ * problem was that a point of light gave no hint of it. The ring appears only
+ * during a drag, so at rest the sky stays a sky.
+ *
+ * Only on nodes that will actually accept the thing: `data-droppable` already
+ * carries the answer from validateDrop, so a subfolder that cannot nest under
+ * another subfolder never lights up and the two-levels rule is visible before
+ * you commit to it rather than as a toast afterwards.
+ */
+.arc--dragging .arc__node[data-droppable='yes'] .arc__form::after {
+  content: '';
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px dashed rgba(232, 224, 255, 0.42);
+  background: radial-gradient(circle, rgba(226, 216, 255, 0.09) 0%, rgba(226, 216, 255, 0) 72%);
+  pointer-events: none;
+  animation: ring-in 180ms ease both;
+}
+
+.arc__form {
+  position: relative;
+}
+
+/* The one under the pointer: solid, brighter, and larger than its neighbours,
+   so "which am I on" is answered by size rather than by a border weight. */
+.arc--dragging .arc__node--drop .arc__form::after {
+  width: 70px;
+  height: 70px;
+  border: 1.5px solid var(--accent);
+  background: radial-gradient(circle, rgba(236, 230, 255, 0.2) 0%, rgba(236, 230, 255, 0) 74%);
+}
+
+@keyframes ring-in {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc--dragging .arc__node[data-droppable='yes'] .arc__form::after { animation: none; }
 }
 
 .arc__node:hover .arc__form {
@@ -756,7 +1008,9 @@ button {
 }
 
 .arc__node--drop .arc__form {
-  filter: brightness(1.7) drop-shadow(0 0 22px rgba(232, 163, 61, 0.8));
+  /* var(), not the literal it used to be: that literal was :root's orange, so
+     the one moment the scene lit up was the one moment it stopped being grey. */
+  filter: brightness(1.7) drop-shadow(0 0 22px var(--accent));
 }
 
 /* Back and answer are not categories, so they stay marks rather than stones. */
@@ -783,6 +1037,20 @@ button {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /*
+   * A shadow, because the sky is not one colour.
+   *
+   * The labels were given a light tint so they would not vanish into mid
+   * violet — but the arc spans the gradient, and the lower nodes sit on the
+   * mauve band near the horizon, which is the lightest thing in the frame.
+   * Light-on-light disappears exactly as thoroughly as dark-on-dark. Now that
+   * the stone is gone and the name carries the whole identity of a category,
+   * it cannot be legible only in the middle of its own range.
+   *
+   * Two stops: a tight one that gives the glyph an edge, and a wide soft one
+   * that darkens the sky it sits on without reading as a drop shadow.
+   */
+  text-shadow: 0 1px 2px rgba(18, 10, 28, 0.55), 0 0 14px rgba(18, 10, 28, 0.5);
 }
 
 .arc__node--active .arc__label {
@@ -802,23 +1070,12 @@ button {
   outline-offset: 2px;
 }
 
-.arc__label {
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.35;
-  letter-spacing: -0.005em;
-  /* Two lines then ellipsis: "Evals & Observability" must not shove its
-     neighbours off the arc. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 .arc__count {
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  /* The faintest text on the screen, over its lightest region. */
+  text-shadow: 0 1px 2px rgba(18, 10, 28, 0.5), 0 0 12px rgba(18, 10, 28, 0.45);
 }
 
 /*
@@ -916,14 +1173,31 @@ button {
   left: 50%;
   transform: translateX(-50%);
   z-index: 4;
+  transition: top 260ms cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px 20px 16px;
   border-radius: 14px;
   background: #131318;
-  box-shadow: inset 0 0 0 1px #222228, 0 26px 60px -32px #000;
+  box-shadow: inset 0 0 0 1px var(--edge), 0 26px 60px -32px #000;
   animation: rise 220ms ease;
+}
+
+/*
+ * The banner and the capture story are both top-centre floating surfaces, and
+ * both arrive at the end of a restructuring capture. The banner is z-20 and
+ * ~99px tall starting at 22; the story is z-4 starting at 52 — so the banner
+ * landed across the story's heading and first line, and being translucent it
+ * did not even hide it cleanly: two paragraphs of text superimposed.
+ *
+ * They are siblings inside .canvas-wrap, so the story can simply step down when
+ * the banner exists. Stacked they end at 398px, which still clears the arc's
+ * topmost node. No JS, and nothing to keep in sync — the banner's own dismissal
+ * state stays private to the banner, which is where it belongs.
+ */
+.canvas-wrap:has(> .banner) .capture-story {
+  top: 133px;
 }
 
 .capture-story__title {
@@ -1028,7 +1302,7 @@ button {
 
 .capture-story__dest {
   padding-top: 10px;
-  border-top: 1px solid #222228;
+  border-top: 1px solid var(--hairline);
   color: var(--text-dim);
   font-size: 12.5px;
 }
@@ -1185,7 +1459,7 @@ button {
     animation: none;
   }
   .arc__node--reject { animation: none; outline: 1px solid #c2603a; }
-  .arc__pebble,
+  .arc__star,
   .arc__thinker { transition: none; }
 }
 /* ----------------------------------------------------------------- settings */
@@ -1203,7 +1477,7 @@ button {
 }
 
 .settings__row + .settings__row {
-  border-top: 1px solid #1c1c21;
+  border-top: 1px solid var(--hairline);
 }
 
 .settings__body {
@@ -1308,7 +1582,7 @@ button {
   text-align: left;
   padding: 11px 10px;
   border-radius: 8px;
-  border-top: 1px solid #191920;
+  border-top: 1px solid var(--hairline);
   transition: background 90ms ease;
 }
 
@@ -1347,35 +1621,6 @@ button {
 
 /* A capture that produced nothing is the case the "It's in your Sources" toast
    points here for — it has to be findable, not just present. */
-.source-row--empty /* A failure is the one row here that needs to be noticed. */
-.source-row--failed .source-row__meta {
-  color: #c2603a;
-}
-
-.source-row__retry {
-  flex: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: var(--bg-raised);
-  color: var(--text);
-  font-size: 12px;
-  transition: background 110ms ease, color 110ms ease;
-}
-
-.source-row__retry:hover:not(:disabled) {
-  background: var(--accent);
-  color: #14141a;
-}
-
-.source-row__retry:disabled {
-  cursor: default;
-  color: var(--text-faint);
-}
-
-.source-row__count {
-  color: var(--accent);
-}
-
 .source-row--empty .source-row__meta {
   color: var(--accent-dim);
 }
@@ -1444,7 +1689,9 @@ button {
 .ticker {
   position: absolute;
   left: 50%;
-  bottom: 96px;
+  /* Above the toasts, which sit at 96. The two used to share the slot exactly,
+     so a re-file confirmation landed on top of the stage it was confirming. */
+  bottom: 140px;
   transform: translateX(-50%);
   color: var(--text-dim);
   letter-spacing: 0.01em;
@@ -1535,15 +1782,22 @@ button {
 
 .memory-row {
   display: block;
-  width: 100%;
   text-align: left;
-  padding: 9px 0;
+  /* Padded and pulled back out by the same amount, so the hover wash has room
+     to sit behind the text without the row moving when it appears. */
+  padding: 9px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
   color: var(--text);
-  border-top: 1px solid #191920;
+  border-top: 1px solid var(--hairline);
 }
 
+/* A wash, not a colour change. Hover used to re-point the text at --accent,
+   which on the browsing screen resolves to a grey *dimmer* than the text it
+   replaced — so pointing at a row made it recede. Lifting the ground under it
+   works in both palettes, because both define a raised surface. */
 .memory-row:hover {
-  color: var(--accent);
+  background: var(--bg-raised);
 }
 
 .memory-row__text {

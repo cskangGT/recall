@@ -88,6 +88,18 @@ export function CaptureStoryPanel() {
         </div>
       ))}
 
+      {/*
+        What was read and deliberately not kept.
+        A source that produced four memories and added one has to say why, or
+        the count reads as extraction having failed.
+      */}
+      {story.alreadyHeld.map((held, i) => (
+        <div key={i} className="capture-story__memory" data-testid="capture-story-held">
+          <span className="capture-story__text">{held.text}</span>
+          <span className="capture-story__echo">You already had this — not saved again</span>
+        </div>
+      ))}
+
       {story.destination && (
         <div className="capture-story__dest" data-testid="capture-story-destination">
           Filed under <strong>{story.destination}</strong>

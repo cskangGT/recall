@@ -40,12 +40,23 @@ describe('seed workspace', () => {
     }
   });
 
+  /*
+   * The numbers moved when the seed stopped carrying 8-dimensional authored
+   * vectors and started carrying openai/text-embedding-3-small at 1024. They
+   * are not looser for it — the margin between them is now 0.0133 rather than
+   * 0.042, so this pair of assertions is *more* load-bearing than before, and
+   * the third decimal is the demo.
+   *
+   * Worth noting what agreeing to three decimals with scripts/validate_thresholds.py
+   * proves: the TypeScript gate math and the Python harness compute the same
+   * thing. 0.27387 here against 0.2739 there, 0.26052 against 0.2606.
+   */
   it('holds AI Tooling just above the split cohesion threshold', () => {
     expect(aiMemories).toHaveLength(9);
     const cohesion = meanPairwiseCosine(aiMemories.map((m) => m.vector));
     // Must NOT fire before the demo capture.
     expect(cohesion).toBeGreaterThan(SPLIT.MAX_MEAN_COHESION);
-    expect(cohesion).toBeCloseTo(0.633, 2);
+    expect(cohesion).toBeCloseTo(0.2739, 3);
   });
 
   it('drops below the threshold once the demo item lands', () => {
@@ -53,7 +64,7 @@ describe('seed workspace', () => {
     expect(after).toHaveLength(11);
     const cohesion = meanPairwiseCosine(after.map((m) => m.vector));
     expect(cohesion).toBeLessThan(SPLIT.MAX_MEAN_COHESION);
-    expect(cohesion).toBeCloseTo(0.591, 2);
+    expect(cohesion).toBeCloseTo(0.2605, 3);
   });
 
   it('splits into a 7/4 structure with usable separation', () => {

@@ -3,6 +3,7 @@ import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
+import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -20,6 +21,22 @@ import { FOCUS_FRACTION } from './arc/layout';
 
 const MIN_VIEWPORT_WIDTH = 1280;
 
+/*
+ * A floor on height as well as width.
+ *
+ * The width gate alone let the app render at 1280x720, where the scene runs out
+ * of room vertically rather than horizontally: the crest sits at 86% of the
+ * shell (619px), the figure is 190px tall so its head reaches 429px, and the
+ * greeting starts at 26% (187px) — with the arc's innermost node between them.
+ * All three converge, and `body { overflow: hidden }` means nothing can scroll
+ * out of the collision. 760px clears it with the arc at its minimum radius.
+ */
+const MIN_VIEWPORT_HEIGHT = 760;
+
+/** Must match `--rail-w` and `--inspector-w` in theme.css. */
+const RAIL_W = 56;
+const INSPECTOR_W = 360;
+
 export function App() {
   const load = useWorkspaceStore((s) => s.load);
   const loading = useWorkspaceStore((s) => s.loading);
@@ -32,8 +49,9 @@ export function App() {
   const dropActive = useUiStore((s) => s.dropActive);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
-  const [wide, setWide] = useState(
-    typeof window === 'undefined' || window.innerWidth >= MIN_VIEWPORT_WIDTH,
+  const [roomy, setRoomy] = useState(
+    typeof window === 'undefined' ||
+      (window.innerWidth >= MIN_VIEWPORT_WIDTH && window.innerHeight >= MIN_VIEWPORT_HEIGHT),
   );
   const busy = useRef(false);
 
@@ -50,7 +68,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onResize = () => setWide(window.innerWidth >= MIN_VIEWPORT_WIDTH);
+    const onResize = () =>
+      setRoomy(
+        window.innerWidth >= MIN_VIEWPORT_WIDTH && window.innerHeight >= MIN_VIEWPORT_HEIGHT,
+      );
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -68,10 +89,18 @@ export function App() {
 
     if (before && ws.payload) {
       ui.setLastCapture(
-        buildCaptureStory(before, ws.payload, result.addedMemoryIds, result.event !== null),
+        buildCaptureStory(
+          before,
+          ws.payload,
+          result.addedMemoryIds,
+          result.event !== null,
+          result.alreadyHeld,
+        ),
       );
     }
 
+    // Nothing added is not nothing happened: everything in the source may
+    // already have been held, and the story above says so.
     if (result.addedMemoryIds.length === 0) {
       busy.current = false;
       return;
@@ -169,17 +198,35 @@ export function App() {
         ui.setSettingsOpen(true);
         return;
       }
-      if (e.key === ' ') {
+      /*
+       * Space fits the map to its contents — and only the map.
+       *
+       * It used to fire in all three views, which was wrong twice over. On the
+       * browsing screen `.arc__node` is `role="button" tabIndex={0}`, so Space
+       * is also how you activate the star you have tabbed to: both handlers
+       * ran, and opening a category with the keyboard silently re-aimed the map
+       * camera on the way past. And the viewport it measured subtracted 416px
+       * of chrome — the rail plus the inspector — while the browsing shell's
+       * symmetric gutters make it 720px, so the camera was fitted against a
+       * window 304px wider than the one it would appear in.
+       *
+       * Scoping it to the map fixes the collision and makes the arithmetic true
+       * rather than merely unused: 416 is exactly the chrome the map has.
+       */
+      if (e.key === ' ' && ui.view === 'map') {
         e.preventDefault();
         const ws = useWorkspaceStore.getState();
-        ui.setCamera(fitToBounds(ws.nodes, { w: window.innerWidth - 416, h: window.innerHeight }));
+        const chrome = RAIL_W + INSPECTOR_W;
+        ui.setCamera(
+          fitToBounds(ws.nodes, { w: window.innerWidth - chrome, h: window.innerHeight }),
+        );
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!wide) return <TooSmall />;
+  if (!roomy) return <TooSmall />;
   if (loading) return <Loading />;
 
   return (
@@ -233,6 +280,9 @@ export function App() {
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}
+        {/* The map is everything at once, so it needs a way to find one thing
+            in it. Browse has the composer in the same slot. */}
+        {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
             <h2>Nothing saved yet.</h2>
@@ -243,7 +293,16 @@ export function App() {
           </div>
         )}
         <ChangeBanner />
-        <StatusTicker />
+        {/*
+          The ticker names the stage the pipeline is on. On the browsing screen
+          the capture story already names all four with the current one lit, so
+          both were printing the same word at the same moment — one at the top of
+          the screen and one at the bottom. The story panel's own docstring says
+          it answers "the questions the ticker never did"; it should have taken
+          the ticker's place then. Map and Sources have no story panel, so there
+          it is still the only sign that anything is happening.
+        */}
+        {view !== 'browse' && <StatusTicker />}
         <Toasts />
         {/* Map and Sources have no composer, so they still need a visible way
             in. Browse has one in the composer, and two `+` on one screen is the

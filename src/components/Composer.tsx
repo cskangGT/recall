@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { answerQuestion } from '../ask/scriptedAsk';
+import { askedCategories } from '../arc/interest';
+import { useInterestStore } from '../store/interestStore';
 
 /**
  * The one place you talk to Recall.
@@ -30,13 +32,13 @@ export function Composer({
   onSubmitted?: () => void;
 }) {
   const setAnswer = useUiStore((s) => s.setAnswer);
+  const recordInterest = useInterestStore((s) => s.record);
   const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
 
   const [text, setText] = useState('');
   const [thinking, setThinking] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
 
   const submit = async () => {
     const question = text.trim();
@@ -52,6 +54,16 @@ export function Composer({
       : answerQuestion(question, payload);
 
     setAnswer({ ...result, question });
+    /*
+     * Asking is the strongest of the three signals the arc ranks by, and until
+     * now it left no trace anywhere: the server writes `ask_history` and reads
+     * it back nowhere, and the client never saw it at all. Recorded against the
+     * top-level categories the answer actually drew on, so the arc reflects what
+     * you were thinking about rather than what you happened to click.
+     */
+    for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
+      recordInterest(categoryId, 'asked');
+    }
     setHighlight(result.highlighted_node_ids);
     select(null);
     setText('');
@@ -70,14 +82,39 @@ export function Composer({
       >
         +
       </button>
+      {/*
+        Deliberately not autofocused. The greeting's "press Enter to look
+        around" is answered by a window-level handler in ArcBrowser instead,
+        because G, T, S and `,` are single-key shortcuts and App's keyboard
+        handler steps aside for INPUT targets — a focused composer would swallow
+        every one of them and type the letter.
+      */}
       <input
-        ref={ref}
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
         placeholder="Ask anything, or drop a screenshot to save it…"
         value={text}
         disabled={thinking}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
+          /*
+           * Escape hands the keyboard back to the app.
+           *
+           * G, T, S and `,` are single-key shortcuts, and App's handler steps
+           * aside for INPUT targets — so the moment you click this box every one
+           * of them stops navigating and starts typing letters into it, with
+           * nothing on screen to say so. Before this there was no way out
+           * without reaching for the mouse: the composer is docked and always
+           * mounted, so unlike the command bars there was no dialog to close.
+           */
+          if (e.key === 'Escape') {
+            // Only blur. App's Escape also clears the answer and the selection,
+            // and losing the answer you were reading because you wanted your
+            // arrow keys back is not the same gesture. Pressing it again does
+            // that, now that the window can hear it.
+            e.stopPropagation();
+            e.currentTarget.blur();
+            return;
+          }
           if (e.key !== 'Enter') return;
           e.preventDefault();
           void submit();
@@ -89,7 +126,16 @@ export function Composer({
         disabled={thinking}
         onClick={() => void submit()}
       >
-        {thinking ? 'Thinking…' : text.trim() ? 'Ask' : firstRun ? 'Look around' : '↵'}
+        {/* "Look around" offers to fan the categories out, so it can only be
+            offered when there are categories. On an empty workspace it invited
+            the one gesture in the app guaranteed to do nothing. */}
+        {thinking
+          ? 'Thinking…'
+          : text.trim()
+            ? 'Ask'
+            : firstRun && (payload?.memories.length ?? 0) > 0
+              ? 'Look around'
+              : '↵'}
       </button>
     </div>
   );

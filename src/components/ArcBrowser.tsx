@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
-import { arcPositions, fitArc } from '../arc/layout';
-import { pebbleShape } from '../arc/pebble';
+import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
+import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
+import { useInterestStore } from '../store/interestStore';
+import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
@@ -39,7 +41,7 @@ interface ArcNode {
   id: string;
   label: string;
   count: number | null;
-  kind: 'folder' | 'back' | 'answer';
+  kind: 'folder' | 'back' | 'answer' | 'more';
   row: TreeRow | null;
 }
 
@@ -59,6 +61,8 @@ export function ArcBrowser() {
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
+  const interestEvents = useInterestStore((s) => s.events);
+  const recordInterest = useInterestStore((s) => s.record);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
@@ -67,6 +71,8 @@ export function ArcBrowser() {
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
   const [levelSeq, setLevelSeq] = useState(0);
+  /** Which page of the ranking the arc is showing. Reset on every level change. */
+  const [page, setPage] = useState(0);
   const [goingBack, setGoingBack] = useState(false);
 
   useLayoutEffect(() => {
@@ -115,11 +121,64 @@ export function ArcBrowser() {
   const reparenting = draggedRow?.kind === 'child_category';
   const effectiveLevelId = arcLevelId;
 
+  const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
+  const isOpen = showingAnswer || openRow !== undefined;
+
+  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
+
+  /*
+   * How interesting each top-level category is, right now.
+   *
+   * Computed from the corpus and the interaction log, and only from those — not
+   * from anything that changes as you point at things, so the arc does not
+   * reshuffle under the cursor. `savesFrom` rolls a subcategory memory up to its
+   * parent, which is the level the arc actually shows.
+   */
+  const scores = useMemo(() => {
+    if (!payload) return new Map<string, number>();
+    const saves = savesFrom(payload);
+    return interestScores(saves, interestEvents, corpusNow(saves, new Date()));
+  }, [payload, interestEvents]);
+
   const nodes = useMemo((): ArcNode[] => {
     const level = categoryRows.filter((r) =>
       effectiveLevelId === null ? r.depth === 0 : r.parentId === effectiveLevelId,
     );
-    const folders: ArcNode[] = level.map((row) => ({
+
+    /*
+     * Ranked, not listed.
+     *
+     * The arc used to show every category in the order the database created
+     * them, which is a fact about the database. Being on the arc now means
+     * "this is what you have been on lately" — so the ranking is the content,
+     * and the map is where everything still lives.
+     */
+    const byId = new Map(level.map((r) => [r.id, r]));
+    const ranked = rankByInterest(
+      level.map((r) => r.id),
+      scores,
+    ).map((id) => byId.get(id)!);
+
+    /*
+     * What fits. The way out and the answer folder take a seat like anything
+     * else, so they come off the budget before the categories do — at the
+     * narrowest viewport the open state holds four marks total, which means
+     * three children plus the way back.
+     */
+    const reserved = effectiveLevelId !== null || answer ? 1 : 0;
+    const capacity = arcCapacity(geometry.radius) - reserved;
+    const slice = paginate(ranked.length, capacity, page);
+    const shown = ranked.slice(slice.start, slice.start + slice.count);
+
+    // Seated by rank rather than in order: the apex is the position the eye
+    // lands on, and it belongs to whatever you have been on most.
+    const seats = seatByRank(shown.length);
+    const seated: (typeof shown)[number][] = [];
+    shown.forEach((row, rank) => {
+      seated[seats[rank]!] = row;
+    });
+
+    const folders: ArcNode[] = seated.map((row) => ({
       id: row.id,
       label: row.label,
       count: row.count,
@@ -127,13 +186,36 @@ export function ArcBrowser() {
       row,
     }));
 
+    if (slice.hidden > 0) {
+      folders.push({
+        id: '__more__',
+        label: `${slice.hidden} more`,
+        count: null,
+        kind: 'more',
+        row: null,
+      });
+    }
+
     if (effectiveLevelId !== null) {
-      // Back sits at the left end, where the eye starts. Labelled just "Back":
-      // the parent's name is already the breadcrumb at the top of the screen,
-      // and a long label here overlapped its neighbour on the arc.
+      /*
+       * Back sits at the left end, where the eye starts, and it says where it
+       * goes rather than which direction it goes in.
+       *
+       * It used to be the word "Back", on the grounds that the parent's name was
+       * already the breadcrumb at the top of the screen. But the breadcrumb
+       * names where you *are*, and the only other place the hierarchy appeared
+       * was that same word repeated over the reading list — so the one thing
+       * nothing on screen told you was what is one level up. A category's place
+       * in the structure is most of what a category means here.
+       *
+       * The destination, note, not the current level: from inside Fundraising
+       * this returns to the top, so it reads "Everything".
+       */
+      const here = categoryRows.find((r) => r.id === effectiveLevelId);
+      const up = here?.parentId ? categoryRows.find((r) => r.id === here.parentId) : undefined;
       folders.unshift({
         id: '__back__',
-        label: 'Back',
+        label: up?.label ?? 'Everything',
         count: null,
         kind: 'back',
         row: null,
@@ -148,12 +230,8 @@ export function ArcBrowser() {
       });
     }
     return folders;
-  }, [categoryRows, effectiveLevelId, answer, answerMemories.length]);
+  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page]);
 
-  const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
-  const isOpen = showingAnswer || openRow !== undefined;
-
-  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
   const points = useMemo(
     () => arcPositions(nodes.length, geometry.radius),
     [nodes.length, geometry.radius],
@@ -173,6 +251,7 @@ export function ArcBrowser() {
   }, [payload, openRow, showingAnswer, answerMemories]);
 
   const goTo = (levelId: string | null, back: boolean) => {
+    setPage(0);
     setGoingBack(back);
     setArcLevel(levelId);
     setLevelSeq((n) => n + 1);
@@ -191,11 +270,20 @@ export function ArcBrowser() {
       select(null);
       return;
     }
+    // Paging a ranked list is meaningful: the next page is what you have been
+    // on less. It wraps, so the mark is never a dead end.
+    if (node.kind === 'more') {
+      setPage((n) => n + 1);
+      return;
+    }
     // Opening a folder always fills the reading list. It additionally descends
     // when there is something to descend into — `AI Tooling` is flat in the
     // seed, and descending into it would empty the arc.
     openCategory(node.id);
     select(node.id);
+    // Opening a category is the weakest of the three signals the arc ranks by,
+    // and the only one the user performs without meaning to say anything.
+    recordInterest(node.row?.parentId ?? node.id, 'opened');
     if (hasSubfolders(node.id)) goTo(node.id, false);
   };
 
@@ -203,6 +291,30 @@ export function ArcBrowser() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+
+      /*
+       * Nothing below this can run before the welcome is dismissed.
+       *
+       * The arc renders `welcomeDismissed ? nodes : []`, but this handler closed
+       * over the full array regardless — so ArrowRight on the greeting opened a
+       * category and dropped a reading list onto an empty sky, with no arc
+       * anywhere to explain where it had come from. Backspace and ArrowUp did
+       * the same.
+       *
+       * Enter is the exception, because the greeting promises it: "press Enter
+       * to look around". It was promising something that did not happen. The
+       * obvious fix is to focus the composer on mount, and it is the wrong one —
+       * G, T, S and `,` are single-key shortcuts, and App's handler steps aside
+       * for INPUT targets, so a focused composer would swallow all four and type
+       * the letters instead. Handling Enter here keeps both.
+       */
+      if (!welcomeDismissed) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        dismissWelcome();
+        return;
+      }
+
       const focusIndex = nodes.findIndex((n) => n.id === openCategoryId);
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -233,7 +345,7 @@ export function ArcBrowser() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, openCategoryId, arcLevelId, categoryRows]);
+  }, [nodes, openCategoryId, arcLevelId, categoryRows, welcomeDismissed, dismissWelcome]);
 
   // ----------------------------------------------------------------- drag
   const finishDrop = (node: ArcNode) => {
@@ -290,7 +402,17 @@ export function ArcBrowser() {
       : 'Where would you like to look?';
 
   return (
-    <div className="arc" data-testid="arc-browser" ref={shellRef}>
+    /*
+     * `--dragging` while something is in the air, so the arc can show where it
+     * can go. A five-pixel point of light is a beautiful category and a hopeless
+     * target: the hit area is the 88x62 box around it, but nothing on screen
+     * said so, and you cannot aim at a box you cannot see.
+     */
+    <div
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}`}
+      data-testid="arc-browser"
+      ref={shellRef}
+    >
       <CaptureStoryPanel />
 
       {/*
@@ -306,7 +428,12 @@ export function ArcBrowser() {
           aria-hidden={!reparenting}
         >
           <span className="reparent__label">
-            {reparenting ? 'Drop it on the category it belongs under' : 'Move this group under'}
+            {/* "Move this group under" was the head of a sentence the chips
+                below finished. They are gone until something is being dragged,
+                so at rest it has to be a whole thought on its own. */}
+            {reparenting
+              ? 'Drop it on the category it belongs under'
+              : 'Drag a group to file it under another'}
           </span>
           <span className="reparent__targets">
             {categoryRows
@@ -355,7 +482,7 @@ export function ArcBrowser() {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
-          const stone = node.kind === 'folder' ? pebbleShape(node.id, node.count) : null;
+          const star = node.kind === 'folder' ? starShape(node.id, node.count) : null;
           return (
             // A div rather than a <button>, deliberately. A <button> that is
             // also an HTML5 drag source leaves Chromium stuck in a drag state
@@ -412,19 +539,22 @@ export function ArcBrowser() {
               onClick={() => activate(node)}
             >
               <span className="arc__form">
-                {stone ? (
+                {star ? (
                   <span
-                    className="arc__pebble"
+                    className="arc__star"
                     style={
                       {
-                        '--pebble-w': `${stone.width}px`,
-                        '--pebble-h': `${stone.height}px`,
-                        '--pebble-r': stone.radius,
+                        '--star-core': `${star.core}px`,
+                        '--star-glow': `${star.glow}px`,
+                        '--star-spikes': `${star.spikes}px`,
+                        '--star-tilt': `${star.tilt}deg`,
                       } as React.CSSProperties
                     }
                   />
                 ) : (
-                  <span className="arc__mark">{node.kind === 'back' ? '←' : '✦'}</span>
+                  <span className="arc__mark">
+                    {node.kind === 'back' ? '←' : node.kind === 'more' ? '⋯' : '✦'}
+                  </span>
                 )}
               </span>
               <span className="arc__label">{node.label}</span>
@@ -448,13 +578,34 @@ export function ArcBrowser() {
           <p className="arc__prompt">{heading}</p>
         ) : (
           <div className="arc__greeting" data-testid="welcome">
-            <p className="arc__greeting-line">Want to think something through?</p>
-            {/* The scale belongs in the sentence, where the eye already is —
-                the Inspector used to shout it from the corner instead. */}
-            <p className="arc__greeting-aside">
-              {payload.memories.length} memories from {payload.sources.length} sources,
-              already sorted. Ask me anything about them — or press Enter to look around.
-            </p>
+            {/*
+              Two greetings, because there are two ways to arrive.
+              The count was written for the seeded workspace, where it is the
+              whole pitch: value before you have typed anything. Against an
+              empty one it read "0 memories from 0 sources, already sorted" —
+              a claim about nothing, made confidently, which is the worst
+              possible first sentence for a product whose entire proposition is
+              that it can be trusted to file things for you.
+            */}
+            {payload.memories.length === 0 ? (
+              <>
+                <p className="arc__greeting-line">Nothing up here yet.</p>
+                <p className="arc__greeting-aside">
+                  Paste a note, a link, or a screenshot below and Recall will read it and
+                  find it a place. The map builds itself from there.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="arc__greeting-line">Want to think something through?</p>
+                {/* The scale belongs in the sentence, where the eye already is —
+                    the Inspector used to shout it from the corner instead. */}
+                <p className="arc__greeting-aside">
+                  {payload.memories.length} memories from {payload.sources.length} sources,
+                  already sorted. Ask me anything about them — or press Enter to look around.
+                </p>
+              </>
+            )}
           </div>
         ))}
 
@@ -466,10 +617,14 @@ export function ArcBrowser() {
       <div className="reading" data-testid="reading-list" style={{ top: geometry.listTop }}>
         <div className="reading__head">
           <span>{heading}</span>
+          {/* "Folder" was left over from the two-pane list this replaced, and
+              then survived a stone and a star. There is nothing on this screen
+              a person would call a folder; what is above them is a category
+              with a name under it, so the hint says that. */}
           <span className="reading__hint">
             {showingAnswer
-              ? 'Drag any of these onto a folder to keep it'
-              : 'Drag one onto a folder to re-file it'}
+              ? 'Drag any of these up to a category to keep it'
+              : 'Drag one up to a category to re-file it'}
           </span>
         </div>
 

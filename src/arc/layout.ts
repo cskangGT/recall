@@ -30,6 +30,79 @@ export const MAX_SPAN_DEG = 120;
 export const DEG_PER_NODE = 22;
 
 /**
+ * Half a node's hit area — `.arc__node` is 88px wide with `margin-left: -44px`,
+ * so it hangs symmetrically off the point it is placed on.
+ *
+ * The fan has to fit the *boxes*, not the centres. `.canvas-wrap` is
+ * `overflow: hidden`, so a node whose centre is comfortably inside the column
+ * can still have its label clipped in half.
+ */
+export const NODE_HALF_W = 44;
+
+/** Room left between the outermost node and the edge of the column. */
+export const EDGE_GUTTER = 12;
+
+/**
+ * A node's box width. Must match `.arc__node { width }` in theme.css.
+ *
+ * It is the label that sets it, not the star: two stars can sit almost on top of
+ * each other and still read as two stars, whereas two labels that overlap are
+ * unreadable. So it is also the number that decides how many categories the arc
+ * can hold at all.
+ */
+export const NODE_WIDTH = 88;
+
+/**
+ * The straight-line distance between two neighbours on the arc.
+ *
+ * Every gap is the same — the nodes are evenly spaced on a circle — so one chord
+ * describes the whole fan.
+ */
+export function chordFor(count: number, radius: number): number {
+  if (count < 2) return Infinity;
+  const stepRad = ((spanFor(count) / (count - 1)) * Math.PI) / 180;
+  return 2 * radius * Math.sin(stepRad / 2);
+}
+
+/**
+ * How many categories this arc can actually hold.
+ *
+ * Derived rather than typed, because the answer changes with the window: at the
+ * narrowest viewport the app will render it is seven at the top level and four
+ * inside a category — and that four *includes* the way back out, so a category
+ * with four children already overflows today. Anything past the limit has its
+ * labels collide, which is a worse failure than not being shown, because it
+ * makes the categories that are there unreadable too.
+ */
+export function arcCapacity(radius: number, nodeWidth: number = NODE_WIDTH): number {
+  let capacity = 1;
+  // The fan stops widening at MAX_SPAN_DEG, so past that point every extra node
+  // makes every gap smaller and the search can stop at the first failure.
+  for (let n = 2; n <= 64; n++) {
+    if (chordFor(n, radius) < nodeWidth) break;
+    capacity = n;
+  }
+  return capacity;
+}
+
+/**
+ * Which seat each rank gets, most interesting first.
+ *
+ * The apex, then alternating outward. On an upward arc the middle is the highest
+ * point and the one the eye lands on, so ranking left-to-right would spend the
+ * best position on whatever happened to sort first. The result is a mountain
+ * with the strongest at the peak.
+ *
+ * Returns seat indices in rank order: `seatByRank(5)[0]` is where rank 1 sits.
+ */
+export function seatByRank(count: number): number[] {
+  const middle = Math.floor((count - 1) / 2);
+  return Array.from({ length: count }, (_, i) => i).sort(
+    (a, b) => Math.abs(a - middle) - Math.abs(b - middle) || b - a,
+  );
+}
+
+/**
  * The fan is only as wide as it needs to be. Three children spread across a
  * half-circle look flung apart rather than related, so the span grows with the
  * count and stops at {@link MAX_SPAN_DEG}.
@@ -118,12 +191,30 @@ export function fitArc(
   // itself symmetric gutters, so the column it measures is narrower than the
   // window. Half the fan is r·sin(60°) plus a node's half-width, which at 0.48
   // still lands inside the column.
+  /*
+   * The width factor above is a proportion, not a guarantee. At the narrowest
+   * viewport the app will render — 1280px, which the browsing shell's symmetric
+   * gutters cut to a 560px column — 0.48 put the outermost node's right edge
+   * 3.2px inside an `overflow: hidden` container. It fit, but by luck rather
+   * than by construction, and nothing in the code said 3.2px was the margin.
+   *
+   * So state it. Half the fan is r·sin(half-span) and the node hangs
+   * NODE_HALF_W past that; the widest the fan ever opens is MAX_SPAN_DEG, so
+   * that half-angle is the case to survive regardless of how many nodes are on
+   * the arc. Above roughly 1300px the proportion is still the smaller number
+   * and this changes nothing.
+   */
+  const widthLimit =
+    (viewport.w / 2 - NODE_HALF_W - EDGE_GUTTER) /
+    Math.sin(((MAX_SPAN_DEG / 2) * Math.PI) / 180);
+
   const radius = Math.max(
     120,
     Math.min(
       viewport.w * (open ? 0.32 : 0.48),
       viewport.h * (open ? 0.34 : 0.52),
       focusY - 80,
+      widthLimit,
       open ? 240 : 470,
     ),
   );
@@ -132,4 +223,42 @@ export function fitArc(
     radius,
     listTop: focusY + (open ? 112 : 0),
   };
+}
+
+/** Which slice of a ranking the arc is currently showing. */
+export interface ArcPage {
+  /** Index of the first item on this page. */
+  start: number;
+  /** How many items this page shows. */
+  count: number;
+  /** How many are not on it. Zero means there is no `more` mark. */
+  hidden: number;
+  /** Total number of pages. Always at least 1. */
+  pages: number;
+}
+
+/**
+ * How to split a ranking across an arc that cannot hold all of it.
+ *
+ * The `more` mark takes a seat like anything else, so a paged arc shows one
+ * fewer category than an unpaged one — and it stays on every page, including the
+ * last, so paging wraps instead of dead-ending. `page` is taken modulo the page
+ * count for the same reason: pressing it repeatedly should cycle rather than run
+ * off the end.
+ *
+ * Out here rather than inline in the component because the seeded workspace
+ * never overflows — its biggest category has three children against a capacity
+ * of four — so nothing in the demo would ever exercise it, and untested paging
+ * is paging that does not work.
+ */
+export function paginate(total: number, capacity: number, page: number): ArcPage {
+  const seats = Math.max(1, capacity);
+  if (total <= seats) return { start: 0, count: total, hidden: 0, pages: 1 };
+
+  const perPage = Math.max(1, seats - 1);
+  const pages = Math.ceil(total / perPage);
+  const current = ((page % pages) + pages) % pages;
+  const start = current * perPage;
+  const count = Math.min(perPage, total - start);
+  return { start, count, hidden: total - count, pages };
 }

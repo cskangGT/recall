@@ -1,4 +1,5 @@
 import { cosine } from '../core/vectorMath';
+import { ECHO_SIMILARITY } from '../core/thresholds';
 import type { GraphPayload, Memory } from '../core/types';
 
 /**
@@ -12,14 +13,6 @@ import type { GraphPayload, Memory } from '../core/types';
  * than a scripted caption.
  */
 
-/**
- * Above this cosine, a new memory is saying something you have already saved.
- *
- * Deliberately not a de-duplication threshold — nothing is discarded. It only
- * decides whether the UI says "new" or shows you the thing it echoes, and being
- * wrong costs a slightly odd label rather than lost data.
- */
-export const ECHO_SIMILARITY = 0.86;
 
 export interface CapturedMemory {
   id: string;
@@ -33,6 +26,14 @@ export interface CaptureStory {
   saw: string;
   sourceTitle: string;
   memories: CapturedMemory[];
+  /**
+   * What the source said that was already held, and therefore not written.
+   *
+   * Reported rather than dropped in silence. A source that produced four
+   * memories and added one has to be able to say why, or the count reads as
+   * extraction having failed.
+   */
+  alreadyHeld: { text: string; similarity: number }[];
   /** The top-level category the capture landed in. */
   destination: string | null;
   /** Set when the capture also triggered a restructuring. */
@@ -52,11 +53,31 @@ export function buildCaptureStory(
   after: GraphPayload,
   addedMemoryIds: string[],
   restructured: boolean,
+  alreadyHeld: { text: string; similarity: number }[] = [],
 ): CaptureStory | null {
   const added = addedMemoryIds
     .map((id) => after.memories.find((m) => m.id === id))
     .filter((m): m is Memory => m !== undefined);
-  if (added.length === 0) return null;
+  /*
+   * Everything the source said was already held.
+   *
+   * Returning null here would leave the screen blank after a capture that did
+   * real work — read the thing, compared it, decided. There is a story to tell;
+   * it just has no new memory in it.
+   */
+  if (added.length === 0) {
+    if (alreadyHeld.length === 0) return null;
+    return {
+      // Separated, because these are distinct sentences and joining them on a
+      // space runs the end of one into the start of the next.
+      saw: alreadyHeld.map((h) => h.text).join(' · '),
+      sourceTitle: 'Nothing new',
+      memories: [],
+      alreadyHeld,
+      destination: null,
+      restructured: false,
+    };
+  }
 
   const source = after.sources.find((s) => s.id === added[0]!.source_id);
 
@@ -91,6 +112,7 @@ export function buildCaptureStory(
         : (source?.raw_content ?? added.map((m) => m.text).join(' ')),
     sourceTitle: source?.title ?? 'Untitled capture',
     memories,
+    alreadyHeld,
     destination: parentNameOf(after, added[0]!.category_id),
     restructured,
   };

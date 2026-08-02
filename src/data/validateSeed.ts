@@ -1,6 +1,22 @@
 import type { GraphPayload } from '../core/types';
 
-export const VECTOR_DIM = 8;
+/**
+ * The width every vector in a payload must share.
+ *
+ * Derived from the payload rather than declared, because the number is a
+ * property of whoever embedded it — 8 while the seed carried hand-authored
+ * vectors, 1024 now that it carries real ones, 1536 if someone drops the
+ * narrowing. Pinning it as a constant meant every change of embedder was also
+ * an edit here, and forgetting made the app throw on boot.
+ *
+ * What is worth checking is not the number but the agreement. `cosine`
+ * (src/core/vectorMath.ts) walks `a.length` with `?? 0`, so comparing an 8-wide
+ * vector against a 1024-wide one returns a plausible wrong number instead of
+ * failing — a corpus half re-embedded would rank by nonsense and look fine.
+ */
+export function vectorDimOf(p: GraphPayload): number {
+  return p.memories[0]?.vector.length ?? 0;
+}
 
 export class SeedValidationError extends Error {
   constructor(message: string) {
@@ -33,11 +49,14 @@ export function validateSeed(raw: unknown): GraphPayload {
     }
   }
 
+  const dim = vectorDimOf(p);
+  if (dim === 0) fail('seed has no memories to take a vector width from');
+
   for (const m of p.memories) {
     if (!categoryIds.has(m.category_id)) fail(`memory ${m.id} has unknown category ${m.category_id}`);
     if (!sourceIds.has(m.source_id)) fail(`memory ${m.id} has unknown source ${m.source_id}`);
-    if (m.vector.length !== VECTOR_DIM) {
-      fail(`memory ${m.id} has vector dimension ${m.vector.length}, expected ${VECTOR_DIM}`);
+    if (m.vector.length !== dim) {
+      fail(`memory ${m.id} has vector dimension ${m.vector.length}, expected ${dim}`);
     }
     for (const id of m.entity_ids) {
       if (!entityIds.has(id)) fail(`memory ${m.id} references unknown entity ${id}`);

@@ -63,6 +63,67 @@ test('the workspace counts stay out of the first frame', async ({ page }) => {
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
 });
 
+/**
+ * The greeting says "press Enter to look around". It was not true: the composer
+ * is never focused, so on first paint focus is on <body> and Enter reached
+ * nothing. The fix is a window-level handler rather than an autofocus, because
+ * G, T, S and `,` are single-key shortcuts and App's handler steps aside for
+ * INPUT targets — a focused composer would swallow all four.
+ */
+test('pressing Enter on the greeting actually looks around', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('welcome')).toBeVisible();
+
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('welcome')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="arc-node-"]').first()).toBeVisible();
+});
+
+test('the single-key shortcuts still work on the greeting', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('welcome')).toBeVisible();
+
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+});
+
+/**
+ * The arc renders `welcomeDismissed ? nodes : []`, but its keyboard handler
+ * closed over the full array regardless — so ArrowRight on the greeting opened a
+ * category and dropped a reading list onto an empty sky, with no arc anywhere to
+ * explain where it had come from.
+ */
+test('arrow keys on the greeting cannot open a category behind it', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('welcome')).toBeVisible();
+
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Backspace');
+
+  await expect(page.getByTestId('welcome')).toBeVisible();
+  await expect(page.getByTestId('reading-list')).toHaveCount(0);
+});
+
+/**
+ * Leaving for the map *is* looking around, so coming back cannot land on a
+ * greeting asking whether you would like to — with the top bar rendered over it
+ * offering "See the big picture", which is the picture you just came back from.
+ */
+test('coming back from the map does not re-ask the first question', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('welcome')).toBeVisible();
+
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await page.keyboard.press('t');
+
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await expect(page.getByTestId('welcome')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="arc-node-"]').first()).toBeVisible();
+});
+
 test('?skipWelcome=1 starts with the categories already out', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();

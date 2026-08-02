@@ -282,10 +282,16 @@ describe('assignMemory — spec 8.3 thresholds', () => {
     const dim = 8;
     const base = new Array(dim).fill(0);
     base[0] = 1;
-    // ~63 degrees off the only member: 0.45, inside the 0.40-0.55 band.
+    /*
+     * Placed relative to the thresholds rather than at a literal 0.45, which was
+     * "inside the 0.40-0.55 band" until that band became 0.24-0.28 and the case
+     * silently turned into an `existing` match. The band is what is under test;
+     * where it happens to sit is the embedder's business.
+     */
+    const target = (ASSIGN.NEW_CHILD + ASSIGN.EXISTING_CATEGORY) / 2;
     const between = new Array(dim).fill(0);
-    between[0] = 0.45;
-    between[6] = Math.sqrt(1 - 0.45 ** 2);
+    between[0] = target;
+    between[6] = Math.sqrt(1 - target ** 2);
 
     const profiles = [{ id: 'cat_parent', parentId: null, vectors: [base] }];
     const decision = assignMemory(between, profiles);
@@ -329,5 +335,72 @@ describe('assignMemory — spec 8.3 thresholds', () => {
 
     const v = payload.memories[0]!.vector;
     expect(assignMemory(v, profiles).categoryId).not.toBe('cat_empty');
+  });
+});
+
+/**
+ * Not saving the same thing twice.
+ *
+ * The number this needs is already on the ingest path: `assignMemory` takes the
+ * argmax of `bestMemberSimilarity` across every category profile, so its score
+ * is the candidate's nearest neighbour in the whole corpus. The check is a
+ * comparison, not a computation.
+ */
+describe('IngestPipeline — duplicates', () => {
+  it('leaves the demo capture alone — it is not a duplicate of anything', async () => {
+    const result = await capture();
+    // The guard for every count assertion in this file and in api.test.ts.
+    expect(result.addedMemoryIds).toHaveLength(2);
+    expect(result.skipped).toHaveLength(0);
+  });
+
+  it('adds nothing the second time the same source arrives', async () => {
+    await capture();
+    const again = await capture();
+
+    expect(again.addedMemoryIds).toHaveLength(0);
+    expect(again.skipped).toHaveLength(2);
+    expect(again.skipped.every((s) => s.similarity > 0.99)).toBe(true);
+    // And the corpus is the size it was after the first capture, not larger.
+    expect(repo.listMemories(WS)).toHaveLength(49);
+  });
+
+  it('says which text it already had, not merely that it skipped something', async () => {
+    await capture();
+    const again = await capture();
+    expect(again.skipped[0]!.text).toBeTruthy();
+    expect(again.skipped.map((s) => s.text)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Braintrust')]),
+    );
+  });
+
+  /**
+   * The failure that matters. A false positive is silent data loss — something
+   * captured, judged already held, and never written. A second capture must not
+   * be able to reorganize anything either: a duplicate is skipped before the
+   * category branch, so it cannot create a category on its way to being
+   * discarded.
+   */
+  it('creates no category and fires no reorganization for a duplicate', async () => {
+    await capture();
+    const before = repo.getGraphPayload(WS).categories.length;
+    const again = await capture();
+
+    expect(again.reorg).toBeNull();
+    expect(repo.getGraphPayload(WS).categories).toHaveLength(before);
+  });
+
+  it('keeps entities attached to the memory they came from', async () => {
+    // Entities are keyed by extracted index, which stopped matching the written
+    // rows the moment duplicates could be skipped. Indexing the wrong array
+    // hangs every entity on the wrong memory — valid ids, silent corruption.
+    const result = await capture();
+    const payload = repo.getGraphPayload(WS);
+    for (const id of result.addedMemoryIds) {
+      const memory = payload.memories.find((m) => m.id === id)!;
+      for (const entityId of memory.entity_ids) {
+        expect(payload.entities.some((e) => e.id === entityId)).toBe(true);
+      }
+    }
   });
 });

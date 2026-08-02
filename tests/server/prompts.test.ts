@@ -4,6 +4,7 @@ import {
   nameByFallback, resolveAnswer, resolveNames,
 } from '../../server/ai/prompts.ts';
 import { parseVoyageResponse } from '../../server/ai/voyage.ts';
+import { parseOpenAiResponse, OpenAiEmbeddings, DEFAULT_DIMENSIONS } from '../../server/ai/openai.ts';
 import { selectAi } from '../../server/ai/select.ts';
 import type { NameCluster, RetrievedMemory } from '../../server/ai/provider.ts';
 
@@ -219,7 +220,7 @@ describe('selectAi', () => {
   it('will not run half-live — one key is not enough', () => {
     const s = selectAi({ ANTHROPIC_API_KEY: 'sk-x' } as NodeJS.ProcessEnv);
     expect(s.live).toBe(false);
-    expect(s.reason).toContain('VOYAGE_API_KEY');
+    expect(s.reason).toContain('VOYAGE_API_KEY or OPENAI_API_KEY');
   });
 
   it('says so when RECALL_AI=live was asked for but cannot be honoured', () => {
@@ -239,5 +240,103 @@ describe('selectAi', () => {
     expect(s.live).toBe(true);
     expect(s.ai.name).toBe('anthropic');
     expect(s.embeddings.dimensions).toBe(1024);
+  });
+
+  /**
+   * The bug this fixes. Voyage was the only embedder for long enough that its
+   * key became load-bearing for the whole stack: an Anthropic key and an OpenAI
+   * key present, Voyage's missing, and everything ran on fixtures while
+   * reporting "VOYAGE_API_KEY not set" — true, and useless.
+   */
+  it('accepts OpenAI as the embedder when Voyage has no key', () => {
+    const s = selectAi({ ANTHROPIC_API_KEY: 'sk-x', OPENAI_API_KEY: 'sk-o' } as NodeJS.ProcessEnv);
+    expect(s.live).toBe(true);
+    expect(s.reason).toContain('OPENAI_API_KEY');
+    // Same width either way, so a workspace survives a change of supplier.
+    expect(s.embeddings.dimensions).toBe(1024);
+  });
+
+  it('prefers Voyage when both embedders are available', () => {
+    const s = selectAi({
+      ANTHROPIC_API_KEY: 'sk-x', VOYAGE_API_KEY: 'v', OPENAI_API_KEY: 'sk-o',
+    } as NodeJS.ProcessEnv);
+    // Voyage is the one whose document/query asymmetry retrieval was written for.
+    expect(s.reason).toContain('VOYAGE_API_KEY');
+    expect(s.reason).not.toContain('OPENAI_API_KEY');
+  });
+
+  it('still refuses to run an embedder without a namer', () => {
+    const s = selectAi({ OPENAI_API_KEY: 'sk-o' } as NodeJS.ProcessEnv);
+    expect(s.live).toBe(false);
+    expect(s.reason).toContain('ANTHROPIC_API_KEY');
+  });
+});
+
+describe('parseOpenAiResponse', () => {
+  const ok = (n: number, dim = 2) => ({
+    data: Array.from({ length: n }, (_, i) => ({
+      index: i,
+      embedding: Array.from({ length: dim }, () => i),
+    })),
+  });
+
+  it('returns one vector per input', () => {
+    expect(parseOpenAiResponse(ok(3), 3, 2)).toHaveLength(3);
+  });
+
+  /**
+   * The guard that matters. OpenAI sends an explicit `index` and does not
+   * promise arrival order; trusting the array as it comes embeds every memory
+   * as its neighbour — a corruption nothing downstream can detect, because
+   * every vector is still a perfectly valid vector.
+   */
+  it('sorts by index rather than trusting arrival order', () => {
+    const body = {
+      data: [
+        { index: 1, embedding: [1, 1] },
+        { index: 0, embedding: [0, 0] },
+      ],
+    };
+    expect(parseOpenAiResponse(body, 2, 2)[0]).toEqual([0, 0]);
+  });
+
+  it('refuses a width it did not ask for', () => {
+    expect(() => parseOpenAiResponse(ok(1, 8), 1, 1024)).toThrow(/different spaces/);
+  });
+
+  it('refuses a short response', () => {
+    expect(() => parseOpenAiResponse(ok(2), 3, 2)).toThrow(/2 embeddings for 3/);
+  });
+
+  it('refuses a body with no data', () => {
+    expect(() => parseOpenAiResponse({}, 1, 2)).toThrow(/no data array/);
+  });
+});
+
+describe('OpenAiEmbeddings', () => {
+  it('asks for the narrowed width, measured to be the one that keeps the split', () => {
+    // 512 fails the harness (margin 0.0083 against a 0.01 floor); 1024 passes
+    // at 0.0133. text-embedding-3-* are Matryoshka, so this is a request
+    // parameter rather than a different model.
+    expect(DEFAULT_DIMENSIONS).toBe(1024);
+
+    let sent: unknown = null;
+    const fetchImpl = (async (_url: string, init: { body: string }) => {
+      sent = JSON.parse(init.body);
+      return {
+        ok: true,
+        json: async () => ({ data: [{ index: 0, embedding: Array(1024).fill(0.1) }] }),
+      };
+    }) as unknown as typeof fetch;
+
+    const provider = new OpenAiEmbeddings({ apiKey: 'sk-o', fetchImpl });
+    return provider.embed(['hello'], 'document').then((out) => {
+      expect(out[0]).toHaveLength(1024);
+      expect(sent).toMatchObject({ model: 'text-embedding-3-small', dimensions: 1024 });
+    });
+  });
+
+  it('says which key is missing rather than failing at the first request', () => {
+    expect(() => new OpenAiEmbeddings({ apiKey: '' })).toThrow(/OPENAI_API_KEY/);
   });
 });

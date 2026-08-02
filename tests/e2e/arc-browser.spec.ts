@@ -21,22 +21,53 @@ const arcLabels = (page: Page) =>
     ),
   );
 
+/**
+ * The arc in rank order rather than in screen order. Rank 1 sits at the apex and
+ * the rest alternate outward, so the seating is a mountain — undo it by walking
+ * out from the middle the same way.
+ */
+const arcRanking = async (page: Page) => {
+  const labels = await arcLabels(page);
+  const middle = Math.floor((labels.length - 1) / 2);
+  return [...labels.keys()]
+    .sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || b - a)
+    .map((seat) => labels[seat]!);
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 });
 
-test('opens on the top level with every parent category on the arc', async ({ page }) => {
-  expect(await arcLabels(page)).toEqual([
-    'Fundraising=11',
-    'AI Tooling=9',
+/**
+ * This used to assert the six categories in insertion order, which is a fact
+ * about the database rather than about the person using it. Being on the arc now
+ * means "this is what you have been on lately", so the assertion is about the
+ * ranking, and the seed's dates are authored to make that ranking a story:
+ * lately this person has been hiring and digging into agent tooling, while the
+ * fundraise was the spring and is over — so Fundraising comes last despite
+ * holding the most memories of anything.
+ *
+ * Read by rank rather than left to right, because the arc seats rank 1 at the
+ * apex and works outward — the middle of an upward arc is the position the eye
+ * lands on, and left-to-right would spend it on whatever sorted first.
+ */
+test('opens on the top level ranked by what the user has been on', async ({ page }) => {
+  expect(await arcRanking(page)).toEqual([
     'Hiring=7',
+    'AI Tooling=9',
     'Product=8',
-    'Go-to-Market=6',
     'Personal Systems=6',
+    'Go-to-Market=6',
+    'Fundraising=11',
   ]);
   // Nothing is open yet, so the reading list stays out of the way.
   await expect(page.getByTestId('reading-list')).toHaveCount(0);
+});
+
+test('seats the strongest at the apex, not at the left end', async ({ page }) => {
+  const labels = await arcLabels(page);
+  expect(labels[Math.floor((labels.length - 1) / 2)]).toBe('Hiring=7');
 });
 
 test('drilling into a category fans out its children and fills the reading list', async ({
@@ -57,7 +88,7 @@ test('a category with no children opens its memories without descending', async 
   await node(page, 'cat_ai_tooling').click();
 
   await expect(page.locator('.reading .item')).toHaveCount(9);
-  await expect(named(page, 'Back')).toHaveCount(0);
+  await expect(node(page, '__back__')).toHaveCount(0);
   await expect(named(page, 'Fundraising')).toBeVisible();
 });
 
@@ -65,9 +96,20 @@ test('back returns to the top level', async ({ page }) => {
   await node(page, 'cat_fundraising').click();
   await expect(named(page, 'Investor Notes')).toBeVisible();
 
-  await named(page, 'Back').click();
+  await node(page, '__back__').click();
   await expect(named(page, 'Investor Notes')).toHaveCount(0);
   expect(await arcLabels(page)).toHaveLength(6);
+});
+
+/**
+ * It used to read "Back", on the grounds that the breadcrumb already named the
+ * parent. But the breadcrumb names where you *are*; nothing named what is one
+ * level up, and a category's place in the structure is most of what it means
+ * here. It carries the destination, not the direction.
+ */
+test('the way up names where it goes', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+  await expect(node(page, '__back__')).toContainText('Everything');
 });
 
 test('Backspace also climbs a level', async ({ page }) => {
@@ -98,12 +140,61 @@ test('dragging a memory onto a category re-files it and locks it (AC-28)', async
 test('dragging a subcategory onto a parent re-parents it', async ({ page }) => {
   await node(page, 'cat_fundraising').click();
 
-  // The parents arrive as an extra strip during the drag. They are added
-  // alongside the arc rather than replacing it — replacing it unmounts the
-  // dragged node's siblings and wedges the browser's drag loop.
-  await named(page, 'Investor Notes').dragTo(page.getByTestId('reparent-target-cat_hiring'));
+  /*
+   * The parents arrive as an extra surface during the drag. They are added
+   * alongside the arc rather than replacing it — replacing it unmounts the
+   * dragged node's siblings and wedges the browser's drag loop.
+   *
+   * Driven by hand rather than with `dragTo` because the targets do not exist
+   * until the drag is under way: at rest the panel is a caption, so `dragTo`
+   * would be waiting for a box to measure that only appears once the mouse is
+   * already down. Which is also the honest version of the gesture.
+   */
+  await named(page, 'Investor Notes').hover();
+  await page.mouse.down();
+  await page.mouse.move(700, 380, { steps: 10 });
+
+  const target = page.getByTestId('reparent-target-cat_hiring');
+  await expect(target).toBeVisible();
+  const box = (await target.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
 
   await expect(page.getByTestId('toast')).toContainText('Moved Investor Notes into Hiring.');
+});
+
+/**
+ * The drop targets used to be 33px tall and 38px apart, in a panel pinned to the
+ * bottom-left corner — about 720px diagonally from the node you had just picked
+ * up. Overshooting by twenty pixels filed the group under the wrong parent,
+ * which is the one mistake this product's trust story says it must not make.
+ */
+test('the re-parent targets are large and near the arc while dragging', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+
+  await named(page, 'Investor Notes').hover();
+  await page.mouse.down();
+  await page.mouse.move(700, 380, { steps: 10 });
+
+  const target = page.getByTestId('reparent-target-cat_hiring');
+  await expect(target).toBeVisible();
+  const box = (await target.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(56);
+  expect(box.width).toBeGreaterThanOrEqual(150);
+
+  // Below the arc, not in a corner: the whole surface is in the upper half.
+  const panel = (await page.getByTestId('reparent-hint').boundingBox())!;
+  expect(panel.y).toBeLessThan(page.viewportSize()!.height * 0.55);
+
+  await page.mouse.up();
+});
+
+/** At rest it is a caption. A menu of six names with nothing to act on reads as
+    something someone left open, and it cannot be dropped on anyway. */
+test('the re-parent targets stay out of the way until something is dragged', async ({ page }) => {
+  await node(page, 'cat_fundraising').click();
+  await expect(page.getByTestId('reparent-hint')).toBeVisible();
+  await expect(page.getByTestId('reparent-target-cat_hiring')).toBeHidden();
 });
 
 test('a subcategory cannot be nested under another subcategory (AC-31)', async ({ page }) => {
@@ -220,10 +311,24 @@ test('the capture story says what was read, what was new, and where it went', as
   await expect(story).toContainText('What Recall saw');
   await expect(page.getByTestId('capture-story-memory')).toHaveCount(2);
 
-  // One of the two echoes an eval memory already in the corpus — that verdict
-  // is real cosine similarity against the pre-capture payload, not a caption.
-  await expect(page.getByTestId('capture-story-echo')).toHaveCount(1);
-  await expect(page.getByTestId('capture-story-new')).toHaveCount(1);
+  /*
+   * Both read as new, and the echo is gone on purpose.
+   *
+   * Under the authored 8-dimensional vectors one of these two echoed a seeded
+   * eval memory, and that line — "You already saved something close to this" —
+   * was the best thing the capture story said. Measured against real
+   * embeddings the pair scores 0.3567 while the 99th percentile of every
+   * ordinary pair in the corpus is 0.4550: it is *less* alike than one random
+   * pair in a hundred. The two sentences were never saying the same thing, they
+   * shared a theme, and a theme is all those vectors encoded.
+   *
+   * A threshold low enough to catch it calls 104 of 1,081 pairs an echo, so
+   * ECHO_SIMILARITY is parked above 1 and the verdict stays honest. The
+   * assertion is kept rather than deleted because this is the thing real
+   * de-duplication has to bring back, and it should fail here when it does.
+   */
+  await expect(page.getByTestId('capture-story-echo')).toHaveCount(0);
+  await expect(page.getByTestId('capture-story-new')).toHaveCount(2);
 
   await expect(page.getByTestId('capture-story-destination')).toContainText('AI Tooling');
 });
@@ -256,4 +361,84 @@ test('the map is still one labelled click away from its new home', async ({ page
   await page.goto('/?skipWelcome=1');
   await page.getByTestId('go-map').click();
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+});
+
+/**
+ * The composer is docked and always mounted, so unlike the two command bars
+ * there is no dialog to close — and App's keyboard handler steps aside for INPUT
+ * targets. Clicking the box therefore killed G, T, S and `,` outright: they
+ * typed their letters into it instead of navigating, nothing on screen said so,
+ * and the only way back was the mouse.
+ */
+test('Escape hands the keyboard back after clicking the chat box', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  await page.getByTestId('composer-input').click();
+  await page.keyboard.press('g');
+  // Still browsing, and the shortcut went into the box as a letter.
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await expect(page.getByTestId('composer-input')).toHaveValue('g');
+
+  await page.getByTestId('composer-input').fill('');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+});
+
+/**
+ * Escape in the composer means "give me my keyboard back", not "throw away what
+ * I was reading" — App's Escape also clears the answer and the selection, and
+ * losing an answer because you wanted the arrow keys is not the same gesture.
+ */
+test('Escape in the composer does not discard the answer', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  await page.getByTestId('composer-input').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  // A second Escape, now that the window can hear it, does clear it.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('browser-answer')).toHaveCount(0);
+});
+
+/**
+ * The point of the whole thing. Asking is the strongest of the three signals —
+ * framing a question is deliberate in a way that saving and browsing are not —
+ * so the category an answer drew on should be the one at the apex afterwards.
+ *
+ * Until now asking left no trace anywhere: the server wrote `ask_history` and
+ * read it back nowhere, and the client never saw it at all.
+ */
+test('asking about something moves it to the top of the arc', async ({ page }) => {
+  expect((await arcRanking(page))[0]).toBe('Hiring=7');
+
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  expect((await arcRanking(page))[0]).toBe('AI Tooling=9');
+});
+
+/**
+ * And it has to survive a reload, or "lately" means "since you opened the tab".
+ * This is the first thing in the client that persists anything.
+ */
+test('what you asked about is still there after a reload', async ({ page }) => {
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  expect((await arcRanking(page))[0]).toBe('AI Tooling=9');
+});
+
+/** A fresh browser has no history, so the arc ranks on the corpus alone. */
+test('a workspace with no interaction history still ranks, on its saves', async ({ page }) => {
+  expect((await arcRanking(page))[0]).toBe('Hiring=7');
 });

@@ -21,6 +21,8 @@ export interface CaptureInput {
 
 export interface CaptureResult {
   addedMemoryIds: string[];
+  /** Extracted memories the corpus already held, so they were not written. */
+  skipped?: { text: string; similarity: number }[];
   reorg: {
     id: string;
     operation: string;
