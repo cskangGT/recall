@@ -59,7 +59,12 @@ export interface Repository {
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],
-    fields?: { error_message?: string | null; summary?: string | null; processed_at?: string | null },
+    fields?: {
+      error_message?: string | null;
+      summary?: string | null;
+      processed_at?: string | null;
+      title?: string | null;
+    },
   ): void;
   listSources(workspaceId: string): SourceRow[];
 

@@ -27,6 +27,14 @@ export interface IngestInput {
   type: SourceType;
   /** Pasted text, or the fetched body of a link. */
   content?: string;
+  /**
+   * What to call this source, when the caller knows better than we can guess.
+   *
+   * The browser extension does: it has the page's own `<title>`, which is
+   * authoritative and free. Without it the title is the first sixty characters
+   * of the body, which for a saved article is a sentence fragment.
+   */
+  title?: string;
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];
@@ -128,6 +136,28 @@ export function planAssignments(
 }
 
 
+/**
+ * True when the source's title was derived rather than given.
+ *
+ * A predicate rather than a `title_locked` column, and rather than a flag
+ * threaded through `process()`. A column would need a migration, and
+ * `migrate()` is `CREATE TABLE IF NOT EXISTS` only — a new column silently
+ * never appears in a database that already exists, which after the launchd
+ * agent means every real corpus. A flag would not survive `retry()`, which
+ * reconstructs from the row and has no idea where the title came from.
+ *
+ * Reading it back off the row survives both.
+ */
+export function isDerivedTitle(source: SourceRow): boolean {
+  const title = source.title;
+  return (
+    title === '' ||
+    title === 'Untitled' ||
+    title === source.url ||
+    title === source.raw_content.slice(0, 60)
+  );
+}
+
 export class IngestPipeline {
   // Written out rather than as constructor parameter properties: those emit
   // code, not just types, so Node's strip-only TypeScript loader rejects them —
@@ -150,7 +180,9 @@ export class IngestPipeline {
       id: sourceId,
       workspace_id: input.workspaceId,
       type: input.type,
-      title: input.content?.slice(0, 60) ?? input.url ?? 'Untitled',
+      // `||` not `??`: a link capture with `content: ''` is not nullish, so the
+      // old `??` gave it a title of the empty string.
+      title: input.title?.trim() || input.content?.slice(0, 60) || input.url || 'Untitled',
       raw_content: input.content ?? '',
       scene_description: null,
       url: input.url ?? null,
@@ -234,8 +266,23 @@ export class IngestPipeline {
         this.persist(input.workspaceId, sourceId, extracted, vectors, payload, plan, names),
       );
 
+      /*
+       * `suggested_title` was extracted and thrown away.
+       *
+       * The extract prompt has always asked for it — "five words or fewer,
+       * naming the source, not the contents" — and nothing ever wrote it down,
+       * so a pasted note was titled with its own first sixty characters
+       * forever. That is what Sources has been showing.
+       *
+       * It fills in only where nothing better exists. A title the caller gave
+       * us wins: the extension has the page's own `<title>`, which is
+       * authoritative, and a model's guess must not overwrite it. `null` is
+       * "leave it alone" by the COALESCE above.
+       */
       this.repo.updateSourceStatus(sourceId, 'complete', {
-        summary: extracted.summary, processed_at: now(),
+        summary: extracted.summary,
+        processed_at: now(),
+        title: isDerivedTitle(source) ? extracted.suggested_title.trim() || null : null,
       });
 
       // ---- 6. Reorganize. A failure here is silent by design (spec §7.4):

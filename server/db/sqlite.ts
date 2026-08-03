@@ -146,7 +146,12 @@ export class SqliteRepository implements Repository {
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],
-    fields: { error_message?: string | null; summary?: string | null; processed_at?: string | null } = {},
+    fields: {
+      error_message?: string | null;
+      summary?: string | null;
+      processed_at?: string | null;
+      title?: string | null;
+    } = {},
   ): void {
     // COALESCE gives every field "null means leave it alone" semantics, which is
     // right for summary and processed_at and wrong for the error: it made a
@@ -158,7 +163,8 @@ export class SqliteRepository implements Repository {
         `UPDATE sources SET status = ?,
            error_message = CASE WHEN ? = 1 THEN COALESCE(?, error_message) ELSE NULL END,
            summary       = COALESCE(?, summary),
-           processed_at  = COALESCE(?, processed_at)
+           processed_at  = COALESCE(?, processed_at),
+           title         = COALESCE(?, title)
          WHERE id = ?`,
       )
       .run(
@@ -167,6 +173,7 @@ export class SqliteRepository implements Repository {
         fields.error_message ?? null,
         fields.summary ?? null,
         fields.processed_at ?? null,
+        fields.title ?? null,
         id,
       );
   }

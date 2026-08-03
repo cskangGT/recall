@@ -470,3 +470,42 @@ describe('invite token', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('what the capture response carries', () => {
+  it('names the categories it touched, so a caller need not search the graph', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot', content: 'Braintrust vs Langfuse', imagePath: '/seed/demo-screenshot.png',
+    });
+    const body = res.body as { touchedCategories: { id: string; name: string }[] };
+    expect(body.touchedCategories.length).toBeGreaterThan(0);
+    for (const c of body.touchedCategories) {
+      expect(typeof c.name).toBe('string');
+      expect(c.name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('omits the graph when the caller says it does not want it', async () => {
+    // The payload carries every memory's 1024-float vector and grows forever.
+    // The extension shows a notification and closes; it never reads this.
+    const res = await post(`${base}/capture`, {
+      type: 'text', content: 'a note', includeGraph: false,
+    });
+    const body = res.body as Record<string, unknown>;
+    expect(body.graph).toBeUndefined();
+    expect(body.touchedCategories).toBeDefined();
+    expect(body.addedMemoryIds).toBeDefined();
+  });
+
+  it('still sends the graph by default — the web client needs it', async () => {
+    const res = await post(`${base}/capture`, { type: 'text', content: 'a note' });
+    expect((res.body as Record<string, unknown>).graph).toBeDefined();
+  });
+
+  it('accepts a title and puts it on the source', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'link', url: 'https://example.com/a', title: 'A Page Title', content: 'body',
+    });
+    const { sourceId } = res.body as { sourceId: string };
+    expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
+  });
+});

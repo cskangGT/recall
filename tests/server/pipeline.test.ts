@@ -499,3 +499,60 @@ describe('a new category is named by the model, not by term statistics', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+describe('what a source is called', () => {
+  it('uses the title the caller gave, not the first sixty characters of the body', async () => {
+    // What the extension has and we cannot guess: the page's own <title>.
+    const result = await pipeline.ingest({
+      workspaceId: WS,
+      type: 'link',
+      url: 'https://example.com/attention',
+      title: 'Attention Is All You Need',
+      content: 'The dominant sequence transduction models are based on complex recurrent networks.',
+    });
+
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('Attention Is All You Need');
+  });
+
+  it('falls back to the model’s suggested_title when nothing better exists', async () => {
+    // The extract prompt has always asked for one — "five words or fewer,
+    // naming the source" — and it was extracted and discarded, so a pasted note
+    // was titled with its own opening sentence forever.
+    const provider = new FixtureProvider();
+    provider.extract = async () => ({
+      memories: [{ text: 'Braintrust replaced our spreadsheet of scores', kind: 'fact', confidence: 0.9, entities: [] }],
+      summary: 'a note', suggested_title: 'Eval Tooling Notes',
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({ workspaceId: WS, type: 'text', content: 'some long pasted note' });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('Eval Tooling Notes');
+  });
+
+  it('leaves an explicit title alone — a guess must not overwrite the real thing', async () => {
+    const provider = new FixtureProvider();
+    provider.extract = async () => ({
+      memories: [{ text: 'Braintrust replaced our spreadsheet', kind: 'fact', confidence: 0.9, entities: [] }],
+      summary: 'a note', suggested_title: 'Eval Tooling Notes',
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({
+      workspaceId: WS, type: 'link', url: 'https://example.com/x',
+      title: 'The Real Page Title', content: 'body text',
+    });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('The Real Page Title');
+  });
+
+  it('does not title a link with the empty string', async () => {
+    // `content: ''` is not nullish, so the old `??` chain never reached the url.
+    const result = await pipeline.ingest({
+      workspaceId: WS, type: 'link', url: 'https://example.com/bare', content: '',
+    });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).not.toBe('');
+  });
+});

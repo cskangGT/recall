@@ -14,6 +14,8 @@ import workspaceJson from '../../seed/workspace.json';
 export interface CaptureInput {
   type: 'text' | 'link' | 'screenshot';
   content?: string;
+  /** What to call the source. The extension has the page's own <title>. */
+  title?: string;
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];

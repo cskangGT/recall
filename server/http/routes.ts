@@ -184,16 +184,45 @@ async function handleWorkspace(
       workspaceId,
       type,
       content: typeof body.content === 'string' ? body.content : undefined,
+      title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
       imagePath: typeof body.imagePath === 'string' ? body.imagePath : undefined,
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
     });
-    // The graph rides along: the client needs the new state anyway, and a
-    // separate round trip would let the UI render a split before the payload
-    // that contains it.
-    return ok({ ...result, graph: deps.repo.getGraphPayload(workspaceId) });
+
+    /*
+     * Where it landed, always. A few hundred bytes, and it is the whole content
+     * of "Saved to Pricing Strategy Debates" — the sentence that tells you the
+     * tool understood you. Without it a caller has to search the graph payload
+     * to name a category it already has the id of.
+     */
+    const categories = deps.repo.getGraphPayload(workspaceId).categories;
+    const touchedCategories = result.touchedCategoryIds
+      .map((id) => categories.find((c) => c.id === id))
+      .filter((c) => c !== undefined)
+      .map((c) => ({ id: c.id, name: c.name }));
+
+    /*
+     * The graph rides along by default: the web client needs the new state
+     * anyway, and a separate round trip would let the UI render a split before
+     * the payload that contains it.
+     *
+     * `includeGraph: false` is for callers that do not — the extension shows a
+     * notification and closes. The payload carries every memory's 1024-float
+     * vector and grows forever, so this is not a micro-optimisation.
+     *
+     * A body field rather than a query parameter, because `server.ts` splits
+     * the query string off before calling `handle` and `routes.ts` stays a pure
+     * function over a parsed request.
+     */
+    if (body.includeGraph === false) return ok({ ...result, touchedCategories });
+    return ok({
+      ...result,
+      touchedCategories,
+      graph: deps.repo.getGraphPayload(workspaceId),
+    });
   }
 
   // POST /api/workspaces/:id/reset — back to the pristine seed corpus.
