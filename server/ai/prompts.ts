@@ -195,13 +195,41 @@ export function buildNamePrompt(input: {
   forbiddenNames: string[];
   retryReasons?: Record<string, string>;
 }): string {
+  /*
+   * Phrased per operation rather than interpolated raw. "Name the result of this
+   * new_category" is a sentence about the codebase; the others are sentences
+   * about what happened, and the model answers the second kind better.
+   */
+  const opening =
+    input.operation === 'new_category'
+      ? [
+          'Name the category these belong in. They arrived together and nothing',
+          'already saved is close enough to hold them, so this is a new one.',
+        ]
+      : [
+          `Name the result of this ${input.operation}. The change has already been decided;`,
+          'you are naming it, not judging it.',
+        ];
+
   const lines = [
-    `Name the result of this ${input.operation}. The change has already been decided;`,
-    'you are naming it, not judging it.',
+    ...opening,
     '',
     'One to three words. A name a person would recognise as their own category.',
     'Never a container word — "Miscellaneous", "Other", "General", "Various" are',
     'refusals to decide, not names.',
+    '',
+    /*
+     * The headings below are identifiers, and the model has to be told so.
+     *
+     * Without this line gpt-4.1 reads "## new_0" as a placeholder heading and
+     * answers with a cluster_id of its own invention — "pricing_decisions" for
+     * a name of "Pricing Decisions". `resolveNames` matches on cluster_id, so a
+     * perfectly good name arrives as "no name returned", is retried once, and
+     * lands on TF-IDF. That is how a note about a pricing argument came out
+     * called "Discussed Lowering" *with the namer working*.
+     */
+    'Return one entry per section below. Its `cluster_id` must be the section',
+    'heading copied exactly — it is an identifier, not a title to improve.',
     '',
     input.forbiddenNames.length > 0
       ? `Already taken, do not reuse: ${input.forbiddenNames.join(', ')}`

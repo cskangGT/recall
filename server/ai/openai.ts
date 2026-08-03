@@ -3,6 +3,7 @@ import path from 'node:path';
 import type {
   AiProvider, AnswerResult, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
+  NameOperation,
 } from './provider.ts';
 import {
   answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt, buildNormalizePrompt,
@@ -270,7 +271,7 @@ export class OpenAiProvider implements AiProvider {
   }
 
   async nameClusters(input: {
-    operation: 'split' | 'merge' | 'promote';
+    operation: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
   }): Promise<NamedCluster[]> {

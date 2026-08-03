@@ -53,7 +53,16 @@ export interface ExtractResult {
 
 // ---------------------------------------------------------------- call 4: name
 
-export type NameOperation = 'split' | 'merge' | 'promote';
+/**
+ * What is being named.
+ *
+ * `new_category` is a category being born rather than one being rearranged, and
+ * it was missing — so the one case a personal instance meets constantly, where
+ * a capture arrives and nothing it could belong to exists yet, never reached the
+ * model at all. It fell to `fallbackName`, which reads term statistics out of a
+ * single sentence that has none.
+ */
+export type NameOperation = 'split' | 'merge' | 'promote' | 'new_category';
 
 export interface NameCluster {
   cluster_id: string;

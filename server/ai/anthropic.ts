@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type {
   AiProvider, AnswerResult, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
+  NameOperation,
 } from './provider.ts';
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
@@ -92,7 +93,7 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async nameClusters(input: {
-    operation: 'split' | 'merge' | 'promote';
+    operation: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
   }): Promise<NamedCluster[]> {

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
-  AiProvider, AnswerResult, EmbeddingProvider, ExtractResult,
+  AiProvider,
+  NameOperation, AnswerResult, EmbeddingProvider, ExtractResult,
   NameCluster, NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
@@ -127,13 +128,29 @@ export class FixtureProvider implements AiProvider {
    * The names the demo expects for a split; TF-IDF for anything else. Both go
    * through the same validation a real namer faces, so a fixture run exercises
    * the fallback path rather than sidestepping it.
+   *
+   * `new_category` gets a canned answer too, and it has to be *distinguishable*
+   * from the statistical one — otherwise every test that captures into an empty
+   * workspace passes whether the model was asked or not, which is the exact
+   * thing this operation was added to fix.
    */
   async nameClusters(input: {
-    operation?: 'split' | 'merge' | 'promote';
+    operation?: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
   }): Promise<NamedCluster[]> {
     const allTexts = input.clusters.map((x) => x.sample_texts);
+    if (input.operation === 'new_category') {
+      return input.clusters.map((c, i) => {
+        const proposed = i === 0 ? 'Fixture Category' : `Fixture Category ${i + 1}`;
+        const check = validateName(proposed, input.forbiddenNames);
+        return {
+          cluster_id: c.cluster_id,
+          name: check.ok ? proposed : fallbackName(c.sample_texts, allTexts),
+          rationale: check.ok ? 'fixture' : `fell back: ${check.reason}`,
+        };
+      });
+    }
     const canned = input.operation === 'merge' ? [] : ['Agent Frameworks', 'Evals & Observability'];
     return input.clusters.map((c, i) => {
       const proposed = canned[i] ?? fallbackName(c.sample_texts, allTexts);

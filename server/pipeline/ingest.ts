@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
 import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
-import { fallbackName, validateName } from '../ai/provider.ts';
+import { fallbackName } from '../ai/provider.ts';
 import type { Category, GraphPayload, Memory, SourceType } from '../../src/core/types.ts';
 import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
 import { evaluateReorg } from '../../src/core/gates.ts';
@@ -51,6 +51,82 @@ export interface IngestResult {
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+/**
+ * Where each extracted memory goes, decided before anything is written.
+ *
+ * Pulled out of `persist` because naming a new category needs the model, the
+ * model call is async, and `persist` runs inside a synchronous transaction. So
+ * the decision happens first, the naming happens between, and the writing
+ * happens last with the names already in hand.
+ *
+ * Pure on purpose — no repository, no clock, no model — so "would this memory
+ * open a new category" is answerable in a test without any of them.
+ *
+ * The provisional profile at the end of the loop is the part worth keeping:
+ * a category that memory 0 opens has to be visible to memory 1, or a source
+ * that says two related things opens two categories for them.
+ */
+export type PlannedAssignment =
+  | { kind: 'skip'; index: number; text: string; similarity: number }
+  | { kind: 'existing'; index: number; categoryId: string; score: number }
+  /** Joins a category an earlier memory in this same batch opened. */
+  | { kind: 'joins'; index: number; clusterId: string; score: number }
+  | { kind: 'new'; index: number; parentId: string | null; score: number; clusterId: string };
+
+export function planAssignments(
+  payload: GraphPayload,
+  texts: readonly string[],
+  vectors: readonly number[][],
+): PlannedAssignment[] {
+  const profiles = categoryProfiles(payload.categories, payload.memories);
+  const plan: PlannedAssignment[] = [];
+
+  texts.forEach((text, index) => {
+    const vector = vectors[index]!;
+    const decision = assignMemory(vector, profiles);
+
+    /*
+     * Something already held is not written a second time.
+     *
+     * `assignMemory` takes the argmax of `bestMemberSimilarity` across every
+     * profile, so `decision.score` *is* the candidate's nearest neighbour in the
+     * whole corpus — the check is a comparison, not a computation. Decided here
+     * rather than later so a duplicate cannot reach the namer on its way to
+     * being discarded, and so it contributes no provisional profile of its own.
+     */
+    if (decision.score >= DUPLICATE_SIMILARITY) {
+      plan.push({ kind: 'skip', index, text, similarity: decision.score });
+      return;
+    }
+
+    if (decision.kind === 'existing') {
+      /*
+       * The category it matched may not exist yet — the provisional profiles
+       * below carry synthetic ids, and a memory can land on one an earlier
+       * memory in this same batch opened. Saying which of the two it is here
+       * keeps `persist` from having to guess whether an id is real.
+       */
+      const openedHere = plan.find(
+        (p) => p.kind === 'new' && p.clusterId === decision.categoryId,
+      );
+      plan.push(
+        openedHere
+          ? { kind: 'joins', index, clusterId: decision.categoryId!, score: decision.score }
+          : { kind: 'existing', index, categoryId: decision.categoryId!, score: decision.score },
+      );
+      return;
+    }
+
+    const parentId = decision.kind === 'new_child' ? decision.parentId! : null;
+    const clusterId = `new_${index}`;
+    plan.push({ kind: 'new', index, parentId, score: decision.score, clusterId });
+    profiles.push({ id: clusterId, parentId, vectors: [vector] });
+  });
+
+  return plan;
+}
+
 
 export class IngestPipeline {
   // Written out rather than as constructor parameter properties: those emit
@@ -150,8 +226,12 @@ export class IngestPipeline {
       // ---- 5. Assign, then apply. Everything from here is one transaction:
       // a half-applied ingest is worse than one that fails outright.
       const payload = this.repo.getGraphPayload(input.workspaceId);
+      const plan = planAssignments(payload, extracted.memories.map((m) => m.text), vectors);
+      // Named before the transaction opens, because this is the one part that
+      // has to ask a model and a transaction cannot wait for one.
+      const names = await this.nameNewCategories(input.workspaceId, plan, extracted, payload);
       const result = this.repo.transaction(() =>
-        this.persist(input.workspaceId, sourceId, extracted, vectors, payload),
+        this.persist(input.workspaceId, sourceId, extracted, vectors, payload, plan, names),
       );
 
       this.repo.updateSourceStatus(sourceId, 'complete', {
@@ -187,6 +267,46 @@ export class IngestPipeline {
     }
   }
 
+  /**
+   * Names every category this capture is about to open, in one call.
+   *
+   * One call rather than one each, so two categories born from the same source
+   * cannot be handed the same name — `nameClusters` accumulates what it has
+   * already used into `forbiddenNames` as it goes, and it retries twice before
+   * falling back to term statistics.
+   *
+   * Those statistics were the *only* path until now, and they are hopeless here:
+   * a brand-new category has one sentence in it, and one sentence has no term
+   * frequencies to compare. It is why a note about lowering a pricing tier came
+   * out called "Because Consider".
+   */
+  private async nameNewCategories(
+    workspaceId: string,
+    plan: PlannedAssignment[],
+    extracted: Awaited<ReturnType<AiProvider['extract']>>,
+    payload: GraphPayload,
+  ): Promise<Map<string, string>> {
+    const opening = plan.filter((p): p is Extract<PlannedAssignment, { kind: 'new' }> => p.kind === 'new');
+    if (opening.length === 0) return new Map();
+
+    const tombstones = this.repo.listTombstones(workspaceId);
+    const parents = new Set(opening.map((o) => o.parentId));
+    const siblings = payload.categories
+      .filter((c) => parents.has(c.parent_id))
+      .map((c) => c.name);
+
+    const named = await this.ai.nameClusters({
+      operation: 'new_category',
+      clusters: opening.map((o) => ({
+        cluster_id: o.clusterId,
+        sample_texts: [extracted.memories[o.index]!.text],
+      })),
+      forbiddenNames: [...siblings, ...tombstones],
+    });
+
+    return new Map(named.map((n) => [n.cluster_id, n.name]));
+  }
+
   // ---------------------------------------------------------------- persist
 
   private persist(
@@ -195,63 +315,52 @@ export class IngestPipeline {
     extracted: Awaited<ReturnType<AiProvider['extract']>>,
     vectors: number[][],
     payload: GraphPayload,
+    plan: PlannedAssignment[],
+    names: Map<string, string>,
   ): { addedMemoryIds: string[]; touchedCategoryIds: string[];
        skipped: { text: string; similarity: number }[] } {
-    const profiles = categoryProfiles(payload.categories, payload.memories);
-    const tombstones = new Set(this.repo.listTombstones(workspaceId));
     const memories: Memory[] = [];
+    /** Synthetic cluster id -> the real category it became, for `joins`. */
+    const createdByCluster = new Map<string, string>();
     const assignments: { memoryId: string; categoryId: string; confidence: number }[] = [];
     const touched = new Set<string>();
     const skipped: { text: string; similarity: number }[] = [];
     /** Extracted index -> the row it became. Absent when it was a duplicate. */
     const memoryIdByExtractedIndex = new Map<number, string>();
 
+    /*
+     * Writing only. Every decision was made by `planAssignments` and every new
+     * name by `nameNewCategories`, both before this transaction opened — the
+     * namer gets no say in *whether* a category is created, only in what it is
+     * called, which is the rule this pipeline has always been built on.
+     */
     extracted.memories.forEach((extractedMemory, i) => {
-      const vector = vectors[i]!;
-      const memoryId = id('mem');
-      const decision = assignMemory(vector, profiles);
-
-      /*
-       * Something already held is not written a second time.
-       *
-       * The number this needs is already here. `assignMemory` takes the argmax
-       * of `bestMemberSimilarity` across every category profile, so
-       * `decision.score` *is* the candidate's nearest neighbour in the entire
-       * corpus — a duplicate check is a comparison, not a computation.
-       *
-       * Skipped before the category branch on purpose: a duplicate must not be
-       * able to create a category on its way to being discarded. And because
-       * `profiles` is mutated as this loop runs, a source that says the same
-       * thing twice catches its own second copy without a separate pass.
-       */
-      if (decision.score >= DUPLICATE_SIMILARITY) {
-        skipped.push({ text: extractedMemory.text, similarity: decision.score });
+      const step = plan[i]!;
+      if (step.kind === 'skip') {
+        skipped.push({ text: step.text, similarity: step.similarity });
         return;
       }
 
-      let categoryId: string;
-      if (decision.kind === 'existing') {
-        categoryId = decision.categoryId!;
-      } else {
-        // A new category needs a name. The namer gets no say in *whether* one is
-        // created — that came from geometry above.
-        const parentId = decision.kind === 'new_child' ? decision.parentId! : null;
-        const siblings = payload.categories
-          .filter((c) => c.parent_id === parentId)
-          .map((c) => c.name);
-        const forbidden = [...siblings, ...tombstones];
-        const proposed = fallbackName([extractedMemory.text], [[extractedMemory.text]]);
-        const name = validateName(proposed, forbidden).ok ? proposed : `${proposed} Notes`;
+      const vector = vectors[i]!;
+      const memoryId = id('mem');
 
+      let categoryId: string;
+      if (step.kind === 'existing') {
+        categoryId = step.categoryId;
+      } else if (step.kind === 'joins') {
+        categoryId = createdByCluster.get(step.clusterId)!;
+      } else {
         const created: Category = {
-          id: id('cat'), parent_id: parentId, name,
-          rationale: `auto-created at similarity ${decision.score.toFixed(3)}`,
+          id: id('cat'),
+          parent_id: step.parentId,
+          name: names.get(step.clusterId) ?? fallbackName([extractedMemory.text], [[extractedMemory.text]]),
+          rationale: `auto-created at similarity ${step.score.toFixed(3)}`,
           name_locked: false, user_created: false,
           x: null, y: null, pinned: false, created_by: 'ai',
         };
         this.repo.insertCategory(workspaceId, created);
         payload.categories.push(created);
-        profiles.push({ id: created.id, parentId, vectors: [vector] });
+        createdByCluster.set(step.clusterId, created.id);
         categoryId = created.id;
       }
 
@@ -270,7 +379,7 @@ export class IngestPipeline {
         pinned: false,
         created_at: now(),
       });
-      assignments.push({ memoryId, categoryId, confidence: decision.score });
+      assignments.push({ memoryId, categoryId, confidence: step.score });
       memoryIdByExtractedIndex.set(i, memoryId);
       touched.add(categoryId);
     });

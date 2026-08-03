@@ -141,6 +141,25 @@ describe('resolveNames — spec 10.4', () => {
     });
     expect(prompt).toContain('previous name was rejected: generic container name');
   });
+
+  it('says the section heading is an identifier to copy, not a title to improve', () => {
+    // Without this, gpt-4.1 answers "## new_0" with a cluster_id it invented,
+    // `resolveNames` finds no entry for `new_0`, and a perfectly good name is
+    // discarded for TF-IDF. Silent: the capture succeeds and the category is
+    // just badly named.
+    const prompt = buildNamePrompt({
+      operation: 'new_category',
+      clusters: [clusters[0]!],
+      forbiddenNames: [],
+    });
+    expect(prompt).toMatch(/cluster_id.*heading copied exactly/s);
+  });
+
+  it('asks for a new category in words about what happened, not about the code', () => {
+    const prompt = buildNamePrompt({ operation: 'new_category', clusters, forbiddenNames: [] });
+    expect(prompt).not.toContain('this new_category');
+    expect(prompt).toContain('nothing');
+  });
 });
 
 describe('resolveAnswer', () => {
