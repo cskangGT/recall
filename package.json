@@ -9,6 +9,10 @@
   "scripts": {
     "start": "node scripts/start.mjs",
     "demo": "RECALL_SEED=1 node scripts/start.mjs",
+    "agent:install": "node scripts/install-agent.mjs",
+    "agent:uninstall": "node scripts/install-agent.mjs --uninstall",
+    "agent:restart": "node scripts/install-agent.mjs --restart",
+    "agent:plist": "node scripts/install-agent.mjs --dry-run",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
