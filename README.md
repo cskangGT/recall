@@ -30,6 +30,75 @@ the one file worth knowing the location of.
 It binds `127.0.0.1` and refuses to bind anything else unless `RECALL_INVITE` is
 set. A tool holding your notes should take a deliberate act to become reachable.
 
+A page you are merely *visiting* cannot write to it: writes are gated on the
+`Origin` header, which a browser attaches to every non-GET and a page cannot
+forge, and reads are gated on `Host`, which is what stops DNS rebinding. Neither
+is theoretical — before those checks a tab you had open could have run
+`fetch('http://127.0.0.1:5170/…/reset', {mode:'no-cors'})` and deleted
+everything. See `originAllowed` in `server/http/routes.ts`.
+
+### Always on
+
+`npm start` dies with its terminal. That is fine for something you open on
+purpose and fatal for something you reach for with a keystroke — a capture that
+fails because the server happened not to be running is worse than no shortcut at
+all, because you find out later.
+
+```bash
+npm run agent:install     # starts at login, restarts if it dies
+npm run agent:restart     # after `npm run build`
+npm run agent:uninstall   # your memories are untouched
+npm run agent:plist       # print the plist without installing anything
+```
+
+Your keys are copied to `~/.recall/env` (mode 0600), not into the plist — a
+plist value comes back out of `launchctl print`, and that file is the first
+thing you read when something is wrong. `.env.local` keeps working for
+`npm start`.
+
+**The checkout cannot live in Desktop, Documents, Downloads, or iCloud Drive.**
+macOS gates those with privacy controls, and a background agent has no way to
+ask for consent — so it does not fail, it *hangs*: `launchctl print` says
+`state = running`, the logs are empty, and nothing is listening. The installer
+refuses and tells you where to move to. (Granting Full Disk Access to `node`
+would also "work", and would hand that access to every script you ever run with
+it.)
+
+If the agent is installed but nothing answers, check **System Settings →
+General → Login Items → Allow in the Background**. Turned off there, a
+LaunchAgent silently never runs. Then `launchctl print gui/$(id -u)/com.recall.server`
+and `~/.recall/logs/server.err.log`.
+
+### Saving from the browser
+
+```
+chrome://extensions → Developer mode → Load unpacked → extension/
+```
+
+`⌘⇧K` saves the page you are reading — or just the part you selected. A
+notification tells you where it landed: *"Saved 3 things → to Software Rewrite
+Decisions."* The toolbar button does the same thing.
+
+Chrome silently declines a shortcut that conflicts with something else, so if
+nothing happens, check `chrome://extensions/shortcuts`.
+
+The extension is what makes links work. `type: 'link'` is stored and never
+fetched — there is no `fetch(` anywhere in the pipeline — and putting the fetch
+in the browser is better than putting it in the server on every axis: no
+bot-blocking, no paywall, no interstitial, because it saves the page you can
+actually see, signed in as you. It also keeps a URL-fetching proxy out of a
+service that now runs all day on localhost.
+
+It sends at most 20,000 characters — a long-form article in full — and refuses
+below 200, because an empty source that extracts nothing looks like it worked.
+
+**Safari** needs more than a copy. `xcrun safari-web-extension-converter extension/`
+produces an Xcode project, and running it needs Xcode plus either a signing
+identity or Develop → "Allow Unsigned Extensions", which resets every time
+Safari launches. Two things also need changing after the conversion:
+`chrome.notifications` is unsupported, and the shortcut has to be assigned by
+hand. That is the honest state of it, not "coming soon".
+
 ### The demo
 
 ```bash
@@ -82,8 +151,8 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 239 unit and server tests
-npm run test:e2e     # 39 Playwright tests, including the full spec 15.3 click path
+npm test             # 464 unit and server tests
+npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
@@ -91,6 +160,34 @@ npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 `npm run test:e2e` fails if any request touches an `/api/` path — "zero backend" is a
 checked condition, not a promise. `npm run rehearse` is stricter still: it fails the run
 if *any* request leaves the page.
+
+### What no test can check
+
+Six things that need a machine, a browser, and you. Re-run this after any
+reinstall — most of it is one-time setup that fails silently when it regresses.
+
+1. **It survives a logout.** Log out and back in, then
+   `launchctl print gui/$(id -u)/com.recall.server`. `~/.recall/logs/server.log`
+   must show `ai provider: openai` — if it says `fixture`, the agent started
+   without your keys and every capture since has been scripted demo output that
+   looks entirely plausible.
+2. **It survives a crash.** `kill -9 $(pgrep -f 'server/http/main.ts')`, then
+   reload `http://127.0.0.1:5170`. Back within ten seconds.
+3. **Chrome actually took the shortcut.** `chrome://extensions/shortcuts` should
+   list `⌘⇧K` against Recall. Chrome declines a conflicting one without saying so.
+4. **A long article.** `⌘⇧K` on something real. The notification should name a
+   category, and Sources should show the page's title — not the first sixty
+   characters of its body.
+5. **A selection.** Highlight one paragraph and `⌘⇧K`. Only that paragraph is
+   stored. Then `⌘⇧K` on `chrome://extensions` — it should decline politely and
+   write nothing.
+6. **The hole is closed.** From the console of any https page:
+   ```js
+   fetch('http://127.0.0.1:5170/api/workspaces/ws_demo/reset', {method:'POST', mode:'no-cors'})
+   ```
+   Your corpus must still be there. This is the one that matters — before the
+   `Origin` check that request deleted everything and the page could not even
+   read the response to know it had worked.
 
 ## Demo day
 
@@ -262,6 +359,24 @@ is a preference — spec §17 rules out a settings page and is right to.
 
 ## Not built yet
 
-Proposal mode. The real AI providers are implemented but unverified against a
-live endpoint — see "Running on real models" above. See
-`docs/spec-review-summary.md`.
+- **Screenshots.** Pasting an image sets a boolean and sends the path of a demo
+  file that is not in this repository. `normalize` implements real vision
+  against both providers; what is missing is an upload — the server reads JSON
+  only, and `imagePath` is an unchecked `fs.readFile` path taken from the
+  request body.
+- **Deleting a category**, which still carries the unanswered question of where
+  its memories go when it has no parent.
+- **Capture outside the browser** — a macOS-wide shortcut for a PDF, a Slack
+  message, or a thought. The extension covers what you read; nothing covers the
+  rest.
+- Proposal mode. See `docs/spec-review-summary.md`.
+
+Two things that are fine now and will not stay fine:
+
+- `getGraphPayload` returns the full `raw_content` of every source, and page
+  saves make that articles. Roughly 200 of them is ~4MB on every load.
+  `includeGraph: false` only spares the extension.
+- `migrate()` is `CREATE TABLE IF NOT EXISTS` only, so it can create tables but
+  not alter them. Now that the agent owns `~/.recall/recall.db` all day, that
+  file has stopped being disposable — an idempotent `ALTER TABLE … ADD COLUMN`
+  guarded by `PRAGMA table_info` is insurance best bought before it is needed.
