@@ -556,3 +556,64 @@ describe('what a source is called', () => {
     expect(source.title).not.toBe('');
   });
 });
+
+describe('what a screenshot leaves behind', () => {
+  it('stores the OCR text and the scene, instead of computing and discarding them', async () => {
+    // Spec §11.1: a screenshot's raw_content *is* its OCR text, and the
+    // Inspector renders scene_description for screenshots — so it rendered null
+    // for as long as the column has existed.
+    const provider = new FixtureProvider();
+    provider.normalize = async () => ({
+      ocr_text: 'Annual price $4,680 · 12 seats included',
+      scene_description: 'A screenshot of a pricing table.',
+      detected_context: 'document' as const,
+      has_meaningful_text: true,
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({
+      workspaceId: WS, type: 'screenshot', content: 'our new pricing page',
+      imagePath: '/seed/demo-screenshot.png',
+    });
+
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.raw_content).toBe('Annual price $4,680 · 12 seats included');
+    expect(source.scene_description).toBe('A screenshot of a pricing table.');
+  });
+
+  it('keeps the caption as well as the OCR, because they are different facts', async () => {
+    // `ocr_text || input.content` threw the caption away exactly when the OCR
+    // succeeded. A pricing table plus "this is what they quoted us" is two
+    // things, and extraction should see both.
+    const seen: string[] = [];
+    const provider = new FixtureProvider();
+    provider.normalize = async () => ({
+      ocr_text: 'Annual price $4,680',
+      scene_description: 'A pricing table.',
+      detected_context: 'document' as const,
+      has_meaningful_text: true,
+    });
+    const original = provider.extract.bind(provider);
+    provider.extract = (async (input: { content: string; type: string }) => {
+      seen.push(input.content);
+      return original();
+    }) as typeof provider.extract;
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    await p.ingest({
+      workspaceId: WS, type: 'screenshot', content: 'this is what they quoted us',
+      imagePath: '/seed/demo-screenshot.png',
+    });
+
+    expect(seen[0]).toContain('this is what they quoted us');
+    expect(seen[0]).toContain('Annual price $4,680');
+  });
+
+  it('leaves a text capture’s raw_content exactly as it was typed', async () => {
+    const result = await pipeline.ingest({
+      workspaceId: WS, type: 'text', content: 'byte for byte, please',
+    });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.raw_content).toBe('byte for byte, please');
+  });
+});

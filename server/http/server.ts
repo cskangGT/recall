@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
-import { handle, type Deps } from './routes.ts';
+import { createReadStream } from 'node:fs';
+import { handle, type ApiResponse, type Deps } from './routes.ts';
 import { serveStatic } from './static.ts';
 
 /**
@@ -103,7 +104,7 @@ export function createApiServer(
             return;
           }
         }
-        const result = await handle(
+        const result: ApiResponse = await handle(
           {
             method: req.method ?? 'GET',
             path,
@@ -120,6 +121,21 @@ export function createApiServer(
           },
           deps,
         );
+        /*
+         * A route that describes a file streams it instead of being serialised.
+         * Images are the only case, and `no-store` is right for them too: the
+         * URL is derived from a source id that never gets a different image.
+         */
+        if (result.file) {
+          res.writeHead(result.status, {
+            'content-type': result.file.contentType,
+            'cache-control': 'no-store',
+          });
+          createReadStream(result.file.path)
+            .on('error', () => res.destroy())
+            .pipe(res);
+          return;
+        }
         send(result.status, result.body);
       } catch (err) {
         // A handler throwing is a bug, not a client error — say so plainly

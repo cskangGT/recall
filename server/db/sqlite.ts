@@ -143,6 +143,37 @@ export class SqliteRepository implements Repository {
       );
   }
 
+  /**
+   * Writes back what the vision call saw.
+   *
+   * `ocr_text`, `scene_description` and `detected_context` were computed on
+   * every screenshot ingest and thrown away — spec §11.1 says a screenshot's
+   * `raw_content` *is* its OCR text, and the Inspector renders
+   * `scene_description` for screenshots, so it was rendering null forever and
+   * falling back to whatever caption had been typed.
+   *
+   * COALESCE again, so an absent field means "leave it alone".
+   */
+  updateSourceNormalized(
+    id: string,
+    fields: { raw_content?: string; scene_description?: string | null; detected_context?: string | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE sources SET
+           raw_content       = COALESCE(?, raw_content),
+           scene_description = COALESCE(?, scene_description),
+           detected_context  = COALESCE(?, detected_context)
+         WHERE id = ?`,
+      )
+      .run(
+        fields.raw_content ?? null,
+        fields.scene_description ?? null,
+        fields.detected_context ?? null,
+        id,
+      );
+  }
+
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],

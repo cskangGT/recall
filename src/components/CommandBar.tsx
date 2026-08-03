@@ -4,6 +4,7 @@ import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
+import { readImage } from '../capture/readImage';
 import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
@@ -12,17 +13,41 @@ import { useInterestStore } from '../store/interestStore';
 
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
+  const toast = useUiStore((s) => s.toast);
+  const pendingImage = useUiStore((s) => s.pendingImage);
+  const setPendingImage = useUiStore((s) => s.setPendingImage);
   const [text, setText] = useState('');
-  const [hasImage, setHasImage] = useState(false);
+  const [reading, setReading] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => ref.current?.focus(), []);
 
+  /*
+   * The image lives in the store, not in local state, because a drop on the
+   * window has to be able to open this bar *with the file already attached*
+   * (spec AC-5) — and the bar is not mounted when the drop happens.
+   */
+  const image = pendingImage;
+  const hasImage = image !== null;
+
+  const attach = async (file: File) => {
+    setReading(true);
+    const result = await readImage(file);
+    setReading(false);
+    if ('error' in result) {
+      toast(result.error);
+      return;
+    }
+    setPendingImage({ ...result.image, name: file.name || 'screenshot' });
+  };
+
   const detected = detectCaptureType({ text, hasImage });
 
   const submit = () => {
+    if (reading) return;
     if (!text.trim() && !hasImage) return;
     setCaptureOpen(false);
+    setPendingImage(null);
     /*
      * What you typed, sent on.
      *
@@ -32,13 +57,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      * fixture; the moment a personal instance ran against real extraction it
      * meant the tool could not save anything you actually wrote.
      *
-     * A screenshot still has no path to send: there is no upload, so an image
-     * capture falls back to the demo's own file (spec §10.1's OCR path is
-     * implemented server-side and unreachable without object storage).
+     * The image goes as bytes. It used to go as the *path* of a demo asset that
+     * is not in the repository, so every screenshot capture ingested the same
+     * fictional item — the server's OCR path (spec §10.1) was implemented and
+     * unreachable.
      */
     onSubmit(
-      hasImage
-        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+      image
+        ? { type: 'screenshot', content: text.trim(), image: { data: image.data, mediaType: image.mediaType } }
         : {
             type: detected.type,
             content: text.trim(),
@@ -73,6 +99,25 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
           <span id="capture-bar-title">Add to Recall</span>
           <span>esc</span>
         </div>
+        {/*
+          What you actually attached, shown. Before this the only sign an image
+          was on its way was a chip lighting up, which was also true when the
+          thing being sent was a demo file you had never seen.
+        */}
+        {image && (
+          <div className="bar__image" data-testid="capture-image">
+            <img src={`data:${image.mediaType};base64,${image.data}`} alt="" />
+            <span className="bar__image-name">{image.name}</span>
+            <button
+              className="bar__image-drop"
+              data-testid="capture-image-remove"
+              aria-label="Remove the attached image"
+              onClick={() => setPendingImage(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
         <textarea
           ref={ref}
           data-testid="capture-input"
@@ -81,9 +126,15 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
-            if (Array.from(e.clipboardData.items).some((i) => i.type.startsWith('image/'))) {
-              setHasImage(true);
-            }
+            // The bytes, not a flag. `getAsFile` is the only way to reach them,
+            // and nothing was calling it.
+            const file = Array.from(e.clipboardData.items)
+              .filter((i) => i.kind === 'file' && i.type.startsWith('image/'))
+              .map((i) => i.getAsFile())
+              .find((f): f is File => f !== null);
+            if (!file) return;
+            e.preventDefault();
+            void attach(file);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -98,13 +149,13 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
               <button
                 key={t}
                 className={`bar__type${detected.type === t ? ' bar__type--on' : ''}`}
-                onClick={() => t === 'screenshot' && setHasImage(!hasImage)}
+                onClick={() => t === 'screenshot' && hasImage && setPendingImage(null)}
               >
                 {TYPE_LABEL[t]}
               </button>
             ))}
           </div>
-          <span>⏎ to add</span>
+          <span>{reading ? 'reading the image…' : '⏎ to add'}</span>
         </div>
       </div>
     </div>

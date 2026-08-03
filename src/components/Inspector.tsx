@@ -401,6 +401,9 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
 
 /** Spec §5.4 Mode C — the full provenance of one capture. */
 function SourceDetail({ source, payload }: { source: Source; payload: GraphPayload }) {
+  // Seed mode has no `imageUrl` — there is no server to serve one from.
+  const dataSource = useWorkspaceStore((s) => s.source);
+  const imageUrl = source.image_path ? dataSource.imageUrl?.(source.id) : undefined;
   const select = useUiStore((s) => s.select);
   const extracted = payload.memories.filter((m) => m.source_id === source.id);
 
@@ -419,6 +422,24 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
             Open link ↗
           </a>
         </div>
+      )}
+
+      {/*
+        The screenshot itself, when the server is holding one.
+
+        `onError` removes it rather than leaving a broken-image glyph: the seed's
+        image_path points at a committed asset the server will not serve, and a
+        source captured before uploads existed has no file at all. Both are
+        legitimate, and neither should look like a fault.
+      */}
+      {source.type === 'screenshot' && imageUrl && (
+        <img
+          className="source-card__image"
+          data-testid="source-image"
+          src={imageUrl}
+          alt={source.scene_description ?? 'The screenshot this was captured from'}
+          onError={(e) => e.currentTarget.remove()}
+        />
       )}
 
       <div className="source-card">

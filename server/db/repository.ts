@@ -56,6 +56,11 @@ export interface Repository {
   getGraphPayload(workspaceId: string): GraphPayload;
 
   insertSource(workspaceId: string, source: SourceRow): void;
+  /** What Call 1 read off a screenshot. Computed on every ingest, stored since none. */
+  updateSourceNormalized(
+    id: string,
+    fields: { raw_content?: string; scene_description?: string | null; detected_context?: string | null },
+  ): void;
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],

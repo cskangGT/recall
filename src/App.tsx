@@ -10,6 +10,7 @@ import { ChangeBanner } from './components/ChangeBanner';
 import { Settings } from './components/Settings';
 import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
 import { useUiStore } from './store/uiStore';
+import { firstImageFile, readImage } from './capture/readImage';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
 import type { CaptureInput } from './data/dataSource';
@@ -281,7 +282,33 @@ export function App() {
         if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
         useUiStore.getState().setDropActive(false);
-        void capture();
+        /*
+         * Read the file that was dropped.
+         *
+         * This used to call `capture()` with no argument, which ingested a
+         * hard-coded demo screenshot — so the overlay said "Recall will read it"
+         * and Recall read something else entirely. Whatever was dropped is
+         * discarded to this day in every build before this one.
+         *
+         * It opens the capture bar rather than ingesting straight away (spec
+         * AC-5): a screenshot usually wants a sentence of context beside it, and
+         * there was no way to add one.
+         */
+        void (async () => {
+          const ui = useUiStore.getState();
+          const file = firstImageFile(Array.from(e.dataTransfer.files));
+          if (!file) {
+            ui.toast('Recall reads images — drop a screenshot, or use ⌘K for text.');
+            return;
+          }
+          const result = await readImage(file);
+          if ('error' in result) {
+            ui.toast(result.error);
+            return;
+          }
+          ui.setPendingImage({ ...result.image, name: file.name || 'screenshot' });
+          ui.setCaptureOpen(true);
+        })();
       }}
     >
       {/*
