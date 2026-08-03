@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import { answerQuestion } from '../ask/scriptedAsk';
+import { askThroughSource } from '../ask/askThroughSource';
 import { askedCategories } from '../arc/interest';
 import { useInterestStore } from '../store/interestStore';
 
@@ -35,10 +35,26 @@ export function Composer({
   const recordInterest = useInterestStore((s) => s.record);
   const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
+  const toast = useUiStore((s) => s.toast);
   const payload = useWorkspaceStore((s) => s.payload);
 
   const [text, setText] = useState('');
   const [thinking, setThinking] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const regainFocus = useRef(false);
+
+  /*
+   * Put the keyboard back once the input is enabled again.
+   *
+   * It has to be an effect rather than a call at the end of `submit`: React has
+   * not committed `thinking = false` by then, so the element is still disabled
+   * and `focus()` on a disabled input silently does nothing.
+   */
+  useEffect(() => {
+    if (thinking || !regainFocus.current) return;
+    regainFocus.current = false;
+    input.current?.focus();
+  }, [thinking]);
 
   const submit = async () => {
     const question = text.trim();
@@ -46,12 +62,33 @@ export function Composer({
       onSubmitted?.();
       return;
     }
+    /*
+     * `disabled` blurs, so remember whether the keyboard was here.
+     *
+     * The input is disabled while an answer is in flight, and disabling a
+     * focused element moves focus to the body. Asking a question therefore cost
+     * you the keyboard: you had to click the box again before you could ask a
+     * second one, and Escape — which is meant to hand the keyboard *back* —
+     * reached App's window handler instead and threw away the answer you had
+     * just asked for.
+     *
+     * Latent until `askThroughSource` made this path await in seed mode too.
+     * Before that the whole submit ran in one synchronous batch and React never
+     * committed the disabled state at all, so nothing ever blurred.
+     */
+    regainFocus.current = document.activeElement === input.current;
     setThinking(true);
 
     const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(question).catch(() => answerQuestion(question, payload))
-      : answerQuestion(question, payload);
+    const outcome = await askThroughSource(source, question, payload);
+    if (outcome.kind === 'unreachable') {
+      // The question stays in the box. It was not answered, and retyping it
+      // after a server hiccup is a small insult on top of a failure.
+      toast(outcome.message);
+      setThinking(false);
+      return;
+    }
+    const result = outcome.answer;
 
     setAnswer({ ...result, question });
     /*
@@ -90,6 +127,7 @@ export function Composer({
         every one of them and type the letter.
       */}
       <input
+        ref={input}
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
         /* A placeholder is not a name. It disappears the moment you type, and
            several readers do not announce it at all — this input had no

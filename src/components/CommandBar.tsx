@@ -4,7 +4,8 @@ import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
-import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { askThroughSource } from '../ask/askThroughSource';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
 import { askedCategories } from '../arc/interest';
@@ -119,6 +120,7 @@ export function AskBar() {
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
   const setHovered = useUiStore((s) => s.setHovered);
+  const toast = useUiStore((s) => s.toast);
   const setView = useUiStore((s) => s.setView);
   const openCategory = useUiStore((s) => s.openCategory);
   const [text, setText] = useState('');
@@ -165,9 +167,14 @@ export function AskBar() {
     setAskOpen(false);
 
     const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(question).catch(() => answerQuestion(question, payload))
-      : answerQuestion(question, payload);
+    const outcome = await askThroughSource(source, question, payload);
+    if (outcome.kind === 'unreachable') {
+      // Deliberately no answer set. A failed ask must leave the screen exactly
+      // as it was rather than showing something that reads like one.
+      toast(outcome.message);
+      return;
+    }
+    const result = outcome.answer;
 
     setAnswer({ ...result, question });
     /*
