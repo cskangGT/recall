@@ -13,6 +13,14 @@ export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
   reorganizing: 'Reorganizing…',
 };
 
+/** A decoded, downscaled image the capture bar is holding. */
+export interface PendingImage {
+  data: string;
+  mediaType: string;
+  /** For the chip, so you can see which file you attached. */
+  name: string;
+}
+
 export interface Toast {
   id: number;
   text: string;
@@ -86,6 +94,13 @@ interface UiState {
   setCaptureStage: (s: CaptureStage) => void;
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
+  /**
+   * An image waiting to be captured, held here rather than in the capture bar
+   * because a drop on the window must be able to open the bar *with the file
+   * already attached* — and the bar is not mounted when the drop lands.
+   */
+  pendingImage: PendingImage | null;
+  setPendingImage: (image: PendingImage | null) => void;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
@@ -164,6 +179,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   // An answer arriving while you are browsing opens its own folder, so the
   // citations land where you are already reading instead of only on the map.
+  pendingImage: null,
+  setPendingImage: (pendingImage) => set({ pendingImage }),
   setAnswer: (answer) =>
     set((s) => ({
       answer,

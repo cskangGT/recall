@@ -27,6 +27,12 @@ a directory you might delete or re-clone. Nothing backs that file up: copying it
 somewhere is how you keep it, deleting it is how you erase everything, and it is
 the one file worth knowing the location of.
 
+Paste or drop a screenshot and it reads it — the image is downscaled to 1568px
+in the browser (past that the vision models see no more and you pay for the
+pixels), stored beside the database in `~/.recall/images/`, and served back into
+the Inspector. The server names the file itself; a client that could name a path
+could name any path.
+
 It binds `127.0.0.1` and refuses to bind anything else unless `RECALL_INVITE` is
 set. A tool holding your notes should take a deliberate act to become reachable.
 
@@ -151,8 +157,8 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 464 unit and server tests
-npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
+npm test             # 493 unit and server tests
+npm run test:e2e     # 96 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
@@ -359,11 +365,6 @@ is a preference — spec §17 rules out a settings page and is right to.
 
 ## Not built yet
 
-- **Screenshots.** Pasting an image sets a boolean and sends the path of a demo
-  file that is not in this repository. `normalize` implements real vision
-  against both providers; what is missing is an upload — the server reads JSON
-  only, and `imagePath` is an unchecked `fs.readFile` path taken from the
-  request body.
 - **Deleting a category**, which still carries the unanswered question of where
   its memories go when it has no parent.
 - **Capture outside the browser** — a macOS-wide shortcut for a PDF, a Slack

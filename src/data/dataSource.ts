@@ -17,7 +17,11 @@ export interface CaptureInput {
   /** What to call the source. The extension has the page's own <title>. */
   title?: string;
   url?: string;
-  imagePath?: string;
+  /**
+   * Bytes, base64, no data: prefix. The server writes them and names the file
+   * itself — a client that could name a path could name any path.
+   */
+  image?: { data: string; mediaType: string };
   referencedUrls?: string[];
 }
 
@@ -46,6 +50,11 @@ export interface AskResult {
 export interface DataSource {
   readonly mode: 'seed' | 'api';
   load(): Promise<GraphPayload>;
+  /**
+   * Where a stored screenshot can be fetched, or null when this source has none
+   * to fetch. Seed mode has no server to serve one, so it answers null.
+   */
+  imageUrl?: (sourceId: string) => string;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
   ask?(question: string): Promise<AskResult>;
@@ -83,6 +92,10 @@ export class ApiDataSource implements DataSource {
     private readonly workspaceId = 'ws_demo',
     private readonly base = '/api',
   ) {}
+
+  imageUrl(sourceId: string): string {
+    return `${this.base}/workspaces/${this.workspaceId}/sources/${sourceId}/image`;
+  }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.base}/workspaces/${this.workspaceId}${path}`, {

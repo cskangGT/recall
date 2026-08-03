@@ -6,6 +6,9 @@ import { IngestPipeline } from '../../server/pipeline/ingest';
 import { AskPipeline } from '../../server/pipeline/ask';
 import { FixtureProvider, FixtureEmbeddings } from '../../server/ai/fixture';
 import { handle, type Deps } from '../../server/http/routes';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { validateSeed } from '../../src/data/validateSeed';
 import type { GraphPayload } from '../../src/core/types';
 
@@ -62,7 +65,7 @@ describe('GET graph', () => {
 describe('POST capture', () => {
   it('ingests, splits, and returns the new graph in one round trip', async () => {
     const res = await post(`${base}/capture`, {
-      type: 'screenshot', content: 'evals', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'evals',
     });
     expect(res.status).toBe(200);
 
@@ -90,7 +93,7 @@ describe('POST capture', () => {
 describe('POST reset', () => {
   it('restores the pristine corpus after a capture', async () => {
     await post(`${base}/capture`, {
-      type: 'screenshot', content: 'evals', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'evals',
     });
     expect(validateSeed(repo.getGraphPayload(WS)).memories).toHaveLength(49);
 
@@ -122,7 +125,7 @@ describe('POST reset', () => {
 describe('POST ask', () => {
   it('answers with citations after the demo capture', async () => {
     await post(`${base}/capture`, {
-      type: 'screenshot', content: 'evals', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'evals',
     });
     const res = await post(`${base}/ask`, { question: 'What did we decide about our eval stack?' });
     expect(res.status).toBe(200);
@@ -150,7 +153,7 @@ describe('POST ask', () => {
 describe('POST undo', () => {
   it('reverses the reorganization and returns the restored graph', async () => {
     const capture = await post(`${base}/capture`, {
-      type: 'screenshot', content: 'evals', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'evals',
     });
     const reorgId = (capture.body as { reorg: { id: string } }).reorg.id;
 
@@ -165,7 +168,7 @@ describe('POST undo', () => {
 
   it('refuses to undo the same reorganization twice', async () => {
     const capture = await post(`${base}/capture`, {
-      type: 'screenshot', content: 'evals', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'evals',
     });
     const reorgId = (capture.body as { reorg: { id: string } }).reorg.id;
     await post(`${base}/reorgs/${reorgId}/undo`);
@@ -290,7 +293,6 @@ describe('PATCH /settings', () => {
     const res = await post(`${base}/capture`, {
       type: 'screenshot',
       content: 'Braintrust vs Langfuse for agent evals',
-      imagePath: '/seed/demo-screenshot.png',
     });
 
     expect(res.status).toBe(200);
@@ -474,7 +476,7 @@ describe('invite token', () => {
 describe('what the capture response carries', () => {
   it('names the categories it touched, so a caller need not search the graph', async () => {
     const res = await post(`${base}/capture`, {
-      type: 'screenshot', content: 'Braintrust vs Langfuse', imagePath: '/seed/demo-screenshot.png',
+      type: 'screenshot', content: 'Braintrust vs Langfuse',
     });
     const body = res.body as { touchedCategories: { id: string; name: string }[] };
     expect(body.touchedCategories.length).toBeGreaterThan(0);
@@ -507,5 +509,81 @@ describe('what the capture response carries', () => {
     });
     const { sourceId } = res.body as { sourceId: string };
     expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
+  });
+});
+
+describe('screenshots', () => {
+  // A 1x1 PNG.
+  const PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  let imageRoot: string;
+
+  beforeEach(() => {
+    imageRoot = mkdtempSync(path.join(tmpdir(), 'recall-api-img-'));
+    deps.imageRoot = imageRoot;
+    deps.ingest = new IngestPipeline(repo, new FixtureProvider(), new FixtureEmbeddings(), imageRoot);
+  });
+  afterEach(() => rmSync(imageRoot, { recursive: true, force: true }));
+
+  it('stores the bytes and points the source at them', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot', content: 'a pricing table',
+      image: { data: PNG, mediaType: 'image/png' },
+    });
+    expect(res.status).toBe(200);
+
+    const { sourceId } = res.body as { sourceId: string };
+    const source = repo.listSources(WS).find((s) => s.id === sourceId)!;
+    expect(source.image_path).toBe(path.join(imageRoot, `${sourceId}.png`));
+    expect(readFileSync(source.image_path!)).toEqual(Buffer.from(PNG, 'base64'));
+  });
+
+  it('refuses a filesystem path from the request body', async () => {
+    // This used to be accepted and handed to `fs.readFile`, which made every
+    // capture a read primitive for any image on the machine.
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot', imagePath: '/Users/someone/.ssh/backup.png',
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toMatch(/imagePath is not accepted/);
+  });
+
+  it('refuses an image type no vision API reads', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot', image: { data: PNG, mediaType: 'image/svg+xml' },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toMatch(/unsupported image type/);
+  });
+
+  it('serves the image back, so a saved screenshot can be looked at', async () => {
+    const { body } = await post(`${base}/capture`, {
+      type: 'screenshot', image: { data: PNG, mediaType: 'image/png' },
+    });
+    const { sourceId } = body as { sourceId: string };
+
+    const res = await get(`${base}/sources/${sourceId}/image`);
+    expect(res.status).toBe(200);
+    // The route describes the file; `server.ts` streams it.
+    expect(res.file).toEqual({
+      path: path.join(imageRoot, `${sourceId}.png`),
+      contentType: 'image/png',
+    });
+  });
+
+  it('will not serve an image_path that is not ours', async () => {
+    // The seeded demo points at a committed asset outside the root. Refusing is
+    // right — the file is not this route's to hand out, and "should never be
+    // anything else" is how a file server for the home directory gets built.
+    const outside = repo.listSources(WS).find((s) => s.image_path)!;
+    const res = await get(`${base}/sources/${outside.id}/image`);
+    expect(res.status).toBe(404);
+    expect(res.file).toBeUndefined();
+  });
+
+  it('404s a source that has no image at all', async () => {
+    const { body } = await post(`${base}/capture`, { type: 'text', content: 'just words' });
+    const { sourceId } = body as { sourceId: string };
+    expect((await get(`${base}/sources/${sourceId}/image`)).status).toBe(404);
   });
 });

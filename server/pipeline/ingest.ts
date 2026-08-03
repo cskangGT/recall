@@ -7,6 +7,7 @@ import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
 import { evaluateReorg } from '../../src/core/gates.ts';
 import { applyReorg } from '../../src/core/applyReorg.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
+import { saveImage, type InlineImage } from '../storage/images.ts';
 import { RELATES_TO_MIN_SIMILARITY, DUPLICATE_SIMILARITY } from '../../src/core/thresholds.ts';
 
 /**
@@ -36,7 +37,15 @@ export interface IngestInput {
    */
   title?: string;
   url?: string;
+  /**
+   * A path already on this machine. Internal only — the HTTP route does **not**
+   * accept it, because a filesystem path from a request body handed to
+   * `fs.readFile` is a read primitive for any image on the disk. The seed
+   * importer and the retry path set it; a client sends `image` instead.
+   */
   imagePath?: string;
+  /** Bytes from a paste or a drop. Written to disk before the row is inserted. */
+  image?: InlineImage;
   referencedUrls?: string[];
 }
 
@@ -165,15 +174,38 @@ export class IngestPipeline {
   private readonly repo: Repository;
   private readonly ai: AiProvider;
   private readonly embeddings: EmbeddingProvider;
+  /** Where uploaded screenshots are written. Undefined means uploads are off. */
+  private readonly imageRoot: string | undefined;
 
-  constructor(repo: Repository, ai: AiProvider, embeddings: EmbeddingProvider) {
+  constructor(
+    repo: Repository,
+    ai: AiProvider,
+    embeddings: EmbeddingProvider,
+    imageRoot?: string,
+  ) {
     this.repo = repo;
     this.ai = ai;
     this.embeddings = embeddings;
+    this.imageRoot = imageRoot;
   }
 
   async ingest(input: IngestInput): Promise<IngestResult> {
     const sourceId = id('src');
+
+    /*
+     * The bytes land before the row does.
+     *
+     * The row records where the image is, so writing it afterwards would open a
+     * window in which a source points at a file that does not exist — and the
+     * whole reason the source is persisted first is that a capture must survive
+     * everything downstream failing. A screenshot whose image is missing is not
+     * a saved capture.
+     */
+    let imagePath = input.imagePath ?? null;
+    if (input.image) {
+      if (!this.imageRoot) throw new Error('this server has nowhere to put an image');
+      imagePath = saveImage(this.imageRoot, sourceId, input.image).path;
+    }
 
     // ---- 1. Persist the raw source first. A capture is never lost.
     const source: SourceRow = {
@@ -186,7 +218,7 @@ export class IngestPipeline {
       raw_content: input.content ?? '',
       scene_description: null,
       url: input.url ?? null,
-      image_path: input.imagePath ?? null,
+      image_path: imagePath,
       referenced_urls: input.referencedUrls ?? [],
       status: 'processing',
       error_message: null,
@@ -236,8 +268,30 @@ export class IngestPipeline {
         const normalized = await this.ai.normalize({
           type: input.type, text: input.content, imagePath: input.imagePath,
         });
-        content = normalized.ocr_text || input.content || '';
         sceneDescription = normalized.scene_description;
+
+        /*
+         * What the image said, kept — and what you said about it, kept too.
+         *
+         * All three of these were computed on every screenshot and discarded.
+         * Spec §11.1 is explicit that a screenshot's `raw_content` is its OCR
+         * text, and the Inspector renders `scene_description` for screenshots,
+         * so it has been rendering null since the column existed.
+         *
+         * The caption is not replaced by the OCR, it is added to it. A
+         * screenshot of a pricing table plus "this is what they quoted us" is
+         * two different facts, and `ocr_text ||` alone threw the second away
+         * exactly when the first succeeded.
+         */
+        const caption = input.content?.trim() ?? '';
+        const ocr = normalized.ocr_text.trim();
+        content = [caption, ocr].filter(Boolean).join('\n\n') || caption;
+
+        this.repo.updateSourceNormalized(sourceId, {
+          raw_content: ocr || undefined,
+          scene_description: normalized.scene_description || null,
+          detected_context: normalized.detected_context || null,
+        });
       }
 
       // ---- 3. Extract

@@ -1,6 +1,13 @@
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
+import path from 'node:path';
+import { IMAGE_TYPES, isInsideRoot, validateImage, type InlineImage } from '../storage/images.ts';
+
+/** Extension -> media type, the inverse of `IMAGE_TYPES`. */
+const IMAGE_TYPES_BY_EXT: Record<string, string> = Object.fromEntries(
+  Object.entries(IMAGE_TYPES).map(([mediaType, ext]) => [ext, mediaType]),
+);
 
 /**
  * The HTTP surface — Phase 4.
@@ -26,6 +33,14 @@ export interface ApiRequest {
 export interface ApiResponse {
   status: number;
   body: unknown;
+  /**
+   * A file to stream instead of `body`.
+   *
+   * Routing stays here and stays pure: this describes the response rather than
+   * producing it, and `server.ts` does the streaming — the same split as every
+   * other route, which returns a value rather than writing to a socket.
+   */
+  file?: { path: string; contentType: string };
 }
 
 const ok = (body: unknown): ApiResponse => ({ status: 200, body });
@@ -39,6 +54,12 @@ export interface Deps {
   ask: AskPipeline;
   /** Restores a workspace to the seed corpus. */
   reset: (workspaceId: string) => void;
+  /**
+   * Where uploaded screenshots live. Absent means this server does not accept
+   * or serve them — the test suite and the seeded demo, which have no disk to
+   * write to and no images of their own.
+   */
+  imageRoot?: string;
   /** Mints a fresh workspace seeded from the demo corpus, returning its id. */
   createWorkspace?: () => string;
   /**
@@ -180,13 +201,36 @@ async function handleWorkspace(
     if (type !== 'text' && type !== 'link' && type !== 'screenshot') {
       return badRequest('type must be one of text, link, screenshot');
     }
+
+    /*
+     * `imagePath` used to be accepted here and handed to `fs.readFile`.
+     *
+     * That made every capture request a read primitive for any image file on
+     * the machine — the extension check was the only thing between a request
+     * body and an arbitrary .png being base64'd into a model prompt. Harmless
+     * enough when the server lived for the ten minutes `npm start` was open;
+     * not once it runs all day.
+     *
+     * The client sends bytes now. It never names a location, and the name is
+     * derived from a row we just wrote.
+     */
+    if (body.imagePath !== undefined) {
+      return badRequest('imagePath is not accepted — send image as { data, mediaType }');
+    }
+
+    let image: InlineImage | undefined;
+    if (body.image !== undefined) {
+      const checked = validateImage(body.image);
+      if ('error' in checked) return badRequest(checked.error);
+      image = checked.image;
+    }
     const result = await deps.ingest.ingest({
       workspaceId,
       type,
       content: typeof body.content === 'string' ? body.content : undefined,
       title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
-      imagePath: typeof body.imagePath === 'string' ? body.imagePath : undefined,
+      image,
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
@@ -260,6 +304,28 @@ async function handleWorkspace(
     }
     deps.repo.setAutoReorganize(workspaceId, body.autoReorganize);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * GET /api/workspaces/:id/sources/:sourceId/image — the screenshot itself.
+   *
+   * Served from the path on the row rather than from anything in the URL, and
+   * then checked for containment anyway. `image_path` is written by
+   * `saveImage` and by the seed importer, so it should never be anything else —
+   * but "should never" is how a file server for the home directory gets built,
+   * and the check is one comparison.
+   */
+  if (req.method === 'GET' && resource === 'sources' && resourceId && action === 'image') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source?.image_path) return notFound('that source has no image');
+    if (!deps.imageRoot || !isInsideRoot(deps.imageRoot, source.image_path)) {
+      // The seeded demo's image_path points at a committed asset outside the
+      // root. Refusing it is right: the file is not ours to serve.
+      return notFound('that image is not stored here');
+    }
+    const contentType = IMAGE_TYPES_BY_EXT[path.extname(source.image_path).toLowerCase()];
+    if (!contentType) return notFound('that image is not a kind we serve');
+    return { status: 200, body: null, file: { path: source.image_path, contentType } };
   }
 
   // POST /api/workspaces/:id/sources/:sourceId/retry — re-run a failed capture.

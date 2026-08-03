@@ -50,9 +50,14 @@ async function ingestViaApi(
   const ui = useUiStore.getState();
   ui.setCaptureStage('reading');
 
-  const request = capture(
-    input ?? { type: 'screenshot', content: 'demo capture', imagePath: '/seed/demo-screenshot.png' },
-  );
+  /*
+   * No argument used to mean "ingest the demo item", which is how dropping a
+   * file on the window saved a fictional screenshot instead of the file. Every
+   * caller passes what it collected now, so there is nothing left to default to
+   * and defaulting would only hide the next caller that forgets.
+   */
+  if (!input) throw new Error('nothing to capture');
+  const request = capture(input);
 
   // Advance the ticker while the request is in flight rather than after it, so
   // a fast server does not skip straight from "Reading…" to a finished split.

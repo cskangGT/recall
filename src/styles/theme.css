@@ -2133,6 +2133,73 @@ button {
   margin-bottom: 10px;
 }
 
+/*
+  The attached image, above the note you are writing about it.
+
+  Capped in height rather than shown whole: a screenshot is tall, and the thing
+  being composed is the sentence underneath. It is a receipt, not a preview.
+*/
+.source-card__image {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  object-position: top;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  /* Screenshots are usually near-white; on this ground they need a floor to
+     sit on or they read as a hole cut in the panel. */
+  background: var(--bg-raised);
+}
+
+.bar__image {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.bar__image img {
+  height: 44px;
+  width: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  /* A screenshot is usually pale; on a dark panel the edge is what reads. */
+  border: 1px solid var(--edge);
+}
+
+.bar__image-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.bar__image-drop {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: var(--text-md);
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.bar__image-drop:hover,
+.bar__image-drop:focus-visible {
+  color: var(--text);
+  background: var(--bg-panel);
+}
+
 .bar textarea,
 .bar input {
   width: 100%;

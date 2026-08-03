@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { SqliteRepository } from '../db/sqlite.ts';
 import { importSeed, namespaceSeed } from '../seed/import.ts';
 import seedJson from '../../seed/workspace.json' with { type: 'json' };
@@ -26,6 +27,18 @@ const WORKSPACE = process.env.RECALL_WORKSPACE ?? 'ws_demo';
 const DB_PATH = process.env.RECALL_DB ?? ':memory:';
 /** Set to serve the built client from this process too — see server/http/static.ts. */
 const STATIC_ROOT = process.env.RECALL_STATIC;
+
+/*
+ * Where pasted and dropped screenshots are written.
+ *
+ * Beside the database by default, for the reason the database is where it is: a
+ * screenshot you saved should not live in a directory you might re-clone. An
+ * in-memory database has no directory, so uploads are off there — which is the
+ * test suite and `npm run dev:api`, neither of which has anything to store.
+ */
+const IMAGE_ROOT =
+  process.env.RECALL_IMAGES ??
+  (DB_PATH === ':memory:' ? undefined : path.join(path.dirname(path.resolve(DB_PATH)), 'images'));
 /** Required for a public deployment; absent means every request may write. */
 const INVITE = process.env.RECALL_INVITE;
 
@@ -101,7 +114,7 @@ if (!IS_LOOPBACK && !INVITE) {
 const server = createApiServer(
   {
     repo,
-    ingest: new IngestPipeline(repo, provider, embeddings),
+    ingest: new IngestPipeline(repo, provider, embeddings, IMAGE_ROOT),
     ask: new AskPipeline(repo, provider, embeddings),
     reset: (workspaceId) => {
       repo.deleteWorkspace(workspaceId);
@@ -120,6 +133,7 @@ const server = createApiServer(
       return id;
     },
     inviteToken: INVITE,
+    imageRoot: IMAGE_ROOT,
   },
   STATIC_ROOT,
   /*
