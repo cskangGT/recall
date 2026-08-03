@@ -19,6 +19,8 @@ export interface ApiRequest {
   body: unknown;
   /** The invite token the caller presented, if any. See `writesAllowed`. */
   invite?: string;
+  /** The browser's `Origin` header, if the caller was a browser. See `originAllowed`. */
+  origin?: string;
 }
 
 export interface ApiResponse {
@@ -68,9 +70,63 @@ function writesAllowed(req: ApiRequest, deps: Deps): boolean {
   return req.invite === deps.inviteToken;
 }
 
+/**
+ * A webpage you are merely *visiting* must not be able to write here.
+ *
+ * This was reasoned about once and got the wrong answer, so the reasoning is
+ * written down. The belief was that a cross-origin write is impossible because
+ * `content-type: application/json` is not CORS-safelisted, which forces a
+ * preflight, and this server answers OPTIONS with a 404 carrying no CORS
+ * headers. Every clause is true. The conclusion is false, because **the
+ * attacker picks the content-type**: `readBody` never looks at it, so
+ *
+ *     fetch('http://127.0.0.1:5170/api/workspaces/ws_demo/reset',
+ *           { method: 'POST', mode: 'no-cors' })
+ *
+ * is a *simple* request — no preflight, delivered and executed. The response is
+ * unreadable, and the corpus is already gone. `/capture` spends real API credit
+ * the same way. `DELETE /memories/:id` was the one route the old reasoning held
+ * for, because DELETE is not a simple method.
+ *
+ * So the check is on `Origin`, which a browser attaches to every non-GET and
+ * which a page cannot forge.
+ *
+ * **No `Origin` at all is allowed.** curl, a script, the installer's health
+ * probe — none of them are browsers, and anything running as you on this machine
+ * can already read the database file directly. There is nothing to defend
+ * against there, and refusing would break the probe.
+ *
+ * Reads stay free; `server.ts`'s Host check is what protects those, because the
+ * threat to a read is DNS rebinding rather than a cross-origin fetch.
+ */
+function originAllowed(req: ApiRequest): boolean {
+  if (req.method === 'GET' || req.method === 'HEAD') return true;
+  if (!req.origin) return true;
+
+  // The served client and the Vite dev proxy — which forwards the browser's own
+  // `Origin: http://localhost:5173` even with `changeOrigin: true`.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.origin)) return true;
+
+  /*
+   * Any extension, not a pinned id. An extension that can reach 127.0.0.1 holds
+   * host permissions the user granted it at install time; the boundary that
+   * means something here is webpage-versus-extension, not extension-versus-
+   * extension. Pinning would also break the moment the unpacked id changes.
+   */
+  if (req.origin.startsWith('chrome-extension://')) return true;
+  if (req.origin.startsWith('safari-web-extension://')) return true;
+  if (req.origin.startsWith('moz-extension://')) return true;
+
+  return false;
+}
+
 export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> {
   const segments = req.path.replace(/^\/+|\/+$/g, '').split('/');
   if (segments[0] !== 'api') return notFound();
+
+  if (!originAllowed(req)) {
+    return forbidden(`${req.origin} may not write to Recall.`);
+  }
 
   if (!writesAllowed(req, deps)) {
     return forbidden('This demo is read-only without an invite.');

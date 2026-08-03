@@ -88,7 +88,9 @@ if (live && seededWidth > 0 && seededWidth !== embeddings.dimensions) {
  * behind nothing at all, and a warning printed to a terminal nobody is looking
  * at is not a control.
  */
-if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !INVITE) {
+const IS_LOOPBACK = HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1';
+
+if (!IS_LOOPBACK && !INVITE) {
   console.error(
     `refusing to bind ${HOST} without RECALL_INVITE — that would put this ` +
       'corpus and the API keys behind it on the network with nothing in front.',
@@ -120,7 +122,33 @@ const server = createApiServer(
     inviteToken: INVITE,
   },
   STATIC_ROOT,
+  /*
+   * Turns on the Host-header check, and only on loopback — see `hostAllowed`.
+   * A deployment bound to a real interface is reached by its real hostname and
+   * is guarded by RECALL_INVITE instead; the check there would refuse every
+   * legitimate request.
+   */
+  IS_LOOPBACK ? PORT : undefined,
 );
+
+/*
+ * `listen` failing is asynchronous, and without this it surfaces as an
+ * unhandled rejection and a stack trace. The common case is entirely mundane
+ * now that a launchd agent may already own the port, and it deserves a sentence
+ * rather than a trace — including in the agent's own error log, where a second
+ * copy starting is exactly what you would be trying to read about.
+ */
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `port ${PORT} is already taken — Recall may already be running ` +
+        `(npm run agent:restart), or set PORT=${PORT + 1} for a second instance.`,
+    );
+  } else {
+    console.error(`could not start: ${err.message}`);
+  }
+  process.exit(1);
+});
 
 server.listen(PORT, HOST, () => {
   console.log(
