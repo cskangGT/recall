@@ -3,8 +3,29 @@ import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 import type { CaptureStory } from '../capture/story';
+import type { BatchCategorySummary } from '../capture/batch';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
+
+/**
+ * The reveal a bulk drop plays: dots pour in while items are read, gather
+ * while the pipeline runs, and resolve into the declaration — what was
+ * organized, into which interests. `declare` waits for a click; the first
+ * sight of your corpus sorted is not a state to time out of.
+ */
+export interface BatchRevealState {
+  phase: 'reading' | 'organizing' | 'declare';
+  /** Items in the batch. */
+  total: number;
+  /** Items read so far — drives the pour of dots. */
+  read: number;
+  summary: {
+    memories: number;
+    skipped: number;
+    sources: number;
+    categories: BatchCategorySummary[];
+  } | null;
+}
 
 export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
   reading: 'Reading…',
@@ -67,6 +88,8 @@ interface UiState {
   lastCapture: CaptureStory | null;
   /** True while a file is being dragged over the window. */
   dropActive: boolean;
+  /** Non-null while a bulk drop is being read, organized, or declared. */
+  batchReveal: BatchRevealState | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -89,6 +112,7 @@ interface UiState {
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
+  setBatchReveal: (state: BatchRevealState | null) => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -116,6 +140,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   answer: null,
   lastCapture: null,
   dropActive: false,
+  batchReveal: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -176,11 +201,19 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
+  setBatchReveal: (batchReveal) => set({ batchReveal }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   escape: () => {
     const s = get();
+    // The declaration is dismissable like any modal; the reading and organizing
+    // phases are not — an Escape mid-pipeline would hide work that is still
+    // happening, not cancel it.
+    if (s.batchReveal?.phase === 'declare') {
+      set({ batchReveal: null });
+      return;
+    }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {
       set({ captureOpen: false, askOpen: false, settingsOpen: false });
       return;

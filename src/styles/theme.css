@@ -2340,3 +2340,224 @@ button {
   background: var(--accent);
   animation: pulse 1.4s ease-in-out infinite;
 }
+
+/* ------------------------------------------------------------------ reveal
+ * The bulk-drop reveal: dots pour in while items are read, gather while the
+ * pipeline runs, and resolve into the declaration. One overlay, three beats,
+ * paced by batchRun.ts — the CSS only knows how each beat looks.
+ */
+
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 7, 9, 0.82);
+  backdrop-filter: blur(6px);
+  animation: rise 0.3s ease;
+}
+
+.reveal__sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.reveal__dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.5s ease, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal__dot--lit {
+  opacity: 0.85;
+  transform: scale(1);
+}
+
+/* The gather: every lit dot drifts toward the centre of the sky. */
+.reveal--organizing .reveal__dot--lit {
+  transform: translate(var(--dx), var(--dy)) scale(0.7);
+  opacity: 0.55;
+  transition-duration: 1.6s;
+}
+
+/* The declaration takes the stage; the dots settle behind it as texture. */
+.reveal--declare .reveal__dot--lit {
+  transform: translate(var(--dx), var(--dy)) scale(0.5);
+  opacity: 0.12;
+}
+
+.reveal__status {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.reveal__count {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal__of {
+  font-size: var(--text-lg);
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.reveal__stage {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+}
+
+.reveal__declare {
+  position: relative;
+  max-width: 560px;
+  padding: 0 32px;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+  animation: rise 0.45s ease;
+}
+
+.reveal__declare h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.35;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.reveal__declare h2 strong {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.reveal__skipped {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-faint);
+}
+
+.reveal__chips {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.reveal__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.reveal__chip--new {
+  border-color: var(--accent-dim);
+}
+
+.reveal__chip-count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal__chip-badge {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reveal__dismiss {
+  margin-top: 10px;
+  padding: 9px 22px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reveal__dismiss:hover {
+  background: var(--accent-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal__declare {
+    animation: none;
+  }
+  .reveal__dot {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ plan
+ * The free window. Archived rows stay present — "a capture is never lost"
+ * includes visually — but unreadable, and the paywall line under the list is
+ * the only place the product ever asks for money.
+ */
+
+.item--archived {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.item__text--archived {
+  filter: blur(4px);
+  user-select: none;
+}
+
+.reading__paywall {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  font-size: var(--text-base);
+  color: var(--text-dim);
+}
+
+.reading__upgrade {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reading__upgrade:hover {
+  background: var(--accent-dim);
+}

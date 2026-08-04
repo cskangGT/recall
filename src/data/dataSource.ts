@@ -36,6 +36,21 @@ export interface CaptureResult {
   note?: string;
 }
 
+export interface CaptureBatchResult {
+  /** One per item, in item order. */
+  results: {
+    sourceId: string;
+    status: string;
+    addedMemoryIds: string[];
+    touchedCategoryIds: string[];
+    skipped: { text: string; similarity: number }[];
+    note?: string;
+  }[];
+  /** The batch's single structural operation, if the gates fired. */
+  reorg: CaptureResult['reorg'];
+  graph: GraphPayload;
+}
+
 export interface AskResult {
   answer: string;
   citations: { n: number; memory_id: string; source_id: string }[];
@@ -48,6 +63,8 @@ export interface DataSource {
   load(): Promise<GraphPayload>;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
+  /** Many items, one reorganization — the server half of the bulk-drop reveal. */
+  captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
   ask?(question: string): Promise<AskResult>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
@@ -112,6 +129,11 @@ export class ApiDataSource implements DataSource {
 
   async capture(input: CaptureInput): Promise<CaptureResult> {
     const result = await this.post<CaptureResult>('/capture', input);
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async captureBatch(items: CaptureInput[]): Promise<CaptureBatchResult> {
+    const result = await this.post<CaptureBatchResult>('/capture/batch', { items });
     return { ...result, graph: validateSeed(result.graph) };
   }
 
