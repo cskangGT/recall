@@ -1637,6 +1637,12 @@ button {
   line-height: 1.5;
 }
 
+.settings__pair {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .settings__action {
   flex: none;
   padding: 6px 12px;

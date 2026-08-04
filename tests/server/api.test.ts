@@ -509,3 +509,42 @@ describe('what the capture response carries', () => {
     expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
   });
 });
+
+describe('export', () => {
+  it('hands back Markdown as a named attachment', async () => {
+    const res = await get(`${base}/export/markdown`);
+    expect(res.status).toBe(200);
+    expect(res.download!.contentType).toMatch(/text\/markdown/);
+    expect(res.download!.filename).toMatch(/^recall-\d{4}-\d{2}-\d{2}\.md$/);
+    expect(res.download!.text).toContain('## AI Tooling');
+  });
+
+  it('hands back JSON the seed validator accepts, vectors and all', async () => {
+    // An export a person cannot read is a backup; one nothing can load is not
+    // even that.
+    const res = await get(`${base}/export/json`);
+    expect(res.status).toBe(200);
+    expect(res.download!.filename).toMatch(/\.json$/);
+
+    const parsed = JSON.parse(res.download!.text) as { payload: unknown; counts: { memories: number } };
+    expect(parsed.counts.memories).toBe(47);
+    expect(() => validateSeed(parsed.payload)).not.toThrow();
+  });
+
+  it('defaults to JSON when no format is named', async () => {
+    expect((await get(`${base}/export`)).download!.filename).toMatch(/\.json$/);
+  });
+
+  it('refuses a format it does not have', async () => {
+    const res = await get(`${base}/export/pdf`);
+    expect(res.status).toBe(400);
+    expect(res.download).toBeUndefined();
+  });
+
+  it('exports what is actually there, not the seed it started from', async () => {
+    await post(`${base}/capture`, { type: 'text', content: 'a thing worth keeping' });
+    const res = await get(`${base}/export/json`);
+    const parsed = JSON.parse(res.download!.text) as { counts: { memories: number } };
+    expect(parsed.counts.memories).toBeGreaterThan(47);
+  });
+});

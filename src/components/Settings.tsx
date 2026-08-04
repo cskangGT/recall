@@ -26,6 +26,25 @@ export function Settings() {
   const offline = isOffline();
   const mode = offline ? 'Offline — seeded data, no network' : source.mode;
 
+  /**
+   * A plain navigation, not a fetch.
+   *
+   * The route answers with `Content-Disposition: attachment`, which is what
+   * makes the browser save the file under the name the server chose. Fetching
+   * it into memory and building a blob URL would do the same thing with more
+   * code and a size limit — and this way the download survives navigating away
+   * mid-transfer.
+   */
+  const download = (format: 'markdown' | 'json') => {
+    if (!source.exportUrl) {
+      // Seed mode has no server to ask, and the corpus is a committed file
+      // anyone can read — saying so beats a button that quietly does nothing.
+      toast('Export needs the server — this is the seeded demo.');
+      return;
+    }
+    window.location.href = source.exportUrl(format);
+  };
+
   const reset = async () => {
     // Seed mode resets by reloading the committed corpus; the API has to be
     // told, because its copy lives in a database that survives a refresh.
@@ -86,6 +105,32 @@ export function Settings() {
               Go offline
             </a>
           )}
+        </div>
+
+        <div className="settings__row">
+          <span className="settings__body">
+            <span className="settings__label">Export everything</span>
+            <span className="settings__hint">
+              Markdown to read, JSON to move. The daily backups are database
+              files — these are what you can open somewhere else.
+            </span>
+          </span>
+          <span className="settings__pair">
+            <button
+              className="settings__action"
+              data-testid="export-markdown"
+              onClick={() => download('markdown')}
+            >
+              Markdown
+            </button>
+            <button
+              className="settings__action"
+              data-testid="export-json"
+              onClick={() => download('json')}
+            >
+              JSON
+            </button>
+          </span>
         </div>
 
         <div className="settings__row">

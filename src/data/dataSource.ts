@@ -46,6 +46,8 @@ export interface AskResult {
 export interface DataSource {
   readonly mode: 'seed' | 'api';
   load(): Promise<GraphPayload>;
+  /** Where the corpus can be downloaded from, or absent in seed mode. */
+  exportUrl?: (format: 'markdown' | 'json') => string;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
   ask?(question: string): Promise<AskResult>;
@@ -83,6 +85,10 @@ export class ApiDataSource implements DataSource {
     private readonly workspaceId = 'ws_demo',
     private readonly base = '/api',
   ) {}
+
+  exportUrl(format: 'markdown' | 'json'): string {
+    return `${this.base}/workspaces/${this.workspaceId}/export/${format}`;
+  }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.base}/workspaces/${this.workspaceId}${path}`, {

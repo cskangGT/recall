@@ -1,6 +1,7 @@
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
+import { exportFilename, toJson, toMarkdown } from '../../src/core/exportCorpus.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -26,6 +27,14 @@ export interface ApiRequest {
 export interface ApiResponse {
   status: number;
   body: unknown;
+  /**
+   * A file to send as an attachment instead of `body`.
+   *
+   * Described here rather than written here, so routing stays pure and
+   * `server.ts` keeps being the only thing that touches a socket — the same
+   * split every other route already has.
+   */
+  download?: { filename: string; contentType: string; text: string };
 }
 
 const ok = (body: unknown): ApiResponse => ({ status: 200, body });
@@ -168,6 +177,37 @@ async function handleWorkspace(
   // the shape SeedDataSource returns.
   if (req.method === 'GET' && resource === 'graph' && !resourceId) {
     return ok(deps.repo.getGraphPayload(workspaceId));
+  }
+
+  /*
+   * GET /api/workspaces/:id/export?format=json|markdown
+   *
+   * `server.ts` strips the query string before this function sees it, and that
+   * is deliberate — routing stays a pure function over a parsed request. So the
+   * format is a path segment: `/export/json`, `/export/markdown`.
+   */
+  if (req.method === 'GET' && resource === 'export') {
+    const format = resourceId ?? 'json';
+    if (format !== 'json' && format !== 'markdown') {
+      return badRequest('format must be json or markdown');
+    }
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    const at = new Date();
+    return {
+      status: 200,
+      body: null,
+      download: format === 'markdown'
+        ? {
+            filename: exportFilename('md', at),
+            contentType: 'text/markdown; charset=utf-8',
+            text: toMarkdown(payload, at),
+          }
+        : {
+            filename: exportFilename('json', at),
+            contentType: 'application/json; charset=utf-8',
+            text: JSON.stringify(toJson(payload, at), null, 2),
+          },
+    };
   }
 
   if (req.method === 'GET' && resource === 'reorgs' && !resourceId) {

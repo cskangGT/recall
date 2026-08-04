@@ -27,6 +27,13 @@ a directory you might delete or re-clone. Nothing backs that file up: copying it
 somewhere is how you keep it, deleting it is how you erase everything, and it is
 the one file worth knowing the location of.
 
+Everything in it comes back out. `,` opens Settings, where **Markdown** gives
+you the corpus as a document — categories, memories, and the source each one
+came from — and **JSON** gives you the whole payload, vectors included, in the
+shape `validateSeed` accepts. The daily snapshots are `.db` files, which is
+right for recovery and useless to anything that does not already know this
+schema; these are the ones you can open somewhere else.
+
 It binds `127.0.0.1` and refuses to bind anything else unless `RECALL_INVITE` is
 set. A tool holding your notes should take a deliberate act to become reachable.
 
@@ -151,8 +158,8 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 464 unit and server tests
-npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
+npm test             # 483 unit and server tests
+npm run test:e2e     # 92 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
