@@ -1,4 +1,5 @@
 import { useUiStore, STAGE_LABEL, type CaptureStage } from '../store/uiStore';
+import { QueueBadge } from './Chrome';
 
 /**
  * The account of what just happened to something you dropped in.
@@ -29,7 +30,10 @@ export function CaptureStoryPanel() {
     const current = STAGES.indexOf(stage);
     return (
       <div className="capture-story" data-testid="classify-panel">
-        <div className="capture-story__title">Reading what you just added</div>
+        <div className="capture-story__title">
+          Reading what you just added
+          <QueueBadge />
+        </div>
         <ol className="capture-story__steps">
           {STAGES.map((s, i) => (
             <li

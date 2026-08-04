@@ -118,6 +118,24 @@ export function LeftRail() {
   );
 }
 
+/**
+ * Spec AC-7's queue badge.
+ *
+ * Its own component because the thing it belongs beside is different per view:
+ * Map and Sources have the ticker, and the browse view replaces the ticker with
+ * the capture story panel. A badge that only appeared on two of three screens
+ * would be missing from the default one.
+ */
+export function QueueBadge() {
+  const waiting = useUiStore((s) => s.captureQueue.length);
+  if (waiting === 0) return null;
+  return (
+    <span className="ticker__queue" data-testid="queue-badge">
+      {waiting} waiting
+    </span>
+  );
+}
+
 export function StatusTicker() {
   const stage = useUiStore((s) => s.captureStage);
   if (stage === 'idle') return null;
@@ -126,6 +144,7 @@ export function StatusTicker() {
     <div className="ticker" data-testid="status-ticker" aria-live="polite">
       <span className="ticker__dot" />
       {STAGE_LABEL[stage]}
+      <QueueBadge />
     </div>
   );
 }

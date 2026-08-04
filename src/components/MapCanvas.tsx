@@ -75,7 +75,8 @@ export function MapCanvas({
   onAnimationDone,
 }: {
   animation: RunningAnimation | null;
-  onAnimationDone: (event: ReorgEvent | null) => void;
+  /** `added` is how many memories the capture actually put in — the toast says so. */
+  onAnimationDone: (event: ReorgEvent | null, added: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<Camera | null>(null);
@@ -280,7 +281,7 @@ export function MapCanvas({
         const total = animation.hasStructure ? 2400 : 1800;
         if (t >= total && !bannerFired.current) {
           bannerFired.current = true;
-          onAnimationDone(animation.event);
+          onAnimationDone(animation.event, animation.newMemoryIds.length);
         }
       }
 
