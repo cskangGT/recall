@@ -1911,6 +1911,18 @@ button {
   gap: 8px;
 }
 
+.ticker__queue {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  /* Digits in a pill that changes width as the queue drains: line them up. */
+  font-variant-numeric: tabular-nums;
+}
+
 .ticker__dot {
   width: 5px;
   height: 5px;

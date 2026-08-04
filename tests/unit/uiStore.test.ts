@@ -155,3 +155,48 @@ describe('uiStore.reorgHistory', () => {
     expect(popReorg()).toBeNull();
   });
 });
+
+describe('the capture queue', () => {
+  beforeEach(() => useUiStore.setState({ captureQueue: [] }));
+
+  it('holds captures in the order they arrived', () => {
+    // Serial, and in order (spec AC-7). Out of order would be worse than
+    // dropping, because two notes about the same thing would be placed against
+    // corpora that disagree.
+    const s = useUiStore.getState();
+    s.enqueueCapture({ type: 'text', content: 'first' });
+    s.enqueueCapture({ type: 'text', content: 'second' });
+
+    expect(useUiStore.getState().captureQueue).toHaveLength(2);
+    expect(useUiStore.getState().shiftCapture()).toEqual({ type: 'text', content: 'first' });
+    expect(useUiStore.getState().shiftCapture()).toEqual({ type: 'text', content: 'second' });
+  });
+
+  it('reports empty as null, not as an undefined item', () => {
+    // `undefined` is a legitimate queued value — it is what a drop enqueues —
+    // so "nothing waiting" has to be a different answer or the drain loop would
+    // capture a phantom.
+    expect(useUiStore.getState().shiftCapture()).toBeNull();
+  });
+
+  it('keeps an argument-less capture distinguishable from an empty queue', () => {
+    const s = useUiStore.getState();
+    s.enqueueCapture(undefined);
+    expect(useUiStore.getState().captureQueue).toHaveLength(1);
+    expect(useUiStore.getState().shiftCapture()).toBeUndefined();
+    expect(useUiStore.getState().shiftCapture()).toBeNull();
+  });
+
+  it('shrinks as it drains, which is what the badge counts', () => {
+    const s = useUiStore.getState();
+    s.enqueueCapture({ type: 'text', content: 'a' });
+    s.enqueueCapture({ type: 'text', content: 'b' });
+    s.enqueueCapture({ type: 'text', content: 'c' });
+
+    const seen: number[] = [useUiStore.getState().captureQueue.length];
+    while (useUiStore.getState().shiftCapture() !== null) {
+      seen.push(useUiStore.getState().captureQueue.length);
+    }
+    expect(seen).toEqual([3, 2, 1, 0]);
+  });
+});

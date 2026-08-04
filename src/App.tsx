@@ -55,6 +55,8 @@ export function App() {
       (window.innerWidth >= MIN_VIEWPORT_WIDTH && window.innerHeight >= MIN_VIEWPORT_HEIGHT),
   );
   const busy = useRef(false);
+  /** See `finish` — `capture` and `finish` refer to each other. */
+  const captureRef = useRef<(input?: CaptureInput) => Promise<void>>(async () => {});
 
   useEffect(() => {
     void load();
@@ -77,8 +79,43 @@ export function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  /**
+   * The one place a capture ends, and the only place the next one starts.
+   *
+   * `busy` was cleared in two branches that did not know about each other, and
+   * a drain has to happen wherever it is released or a queued item waits for a
+   * capture that will never come.
+   *
+   * `captureRef` breaks the cycle: `capture` needs `finish`, `finish` needs
+   * `capture`, and neither may be recreated on every render or the keyboard
+   * effect below re-binds constantly.
+   */
+  const finish = useCallback(() => {
+    busy.current = false;
+    const next = useUiStore.getState().shiftCapture();
+    if (next !== null) void captureRef.current(next);
+  }, []);
+
   const capture = useCallback(async (input?: CaptureInput) => {
-    if (busy.current) return;
+    /*
+     * Queued, not dropped.
+     *
+     * This was `if (busy.current) return;` — a second capture during the first
+     * disappeared with no toast, no badge and no retry. A capture takes several
+     * seconds against a real model and then holds `busy` through the animation
+     * on top, so the window is wide enough to hit by pasting twice.
+     *
+     * Serial rather than parallel (spec AC-7), because the pipeline places each
+     * memory against the corpus *as it is*: two captures racing would each be
+     * assigned against a graph that does not contain the other, and could open
+     * two categories for the same idea.
+     */
+    if (busy.current) {
+      const ui = useUiStore.getState();
+      ui.enqueueCapture(input);
+      ui.toast(`Queued — Recall is still reading the last one.`);
+      return;
+    }
     busy.current = true;
     const ui = useUiStore.getState();
 
@@ -114,7 +151,7 @@ export function App() {
     // Nothing added is not nothing happened: everything in the source may
     // already have been held, and the story above says so.
     if (result.addedMemoryIds.length === 0) {
-      busy.current = false;
+      finish();
       return;
     }
 
@@ -138,6 +175,22 @@ export function App() {
     });
   }, []);
 
+  captureRef.current = capture;
+
+  /*
+   * A queued capture has not been sent anywhere yet — it is bytes in a tab.
+   * Closing it would lose them silently, which is the failure this whole change
+   * exists to remove, so the browser gets to ask.
+   */
+  useEffect(() => {
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (useUiStore.getState().captureQueue.length === 0) return;
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, []);
+
   // The reorganization choreography lives on the canvas, so when a capture
   // happens anywhere else nothing is there to finish it — the app would stay
   // busy forever and the banner would never fire. Resolve it on the timeline's
@@ -146,20 +199,25 @@ export function App() {
     if (!animation || view === 'map') return;
     const total = animation.hasStructure ? 2400 : 1800;
     const elapsed = performance.now() - animation.startedAt;
-    const t = setTimeout(() => onAnimationDoneRef.current(animation.event), Math.max(0, total - elapsed));
+    const t = setTimeout(
+      () => onAnimationDoneRef.current(animation.event, animation.newMemoryIds.length),
+      Math.max(0, total - elapsed),
+    );
     return () => clearTimeout(t);
   }, [animation, view]);
 
-  const onAnimationDone = useCallback((event: ReorgEvent | null) => {
+  const onAnimationDone = useCallback((event: ReorgEvent | null, added: number) => {
     const ui = useUiStore.getState();
     if (event) {
       ui.pushReorg(event);
     } else {
-      ui.toast('Added 2 memories.');
+      // Was hard-coded to "Added 2 memories." — the demo's own number, told to
+      // you after every capture regardless of what it actually saved.
+      ui.toast(added === 1 ? 'Added 1 memory.' : `Added ${added} memories.`);
     }
     setAnimation(null);
-    busy.current = false;
-  }, []);
+    finish();
+  }, [finish]);
 
   // Held in a ref so the timer above does not need to re-run when the callback
   // identity changes.

@@ -3,6 +3,7 @@ import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 import type { CaptureStory } from '../capture/story';
+import type { CaptureInput } from '../data/dataSource';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
 
@@ -61,6 +62,20 @@ interface UiState {
   askOpen: boolean;
   settingsOpen: boolean;
   captureStage: CaptureStage;
+  /**
+   * Captures waiting their turn — not counting the one in flight.
+   *
+   * A second capture during the first used to hit `if (busy.current) return;`
+   * and vanish: no toast, no retry, nothing on screen. In a tool whose whole
+   * job is not losing things, a save that silently does not happen is the worst
+   * failure available, because it is indistinguishable from one that did.
+   *
+   * They run serially rather than in parallel (spec AC-7) because the pipeline
+   * assigns each memory against the corpus *as it is* — two captures racing
+   * would each be placed against a graph that does not include the other, and
+   * could open two categories for the same idea.
+   */
+  captureQueue: (CaptureInput | undefined)[];
   reorgHistory: ReorgEvent[];
   answer: (ScriptedAnswer & { question: string }) | null;
   /** The account of the last capture — what was read, what was new, where it went. */
@@ -84,6 +99,9 @@ interface UiState {
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setCaptureStage: (s: CaptureStage) => void;
+  enqueueCapture: (input: CaptureInput | undefined) => void;
+  /** Takes the next one, or null when there is nothing waiting. */
+  shiftCapture: () => (CaptureInput | undefined) | null;
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
@@ -112,6 +130,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   askOpen: false,
   settingsOpen: false,
   captureStage: 'idle',
+  captureQueue: [],
   reorgHistory: [],
   answer: null,
   lastCapture: null,
@@ -152,6 +171,15 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCaptureStage: (captureStage) => set({ captureStage }),
+
+  enqueueCapture: (input) => set((s) => ({ captureQueue: [...s.captureQueue, input] })),
+
+  shiftCapture: () => {
+    const [next, ...rest] = get().captureQueue;
+    if (get().captureQueue.length === 0) return null;
+    set({ captureQueue: rest });
+    return next ?? undefined;
+  },
 
   // 10 deep, session-scoped (spec 8.4.5).
   pushReorg: (e) => set((s) => ({ reorgHistory: [e, ...s.reorgHistory].slice(0, 10) })),
