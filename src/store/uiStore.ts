@@ -84,6 +84,14 @@ interface UiState {
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
   answer: (ScriptedAnswer & { question: string }) | null;
+  /**
+   * The conversation so far — answered questions, oldest first, capped at
+   * three. Sent with the next question so a follow-up ("which of those?") has
+   * a *those*. Each answer is still built from the corpus alone; the thread
+   * disambiguates the question, it is never evidence. Dies with the answer:
+   * dismissing the answer surface ends the conversation.
+   */
+  askThread: { question: string; answer: string }[];
   /** The account of the last capture — what was read, what was new, where it went. */
   lastCapture: CaptureStory | null;
   /** True while a file is being dragged over the window. */
@@ -110,6 +118,8 @@ interface UiState {
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  /** Ends the conversation without touching the answer on screen. */
+  clearAskThread: () => void;
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
@@ -138,6 +148,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   captureStage: 'idle',
   reorgHistory: [],
   answer: null,
+  askThread: [],
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
@@ -192,6 +203,15 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAnswer: (answer) =>
     set((s) => ({
       answer,
+      // An answered question extends the conversation; a refusal or a
+      // dismissal does not — following up on "I don't have anything" is
+      // following up on nothing.
+      askThread:
+        answer === null
+          ? []
+          : answer.refused
+            ? s.askThread
+            : [...s.askThread, { question: answer.question, answer: answer.answer }].slice(-3),
       openCategoryId:
         answer !== null && s.view === 'browse'
           ? ANSWER_FOLDER_ID
@@ -199,6 +219,7 @@ export const useUiStore = create<UiState>((set, get) => ({
             ? null
             : s.openCategoryId,
     })),
+  clearAskThread: () => set({ askThread: [] }),
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
@@ -225,6 +246,8 @@ export const useUiStore = create<UiState>((set, get) => ({
       set({
         highlightedIds: [],
         answer: null,
+        // The conversation dies with the answer surface it happened on.
+        askThread: [],
         // The answer folder cannot outlive the answer it holds.
         openCategoryId: s.openCategoryId === ANSWER_FOLDER_ID ? null : s.openCategoryId,
       });

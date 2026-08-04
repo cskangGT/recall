@@ -114,6 +114,8 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
 export function AskBar() {
   const setAskOpen = useUiStore((s) => s.setAskOpen);
   const setAnswer = useUiStore((s) => s.setAnswer);
+  const askThread = useUiStore((s) => s.askThread);
+  const clearAskThread = useUiStore((s) => s.clearAskThread);
   const recordInterest = useInterestStore((s) => s.record);
   const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
@@ -164,10 +166,15 @@ export function AskBar() {
     if (!payload || !question.trim()) return;
     setAskOpen(false);
 
+    // The conversation so far rides along, so a follow-up's pronouns resolve.
+    // Snapshotted here: the thread grows when the answer lands, and the model
+    // must see the conversation as it was when the question was asked.
+    const history = useUiStore.getState().askThread;
+
     const source = useWorkspaceStore.getState().source;
     const result = source.ask
-      ? await source.ask(question).catch(() => answerQuestion(question, payload))
-      : answerQuestion(question, payload);
+      ? await source.ask(question, history).catch(() => answerQuestion(question, payload, history))
+      : answerQuestion(question, payload, history);
 
     setAnswer({ ...result, question });
     /*
@@ -199,10 +206,31 @@ export function AskBar() {
           </span>
           <span>esc</span>
         </div>
+        {/* The conversation, named. A follow-up only works if you can see what
+            it would follow — and end it, because "start fresh" must never
+            require dismissing the answer you are looking at. */}
+        {!searching && askThread.length > 0 && (
+          <div className="bar__followup" data-testid="ask-followup">
+            <span className="bar__followup-q">
+              Following up on “{askThread[askThread.length - 1]!.question}”
+            </span>
+            <button
+              className="bar__followup-clear"
+              data-testid="ask-followup-clear"
+              onClick={clearAskThread}
+            >
+              Start fresh
+            </button>
+          </div>
+        )}
         <input
           ref={ref}
           data-testid="ask-input"
-          placeholder="Ask across everything you've saved…"
+          placeholder={
+            askThread.length > 0
+              ? 'Follow up — or start fresh above…'
+              : "Ask across everything you've saved…"
+          }
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

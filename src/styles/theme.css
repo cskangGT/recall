@@ -2561,3 +2561,39 @@ button {
 .reading__upgrade:hover {
   background: var(--accent-dim);
 }
+
+/* ------------------------------------------------------------------ follow-up
+ * The conversation line in the ask bar: what the next question would follow,
+ * and the way out of it. One line, quiet — the thread is context, not content.
+ */
+
+.bar__followup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.bar__followup-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar__followup-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.bar__followup-clear:hover {
+  color: var(--accent-dim);
+}

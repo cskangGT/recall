@@ -292,7 +292,19 @@ async function handleWorkspace(
     if (typeof body.question !== 'string' || body.question.trim().length === 0) {
       return badRequest('question is required');
     }
-    return ok(await deps.ask.ask(workspaceId, body.question));
+    // Optional conversation context for follow-ups. Malformed turns are
+    // dropped rather than rejected — history disambiguates a question, and a
+    // question must not fail because its context was oddly shaped. Capped at
+    // the last three: further back is a different subject more often than not.
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter(
+        (t): t is { question: string; answer: string } =>
+          typeof t === 'object' && t !== null &&
+          typeof (t as Record<string, unknown>).question === 'string' &&
+          typeof (t as Record<string, unknown>).answer === 'string',
+      )
+      .slice(-3);
+    return ok(await deps.ask.ask(workspaceId, body.question, history));
   }
 
   // POST /api/workspaces/:id/reorgs/:reorgId/undo

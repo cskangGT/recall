@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
-import type { AiProvider, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
+import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
 import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
 
 /**
@@ -49,11 +49,26 @@ export class AskPipeline {
     this.embeddings = embeddings;
   }
 
-  async ask(workspaceId: string, question: string): Promise<AskResult> {
+  async ask(workspaceId: string, question: string, history: AskTurn[] = []): Promise<AskResult> {
     const payload = this.repo.getGraphPayload(workspaceId);
 
-    const [questionVector] = await this.embeddings.embed([question], 'query');
-    const keywordHits = this.repo.keywordSearch(workspaceId, question, RETRIEVE_LIMIT);
+    /*
+     * A follow-up retrieves on the conversation, not on itself. "Which of
+     * those take reservations?" embeds nowhere near restaurants — the referent
+     * lives in the previous question, so the previous question rides along for
+     * the query embedding and the keyword pass. Only the latest turn: two
+     * questions back is a different subject more often than the same one, and
+     * an over-wide query drags the floor down for everything.
+     *
+     * Everything downstream is unchanged on purpose — the floor, the citation
+     * contract, the refusal. History rewords the question; it never lowers the
+     * bar for answering it.
+     */
+    const previous = history.at(-1);
+    const retrievalText = previous ? `${previous.question}\n${question}` : question;
+
+    const [questionVector] = await this.embeddings.embed([retrievalText], 'query');
+    const keywordHits = this.repo.keywordSearch(workspaceId, retrievalText, RETRIEVE_LIMIT);
 
     const fused = fuse(payload, questionVector!, keywordHits, RETRIEVE_LIMIT);
     const surviving = applyFloor(fused);
@@ -79,7 +94,7 @@ export class AskPipeline {
       };
     });
 
-    const generated = await this.ai.answer({ question, retrieved: context });
+    const generated = await this.ai.answer({ question, retrieved: context, history });
 
     if (generated.refused || generated.citations.length === 0) {
       this.record(workspaceId, question, refusal(surviving.length));

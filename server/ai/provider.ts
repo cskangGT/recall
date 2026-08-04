@@ -78,6 +78,17 @@ export interface NamedCluster {
 
 // ---------------------------------------------------------------- ask
 
+/**
+ * One prior exchange, oldest first. Follow-ups carry the last few so "which of
+ * those?" has a *those* — the model resolves the referent; retrieval gets the
+ * same context separately (see AskPipeline). Each question is still answered
+ * against the corpus alone: history disambiguates, it is never evidence.
+ */
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
 export interface AnswerCitation {
   n: number;
   memory_id: string;
@@ -122,7 +133,12 @@ export interface AiProvider {
     /** Sibling names the result must not collide with. */
     forbiddenNames: string[];
   }): Promise<NamedCluster[]>;
-  answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult>;
+  answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    /** Recent exchanges, oldest first — absent on a fresh question. */
+    history?: AskTurn[];
+  }): Promise<AnswerResult>;
 }
 
 // ---------------------------------------------------------------- naming validation

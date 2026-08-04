@@ -163,9 +163,24 @@ export class FixtureProvider implements AiProvider {
     });
   }
 
-  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+  async answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    history?: { question: string; answer: string }[];
+  }): Promise<AnswerResult> {
     const q = input.question.toLowerCase();
-    const entry = answers.find((a) => a.match.every((kw) => q.includes(kw)));
+    // A follow-up rarely repeats the keywords its referent carried — "which
+    // tool won?" says nothing about evals. Match the question alone first;
+    // failing that, match with the conversation the way a real model would
+    // resolve it. The refusal path stays real: no scripted entry, no answer.
+    const withHistory = [...(input.history ?? []).map((t) => t.question), input.question]
+      .join(' ')
+      .toLowerCase();
+    const entry =
+      answers.find((a) => a.match.every((kw) => q.includes(kw))) ??
+      (input.history?.length
+        ? answers.find((a) => a.match.every((kw) => withHistory.includes(kw)))
+        : undefined);
     if (!entry) {
       return {
         answer: "I don't have anything saved about that yet.",

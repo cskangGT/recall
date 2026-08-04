@@ -1,5 +1,5 @@
 import type {
-  AnswerCitation, ExtractResult, ExtractedMemory, NameCluster, NamedCluster,
+  AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
@@ -332,6 +332,7 @@ export const answerSchema = {
 export function buildAnswerPrompt(input: {
   question: string;
   retrieved: RetrievedMemory[];
+  history?: AskTurn[];
 }): string {
   const numbered = input.retrieved
     .map(
@@ -339,6 +340,24 @@ export function buildAnswerPrompt(input: {
         `[${i + 1}] ${m.text}\n    (${m.category_name} · ${m.source_type} · ${m.source_title})`,
     )
     .join('\n');
+
+  /*
+   * The conversation resolves referents, nothing more. It sits above the
+   * memories and below the rules so the model reads it as context for the
+   * question — "which of those?" needs a *those* — while the citation contract
+   * stays anchored to the numbered memories alone. A prior answer is never
+   * evidence: it was built from citations that are not in this prompt, and
+   * citing it would be citing a citation.
+   */
+  const conversation =
+    input.history && input.history.length > 0
+      ? [
+          'Earlier in this conversation (context for pronouns and follow-ups only —',
+          'never a source to cite or repeat from):',
+          ...input.history.map((t) => `Q: ${t.question}\nA: ${t.answer}`),
+          '',
+        ]
+      : [];
 
   return [
     'Answer using only the numbered memories below. They are the entire world.',
@@ -351,6 +370,7 @@ export function buildAnswerPrompt(input: {
     'leave citations empty. Refusing is correct and costs nothing; a confident',
     'answer built out of near-misses costs their trust in everything else here.',
     '',
+    ...conversation,
     `Question: ${input.question}`,
     '',
     'Memories:',

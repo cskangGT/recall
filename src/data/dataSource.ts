@@ -58,6 +58,12 @@ export interface AskResult {
   refused: boolean;
 }
 
+/** One prior exchange, for follow-up questions. Oldest first. */
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
 export interface DataSource {
   readonly mode: 'seed' | 'api';
   load(): Promise<GraphPayload>;
@@ -65,7 +71,7 @@ export interface DataSource {
   capture?(input: CaptureInput): Promise<CaptureResult>;
   /** Many items, one reorganization — the server half of the bulk-drop reveal. */
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
-  ask?(question: string): Promise<AskResult>;
+  ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
@@ -137,8 +143,8 @@ export class ApiDataSource implements DataSource {
     return { ...result, graph: validateSeed(result.graph) };
   }
 
-  ask(question: string): Promise<AskResult> {
-    return this.post<AskResult>('/ask', { question });
+  ask(question: string, history?: AskTurn[]): Promise<AskResult> {
+    return this.post<AskResult>('/ask', { question, history });
   }
 
   async undo(reorgId: string): Promise<GraphPayload> {

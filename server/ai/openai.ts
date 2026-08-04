@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  AiProvider, AnswerResult, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
+  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
 } from './provider.ts';
@@ -304,7 +304,11 @@ export class OpenAiProvider implements AiProvider {
       .filter((a): a is NamedCluster => a !== undefined);
   }
 
-  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+  async answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    history?: AskTurn[];
+  }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
   }
 }
