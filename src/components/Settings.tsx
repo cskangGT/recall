@@ -2,6 +2,7 @@ import { useUiStore } from '../store/uiStore';
 import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
+import { currentPlan, FREE_WINDOW_DAYS } from '../core/plan';
 
 /**
  * Settings, kept deliberately small.
@@ -85,6 +86,26 @@ export function Settings() {
             <a className="settings__action" href="?offline=1">
               Go offline
             </a>
+          )}
+        </div>
+
+        <div className="settings__row">
+          <span className="settings__body">
+            <span className="settings__label">Plan</span>
+            <span className="settings__hint" data-testid="settings-plan">
+              {currentPlan() === 'free'
+                ? `Free — your last ${FREE_WINDOW_DAYS} days, organized and askable. Older saves are archived, never deleted.`
+                : 'Pro — everything you ever saved, organized and askable.'}
+            </span>
+          </span>
+          {currentPlan() === 'free' && (
+            <button
+              className="settings__action"
+              data-testid="settings-upgrade"
+              onClick={() => toast('Recall Pro remembers everything. Payments arrive with the next build.')}
+            >
+              Upgrade
+            </button>
           )}
         </div>
 

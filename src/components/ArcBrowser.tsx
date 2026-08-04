@@ -9,6 +9,7 @@ import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
+import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
 import type { SourceType } from '../core/types';
 
 /**
@@ -249,6 +250,20 @@ export function ArcBrowser() {
       .filter((m) => m.category_id === openRow.id || childIds.includes(m.category_id))
       .sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   }, [payload, openRow, showingAnswer, answerMemories]);
+
+  /*
+   * The free window. Rows past it render archived — present but not readable —
+   * and one line under the list says why and what opens them. An answer's
+   * citations are never archived mid-answer: the answer already read them, and
+   * redacting its own evidence would make the product look like it is lying.
+   */
+  const planCutoff = useMemo(
+    () => (payload ? freeCutoff(payload.memories, currentPlan()) : null),
+    [payload],
+  );
+  const archivedCount = showingAnswer
+    ? 0
+    : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
 
   const goTo = (levelId: string | null, back: boolean) => {
     setPage(0);
@@ -637,6 +652,36 @@ export function ArcBrowser() {
         {contents.map((memory) => {
           const source = payload.sources.find((s) => s.id === memory.source_id);
           const home = payload.categories.find((c) => c.id === memory.category_id);
+          const archived = !showingAnswer && isArchivedByPlan(memory.created_at, planCutoff);
+          if (archived) {
+            return (
+              <div
+                key={memory.id}
+                data-testid={`item-${memory.id}`}
+                className="item item--archived"
+                role="button"
+                tabIndex={0}
+                aria-label="Archived memory — upgrade to open"
+                onClick={() => useUiStore.getState().toast('Archived on Recall Free — upgrade to open everything you saved.')}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  useUiStore.getState().toast('Archived on Recall Free — upgrade to open everything you saved.');
+                }}
+              >
+                <span className="item__icon">{source ? SOURCE_ICON[source.type] : '·'}</span>
+                <span className="item__body">
+                  <span className="item__text item__text--archived" aria-hidden="true">
+                    {memory.text}
+                  </span>
+                  <span className="item__meta">Archived · saved {memory.created_at.slice(0, 10)}</span>
+                </span>
+                <span className="item__lock" title="Past the free window">
+                  ◷
+                </span>
+              </div>
+            );
+          }
           return (
             <div
               key={memory.id}
@@ -685,6 +730,24 @@ export function ArcBrowser() {
             </div>
           );
         })}
+
+        {archivedCount > 0 && (
+          <div className="reading__paywall" data-testid="plan-paywall">
+            <span>
+              Recall Free remembers your last {FREE_WINDOW_DAYS} days — {archivedCount}{' '}
+              older {archivedCount === 1 ? 'memory is' : 'memories are'} archived here.
+            </span>
+            <button
+              className="reading__upgrade"
+              data-testid="plan-upgrade"
+              onClick={() =>
+                useUiStore.getState().toast('Recall Pro remembers everything. Payments arrive with the next build.')
+              }
+            >
+              Remember everything
+            </button>
+          </div>
+        )}
       </div>
       )}
     </div>
