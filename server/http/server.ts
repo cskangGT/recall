@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http';
-import { handle, type Deps } from './routes.ts';
+import { handle, type ApiResponse, type Deps } from './routes.ts';
 import { serveStatic } from './static.ts';
 
 /**
@@ -103,7 +103,7 @@ export function createApiServer(
             return;
           }
         }
-        const result = await handle(
+        const result: ApiResponse = await handle(
           {
             method: req.method ?? 'GET',
             path,
@@ -120,6 +120,22 @@ export function createApiServer(
           },
           deps,
         );
+        /*
+         * An export is a file you keep, not a response you read. The
+         * Content-Disposition is what makes a browser save it under the name
+         * the route chose rather than rendering it in a tab.
+         */
+        if (result.download) {
+          const body = Buffer.from(result.download.text, 'utf8');
+          res.writeHead(result.status, {
+            'content-type': result.download.contentType,
+            'content-length': body.byteLength,
+            'content-disposition': `attachment; filename="${result.download.filename}"`,
+            'cache-control': 'no-store',
+          });
+          res.end(body);
+          return;
+        }
         send(result.status, result.body);
       } catch (err) {
         // A handler throwing is a bug, not a client error — say so plainly

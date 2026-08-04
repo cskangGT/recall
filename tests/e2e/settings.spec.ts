@@ -59,3 +59,18 @@ test('reports the data source, and offline keeps the demo off the network', asyn
   // to beat ?api=1 rather than lose to it.
   await expect(page.getByTestId('settings-mode')).toContainText('Offline');
 });
+
+test('export says so honestly when there is no server to ask', async ({ page }) => {
+  // Seed mode has no backend. A button that quietly does nothing would be worse
+  // than one that explains itself.
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await page.keyboard.press(',');
+  await expect(page.getByTestId('settings')).toBeVisible();
+
+  await expect(page.getByTestId('export-markdown')).toBeVisible();
+  await expect(page.getByTestId('export-json')).toBeVisible();
+
+  await page.getByTestId('export-markdown').click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(/Export needs the server/);
+});
