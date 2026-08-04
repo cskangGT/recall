@@ -36,6 +36,11 @@ export interface SourceRow {
   error: string | null;
   /** A capture that produced nothing is the case the toast points here for. */
   empty: boolean;
+  /**
+   * A link saved but not read. Zero memories like `empty`, and a different
+   * thing: this one has somewhere to go — open it and capture it.
+   */
+  unread: boolean;
 }
 
 /**
@@ -62,12 +67,22 @@ export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'a
     .map((s) => {
       const memoryCount = counts.get(s.id) ?? 0;
       const failed = s.status === 'failed';
+      /*
+       * A link you saved and have not read is not an empty capture.
+       *
+       * Both produce zero memories, and calling them the same thing told you
+       * "nothing to remember in this" about a page you deliberately kept —
+       * true, and useless. The difference is that one of them has somewhere to
+       * go: open it and capture it.
+       */
+      const unread = !failed && memoryCount === 0 && s.type === 'link' && Boolean(s.url);
       return {
         source: s,
         memoryCount,
+        unread,
         // A failed source produced nothing, but calling it empty would hide the
         // fact that it can be retried.
-        empty: !failed && memoryCount === 0,
+        empty: !failed && !unread && memoryCount === 0,
         failed,
         error: s.error_message ?? null,
       };
@@ -140,7 +155,7 @@ export function SourcesView() {
 
       {rows.length === 0 && <p className="sources__empty">No sources yet.</p>}
 
-      {rows.map(({ source, memoryCount, empty, failed, error }) => (
+      {rows.map(({ source, memoryCount, empty, unread, failed, error }) => (
         <div
           key={source.id}
           data-testid={`source-row-${source.id}`}
@@ -178,6 +193,7 @@ export function SourcesView() {
             <span className="source-row__title">{source.title}</span>
             <span className="source-row__meta">
               {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
+              {unread ? ' · saved to read' : ''}
               {empty ? ' · nothing to remember in this' : ''}
               {failed ? ` · couldn't process this${error ? ` — ${error}` : ''}` : ''}
             </span>

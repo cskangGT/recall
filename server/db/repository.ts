@@ -64,6 +64,8 @@ export interface Repository {
       summary?: string | null;
       processed_at?: string | null;
       title?: string | null;
+      /** What was read out of the source. For a link, its own description. */
+      raw_content?: string | null;
     },
   ): void;
   listSources(workspaceId: string): SourceRow[];

@@ -7,6 +7,7 @@ import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
 import { evaluateReorg } from '../../src/core/gates.ts';
 import { applyReorg } from '../../src/core/applyReorg.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
+import { fetchPageMeta } from '../net/fetchPage.ts';
 import { RELATES_TO_MIN_SIMILARITY, DUPLICATE_SIMILARITY } from '../../src/core/thresholds.ts';
 
 /**
@@ -158,6 +159,21 @@ export function isDerivedTitle(source: SourceRow): boolean {
   );
 }
 
+/**
+ * Is there anything here to extract from, or only an address?
+ *
+ * The extension sends a page and the ⌘K bar sends the URL as its own content,
+ * and both arrive as `type: 'link'`. This is the difference between them, and
+ * it is checked rather than trusted because nothing enforces it at the boundary.
+ */
+export function hasBody(content: string | undefined, url: string | null | undefined): boolean {
+  const text = (content ?? '').trim();
+  if (text.length === 0) return false;
+  // The URL repeated back is not content. `CommandBar` sends exactly this.
+  if (url && text === url.trim()) return false;
+  return !/^https?:\/\/\S+$/.test(text);
+}
+
 export class IngestPipeline {
   // Written out rather than as constructor parameter properties: those emit
   // code, not just types, so Node's strip-only TypeScript loader rejects them —
@@ -218,6 +234,29 @@ export class IngestPipeline {
     return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
   }
 
+  /**
+   * A link that was saved but not read.
+   *
+   * Not a failure, and not the empty-capture case either: you meant to save
+   * this, and Recall holds it with whatever the page says about itself. The
+   * §7.4 sentence for a page that could not be reached says so plainly and
+   * offers the way through, which is to read it and capture the text.
+   */
+  private savedToRead(sourceId: string, refused: string | null): IngestResult {
+    this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
+    return {
+      sourceId,
+      status: 'no_memories',
+      addedMemoryIds: [],
+      touchedCategoryIds: [],
+      skipped: [],
+      reorg: null,
+      note: refused
+        ? `${refused} Saved the link only — open it and press ⌘⇧K, or paste the text.`
+        : 'Saved the link. Open it and press ⌘⇧K to remember what it says.',
+    };
+  }
+
   /** Steps 2-6, shared by a first attempt and a retry. */
   private async process(workspaceId: string, source: SourceRow): Promise<IngestResult> {
     const sourceId = source.id;
@@ -229,15 +268,59 @@ export class IngestPipeline {
     };
 
     try {
-      // ---- 2. Normalize (screenshots only — spec §10.1)
+      /*
+       * ---- 2. Read the source (spec §10.1)
+       *
+       * Per type, which is what this step always meant and never was. It was
+       * `if (type === 'screenshot')`, so a screenshot had a reader and a link
+       * did not — and a link went into step 3 with its *address* as its
+       * content. The extractor was then asked to pull memories out of
+       * `https://…`, and a language model asked that question answers from what
+       * it knows about that URL. Measured: a real essay produced four confident
+       * memories and an invented URL produced one entirely fabricated claim,
+       * with nothing fetched either time.
+       *
+       * `NormalizeInput.text` has documented itself as "Raw pasted text,
+       * **fetched article body**, or an image reference" since it was written.
+       * The slot was always for this.
+       */
       let content = input.content ?? '';
       let sceneDescription: string | undefined;
+      /** Set when the source could not be read, and shown instead of a memory. */
+      let unread: string | null = null;
+
       if (input.type === 'screenshot') {
         const normalized = await this.ai.normalize({
           type: input.type, text: input.content, imagePath: input.imagePath,
         });
         content = normalized.ocr_text || input.content || '';
         sceneDescription = normalized.scene_description;
+      } else if (input.type === 'link' && !hasBody(input.content, source.url)) {
+        /*
+         * A link with no body is one you have not read yet — the ⌘K path sends
+         * the URL as its own content, while the extension sends the page. Only
+         * the first needs reading, and reading it means the `<head>`: the body
+         * is what the extension already takes, with your session, past the bot
+         * walls that would beat a server.
+         */
+        const outcome = await fetchPageMeta(source.url ?? input.content ?? '');
+        if ('refused' in outcome) {
+          unread = outcome.refused;
+        } else {
+          const { title, description } = outcome.meta;
+          this.repo.updateSourceStatus(sourceId, 'processing', {
+            // What the page says about itself is what we read, so it is the raw
+            // content — the same meaning OCR text carries for a screenshot.
+            raw_content: description ?? title ?? null,
+            title: title ?? null,
+          });
+        }
+        /*
+         * Extraction does not run either way. A title and a description are how
+         * a page introduces itself, not claims you have read — turning them
+         * into memories would be the same fabrication in a smaller font.
+         */
+        return this.savedToRead(sourceId, unread);
       }
 
       // ---- 3. Extract

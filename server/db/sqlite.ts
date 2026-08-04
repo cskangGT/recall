@@ -151,6 +151,8 @@ export class SqliteRepository implements Repository {
       summary?: string | null;
       processed_at?: string | null;
       title?: string | null;
+      /** What was read out of the source. For a link, its own description. */
+      raw_content?: string | null;
     } = {},
   ): void {
     // COALESCE gives every field "null means leave it alone" semantics, which is
@@ -164,7 +166,8 @@ export class SqliteRepository implements Repository {
            error_message = CASE WHEN ? = 1 THEN COALESCE(?, error_message) ELSE NULL END,
            summary       = COALESCE(?, summary),
            processed_at  = COALESCE(?, processed_at),
-           title         = COALESCE(?, title)
+           title         = COALESCE(?, title),
+           raw_content   = COALESCE(?, raw_content)
          WHERE id = ?`,
       )
       .run(
@@ -174,6 +177,7 @@ export class SqliteRepository implements Repository {
         fields.summary ?? null,
         fields.processed_at ?? null,
         fields.title ?? null,
+        fields.raw_content ?? null,
         id,
       );
   }
