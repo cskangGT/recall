@@ -1,5 +1,5 @@
 import type { Repository } from '../db/repository.ts';
-import type { IngestPipeline } from '../pipeline/ingest.ts';
+import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
 
 /**
@@ -223,6 +223,58 @@ async function handleWorkspace(
       touchedCategories,
       graph: deps.repo.getGraphPayload(workspaceId),
     });
+  }
+
+  /*
+   * POST /api/workspaces/:id/capture/batch — many sources, one reorganization.
+   *
+   * The single-capture route stays exactly as it is: the extension and the
+   * command bar are one-item surfaces and their contract must not grow a shape
+   * it never sends. This one takes `{ items: [...] }`, runs them serially with
+   * per-item reorganize suppressed, and lets the gates fire once at the end —
+   * the server half of the bulk-drop reveal.
+   */
+  if (req.method === 'POST' && resource === 'capture' && resourceId === 'batch' && !action) {
+    const body = asRecord(req.body);
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return badRequest('items must be a non-empty array');
+    }
+    // A cap, because the pipeline is serial and a request that takes minutes
+    // looks exactly like one that hung. 100 items ≈ a two-week Instagram export.
+    if (body.items.length > 100) {
+      return badRequest('at most 100 items per batch');
+    }
+
+    const items: IngestInput[] = [];
+    for (const raw of body.items) {
+      const item = asRecord(raw);
+      const type = item.type;
+      // Text and links only. A screenshot needs an imagePath the server reads
+      // off disk, and a batch of those is an upload feature, not a loop.
+      if (type !== 'text' && type !== 'link') {
+        return badRequest('batch items must have type text or link');
+      }
+      items.push({
+        workspaceId,
+        type,
+        content: typeof item.content === 'string' ? item.content : undefined,
+        title: typeof item.title === 'string' ? item.title : undefined,
+        url: typeof item.url === 'string' ? item.url : undefined,
+      });
+    }
+
+    const { results, reorg } = await deps.ingest.ingestBatch(items);
+    const summaries = results.map((r) => ({
+      sourceId: r.sourceId,
+      status: r.status,
+      addedMemoryIds: r.addedMemoryIds,
+      touchedCategoryIds: r.touchedCategoryIds,
+      skipped: r.skipped,
+      note: r.note,
+    }));
+
+    if (body.includeGraph === false) return ok({ results: summaries, reorg });
+    return ok({ results: summaries, reorg, graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
   // POST /api/workspaces/:id/reset — back to the pristine seed corpus.

@@ -57,6 +57,13 @@ export interface IngestResult {
   note?: string;
 }
 
+export interface BatchIngestResult {
+  /** One per input, in input order. Per-item `reorg` is always null here. */
+  results: IngestResult[];
+  /** The single structural operation of the whole batch, if the gates fired. */
+  reorg: ReorgEventRow | null;
+}
+
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
@@ -172,7 +179,10 @@ export class IngestPipeline {
     this.embeddings = embeddings;
   }
 
-  async ingest(input: IngestInput): Promise<IngestResult> {
+  async ingest(
+    input: IngestInput,
+    options: { reorganize?: boolean } = {},
+  ): Promise<IngestResult> {
     const sourceId = id('src');
 
     // ---- 1. Persist the raw source first. A capture is never lost.
@@ -194,7 +204,52 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    return this.process(input.workspaceId, source);
+    return this.process(input.workspaceId, source, options);
+  }
+
+  /**
+   * Many sources, one structural operation.
+   *
+   * Items are processed serially — parallel reorganization of the same taxonomy
+   * produces conflicting structural decisions (spec §5.3) — with the per-item
+   * reorganize suppressed. The gates then run once over everything the batch
+   * touched, so "at most one structural operation per ingest" (spec 8.4.3)
+   * holds for the batch as a whole: thirty items re-clustering thirty times is
+   * a blob rearranging, and a reveal can only declare one structural sentence.
+   *
+   * A failed item is recorded on its own source row and does not stop the rest;
+   * a batch that dies at item 17 of 30 with nothing to show would lose the
+   * user's trust at the exact moment built to earn it.
+   */
+  async ingestBatch(inputs: IngestInput[]): Promise<BatchIngestResult> {
+    const results: IngestResult[] = [];
+    const touched = new Set<string>();
+
+    for (const input of inputs) {
+      const result = await this.ingest(input, { reorganize: false });
+      results.push(result);
+      for (const categoryId of result.touchedCategoryIds) touched.add(categoryId);
+    }
+
+    let reorg: ReorgEventRow | null = null;
+    const workspaceId = inputs[0]?.workspaceId;
+    // The trigger source is the last item that actually landed memories — the
+    // capture that tipped the geometry, which is what the column means.
+    const trigger = [...results].reverse().find((r) => r.addedMemoryIds.length > 0);
+    if (
+      workspaceId !== undefined &&
+      trigger !== undefined &&
+      touched.size > 0 &&
+      this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false
+    ) {
+      try {
+        reorg = await this.reorganize(workspaceId, trigger.sourceId, [...touched]);
+      } catch {
+        reorg = null; // silent by design — the memories all landed (spec §7.4)
+      }
+    }
+
+    return { results, reorg };
   }
 
   /**
@@ -219,7 +274,11 @@ export class IngestPipeline {
   }
 
   /** Steps 2-6, shared by a first attempt and a retry. */
-  private async process(workspaceId: string, source: SourceRow): Promise<IngestResult> {
+  private async process(
+    workspaceId: string,
+    source: SourceRow,
+    options: { reorganize?: boolean } = {},
+  ): Promise<IngestResult> {
     const sourceId = source.id;
     const input = {
       workspaceId,
@@ -292,7 +351,7 @@ export class IngestPipeline {
       // has been in the schema and the payload since Phase 3 and was read by
       // nobody — declared and ignored.
       let reorg: ReorgEventRow | null = null;
-      if (this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
+      if (options.reorganize !== false && this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
         try {
           reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds);
         } catch {
