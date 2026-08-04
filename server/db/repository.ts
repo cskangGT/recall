@@ -42,6 +42,8 @@ export interface ReorgEventRow {
 export interface Repository {
   /** Applies the schema. Idempotent. */
   migrate(): void;
+  /** A consistent copy of the whole database, taken while it is in use. */
+  vacuumInto(destination: string): void;
 
   createWorkspace(input: { id: string; name: string; isDemo?: boolean }): void;
   /** Drops a workspace and everything under it. Used to reset the demo. */

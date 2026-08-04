@@ -13,6 +13,7 @@
     "agent:uninstall": "node scripts/install-agent.mjs --uninstall",
     "agent:restart": "node scripts/install-agent.mjs --restart",
     "agent:plist": "node scripts/install-agent.mjs --dry-run",
+    "backup": "node scripts/backup.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

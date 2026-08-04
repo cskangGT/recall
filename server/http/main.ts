@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { SqliteRepository } from '../db/sqlite.ts';
 import { importSeed, namespaceSeed } from '../seed/import.ts';
 import seedJson from '../../seed/workspace.json' with { type: 'json' };
@@ -7,6 +8,7 @@ import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
 import { createApiServer } from './server.ts';
+import { shouldSnapshot, takeSnapshot } from '../db/snapshot.ts';
 
 /**
  * Entry point. `npm run dev:api`.
@@ -26,6 +28,16 @@ const WORKSPACE = process.env.RECALL_WORKSPACE ?? 'ws_demo';
 const DB_PATH = process.env.RECALL_DB ?? ':memory:';
 /** Set to serve the built client from this process too — see server/http/static.ts. */
 const STATIC_ROOT = process.env.RECALL_STATIC;
+
+/**
+ * Where timestamped copies of the corpus go, beside the database itself.
+ *
+ * `:memory:` has nothing to back up and no directory to put it in — that is
+ * the test suite and `npm run dev:api`, neither of which owns anything.
+ */
+const BACKUP_ROOT =
+  process.env.RECALL_BACKUPS ??
+  (DB_PATH === ':memory:' ? undefined : path.join(path.dirname(path.resolve(DB_PATH)), 'backups'));
 /** Required for a public deployment; absent means every request may write. */
 const INVITE = process.env.RECALL_INVITE;
 
@@ -158,6 +170,35 @@ server.listen(PORT, HOST, () => {
       `${INVITE ? 'invite required to write' : 'writes open'})`,
   );
 });
+
+/*
+ * A copy of the corpus, once a day, while it is running.
+ *
+ * On the hour rather than at startup, because an always-on agent starts once
+ * and then runs for weeks — a startup-only backup on this machine would be a
+ * backup of whenever you last rebooted.
+ *
+ * `unref()` so this timer is never the reason the process stays alive, and a
+ * swallowed failure because a backup that cannot be written is a thing to
+ * mention in a log, not a reason to stop answering captures.
+ */
+if (BACKUP_ROOT) {
+  const CHECK_MS = 60 * 60 * 1000;
+  const maybeSnapshot = () => {
+    try {
+      if (!shouldSnapshot(BACKUP_ROOT, DB_PATH, Date.now())) return;
+      const { path: file, bytes, pruned } = takeSnapshot(BACKUP_ROOT, (d) => repo.vacuumInto(d));
+      console.log(
+        `backup: ${file} (${Math.round(bytes / 1024)}KB)` +
+          (pruned.length > 0 ? `, pruned ${pruned.length}` : ''),
+      );
+    } catch (err) {
+      console.error(`backup failed: ${err instanceof Error ? err.message : err}`);
+    }
+  };
+  maybeSnapshot();
+  setInterval(maybeSnapshot, CHECK_MS).unref();
+}
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

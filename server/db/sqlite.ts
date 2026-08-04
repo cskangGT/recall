@@ -34,6 +34,14 @@ import type {
   MemoryAssignment, ReorgEventRow, Repository, SourceRow,
 } from './repository.ts';
 
+/**
+ * Additive schema changes, in the order they were introduced.
+ *
+ * Empty today, and that is the point: the mechanism is cheap now and expensive
+ * the first time it is needed without existing. `[table, column, declaration]`.
+ */
+const MIGRATIONS: readonly (readonly [string, string, string])[] = [];
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const bool = (v: unknown): boolean => v === 1 || v === true;
@@ -48,8 +56,60 @@ export class SqliteRepository implements Repository {
     this.db = new DatabaseSync(path);
   }
 
+  /**
+   * Brings an existing database up to the current schema.
+   *
+   * `schema.sql` is entirely `CREATE ... IF NOT EXISTS`, which creates and can
+   * never alter. That was correct while the database was `:memory:` or a demo
+   * file you deleted between runs — and it stopped being correct the moment a
+   * launchd agent started owning `~/.recall/recall.db` all day. A new column
+   * added to `schema.sql` would silently never appear in the one database that
+   * has your notes in it, and the failure would show up as a confusing runtime
+   * error weeks later rather than as anything to do with schemas.
+   *
+   * Additions are declared below and applied by `ensureColumn`, which asks the
+   * database what it already has. **No version counter**: a counter is a second
+   * source of truth that can disagree with the schema it describes, and asking
+   * `table_info` cannot. The cost is that only additive changes are expressible
+   * here, which is the only kind worth doing without a plan anyway.
+   */
   migrate(): void {
     this.db.exec(readFileSync(join(HERE, 'schema.sql'), 'utf8'));
+
+    // Columns added after a database may already exist in the wild. Append
+    // here; never edit or reorder, and never remove one — an old database is
+    // still out there and still needs the step.
+    for (const [table, column, declaration] of MIGRATIONS) {
+      this.ensureColumn(table, column, declaration);
+    }
+  }
+
+  /**
+   * Adds a column if the table does not have it. Idempotent by construction.
+   *
+   * SQLite has no `ADD COLUMN IF NOT EXISTS`, and catching the error instead
+   * would swallow the ones that matter — a typo in the declaration raises the
+   * same class of exception as a duplicate name.
+   */
+  private ensureColumn(table: string, column: string, declaration: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (columns.length === 0) return; // table is not in this schema at all
+    if (columns.some((c) => c.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  }
+
+  /**
+   * A consistent copy of the corpus, taken while it is being used.
+   *
+   * `VACUUM INTO` rather than copying the file: in WAL mode the committed state
+   * lives across the database and its write-ahead log, and a plain copy catches
+   * them at different moments. This one is taken inside a read transaction and
+   * compacted on the way out.
+   */
+  vacuumInto(destination: string): void {
+    // No parameter binding for a filename in VACUUM, so the quote is escaped by
+    // hand. The caller builds this path from a timestamp, never from input.
+    this.db.exec(`VACUUM INTO '${destination.replace(/'/g, "''")}'`);
   }
 
   // ---------------------------------------------------------------- workspace

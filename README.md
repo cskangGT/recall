@@ -23,9 +23,24 @@ appears. Needs `OPENAI_API_KEY` in `.env.local` — extraction costs roughly a
 cent a capture, embeddings a rounding error beside it.
 
 **Your memories live in `~/.recall/recall.db`.** Not in this checkout, which is
-a directory you might delete or re-clone. Nothing backs that file up: copying it
-somewhere is how you keep it, deleting it is how you erase everything, and it is
-the one file worth knowing the location of.
+a directory you might delete or re-clone. It is the one file worth knowing the
+location of, and deleting it is how you erase everything.
+
+It is copied for you. The agent takes a snapshot once a day into
+`~/.recall/backups/` — only when something has actually changed, keeping the
+last seven — and `npm run backup` takes one on demand, which is what you want
+before doing something you are unsure about. They are `VACUUM INTO` copies, not
+`cp`: a plain copy of a live SQLite database in WAL mode catches the file and
+its write-ahead log at different moments and can produce something that will not
+open.
+
+To restore, stop the agent first so nothing is writing:
+
+```bash
+npm run agent:uninstall
+cp ~/.recall/backups/recall-<timestamp>.db ~/.recall/recall.db
+npm run agent:install
+```
 
 It binds `127.0.0.1` and refuses to bind anything else unless `RECALL_INVITE` is
 set. A tool holding your notes should take a deliberate act to become reachable.
@@ -151,7 +166,7 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 464 unit and server tests
+npm test             # 489 unit and server tests
 npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
@@ -376,7 +391,3 @@ Two things that are fine now and will not stay fine:
 - `getGraphPayload` returns the full `raw_content` of every source, and page
   saves make that articles. Roughly 200 of them is ~4MB on every load.
   `includeGraph: false` only spares the extension.
-- `migrate()` is `CREATE TABLE IF NOT EXISTS` only, so it can create tables but
-  not alter them. Now that the agent owns `~/.recall/recall.db` all day, that
-  file has stopped being disposable — an idempotent `ALTER TABLE … ADD COLUMN`
-  guarded by `PRAGMA table_info` is insurance best bought before it is needed.

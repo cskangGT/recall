@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteRepository } from '../../server/db/sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { importSeed } from '../../server/seed/import';
 import { validateSeed } from '../../src/data/validateSeed';
 import { evaluateReorg } from '../../src/core/gates';
@@ -192,5 +195,91 @@ describe('SqliteRepository — invariants the schema enforces', () => {
     repo.addTombstone(WS, 'Agent Frameworks');
     repo.addTombstone(WS, 'Agent Frameworks');
     expect(repo.listTombstones(WS)).toEqual(['agent frameworks']);
+  });
+});
+
+describe('migrating a database that already exists', () => {
+  // The reason this mechanism exists: `schema.sql` is entirely
+  // `CREATE ... IF NOT EXISTS`, so it creates and can never alter. That was
+  // fine while the database was `:memory:` or a demo file you deleted between
+  // runs, and stopped being fine when a launchd agent started owning
+  // ~/.recall/recall.db all day.
+
+  const columns = (r: SqliteRepository, table: string) =>
+    (r as unknown as { db: { prepare: (s: string) => { all: () => { name: string }[] } } })
+      .db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+
+  const addColumn = (r: SqliteRepository, table: string, column: string, decl: string) =>
+    (r as unknown as { ensureColumn: (t: string, c: string, d: string) => void })
+      .ensureColumn(table, column, decl);
+
+  it('adds a column an older database does not have', () => {
+    expect(columns(repo, 'sources')).not.toContain('archived_at');
+    addColumn(repo, 'sources', 'archived_at', 'TEXT');
+    expect(columns(repo, 'sources')).toContain('archived_at');
+  });
+
+  it('is idempotent, because migrate() runs on every start', () => {
+    addColumn(repo, 'sources', 'archived_at', 'TEXT');
+    expect(() => addColumn(repo, 'sources', 'archived_at', 'TEXT')).not.toThrow();
+    expect(columns(repo, 'sources').filter((c) => c === 'archived_at')).toHaveLength(1);
+  });
+
+  it('leaves the rows that were already there', () => {
+    // The whole point is not losing what has accumulated.
+    importSeed(repo, WS);
+    const before = repo.listSources(WS).length;
+    expect(before).toBeGreaterThan(0);
+    addColumn(repo, 'sources', 'archived_at', 'TEXT');
+    expect(repo.listSources(WS)).toHaveLength(before);
+  });
+
+  it('says nothing about a table this schema does not have', () => {
+    expect(() => addColumn(repo, 'not_a_table', 'x', 'TEXT')).not.toThrow();
+  });
+
+  it('re-running migrate() on a populated database changes nothing', () => {
+    importSeed(repo, WS);
+    const before = { sources: repo.listSources(WS).length, memories: repo.listMemories(WS).length };
+    repo.migrate();
+    repo.migrate();
+    expect(repo.listSources(WS)).toHaveLength(before.sources);
+    expect(repo.listMemories(WS)).toHaveLength(before.memories);
+  });
+});
+
+describe('snapshots of a live database', () => {
+  it('produces a file another connection can read every row from', () => {
+    importSeed(repo, WS);
+    const dir = mkdtempSync(path.join(tmpdir(), 'recall-vac-'));
+    const destination = path.join(dir, 'snap.db');
+    try {
+      repo.vacuumInto(destination);
+
+      // Opened independently: this is what recovering from a backup means.
+      const restored = new SqliteRepository(destination);
+      expect(restored.listMemories(WS)).toHaveLength(repo.listMemories(WS).length);
+      expect(restored.listSources(WS)).toHaveLength(repo.listSources(WS).length);
+      expect(restored.getGraphPayload(WS).categories).toHaveLength(
+        repo.getGraphPayload(WS).categories.length,
+      );
+      restored.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to write over one that exists, rather than replacing it', () => {
+    importSeed(repo, WS);
+    // A backup the next backup can silently overwrite is one bug from being no
+    // backup at all — which is why the filename carries a timestamp.
+    const dir = mkdtempSync(path.join(tmpdir(), 'recall-vac-'));
+    const destination = path.join(dir, 'snap.db');
+    try {
+      repo.vacuumInto(destination);
+      expect(() => repo.vacuumInto(destination)).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
