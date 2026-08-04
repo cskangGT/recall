@@ -1,6 +1,7 @@
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
+import { planCategoryDeletion } from '../../src/core/deleteCategory.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -319,6 +320,56 @@ async function handleWorkspace(
     }
     deps.repo.deleteMemory(resourceId);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * DELETE /api/workspaces/:id/categories/:categoryId
+   *
+   * The plan comes from `planCategoryDeletion`, the same pure function the
+   * confirmation used to tell the user where their memories were about to go.
+   * Recomputed here rather than trusted from the request: the client's copy of
+   * the graph can be stale, and a plan is a set of destinations, which is
+   * exactly the kind of thing not to take from a caller.
+   *
+   * One transaction. A half-deleted category — memories moved, category still
+   * there, or worse the other way round — is not a state anything downstream
+   * knows how to read.
+   */
+  if (req.method === 'DELETE' && resource === 'categories' && resourceId && !action) {
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    const category = payload.categories.find((c) => c.id === resourceId);
+    if (!category) return notFound(`unknown category ${resourceId}`);
+
+    const outcome = planCategoryDeletion(payload, resourceId);
+    if ('refused' in outcome) return badRequest(outcome.refused);
+
+    deps.repo.transaction(() => {
+      for (const child of outcome.promoted) {
+        deps.repo.updateCategory(child, { parent_id: null });
+      }
+      for (const move of outcome.moves) {
+        const memory = payload.memories.find((m) => m.id === move.memoryId)!;
+        /*
+         * `assignedBy: 'ai'` and not locked. Deleting a category is a judgement
+         * about the *category*, not about where each of its memories should
+         * live — locking these would freeze a destination the user never chose
+         * against every future reorganization.
+         */
+        deps.repo.assign({
+          memoryId: move.memoryId,
+          categoryId: move.toCategoryId,
+          confidence: memory.confidence,
+          assignedBy: 'ai',
+        });
+        // The layout put it next to neighbours it no longer has.
+        deps.repo.updateMemoryPosition(move.memoryId, null, null, memory.pinned);
+      }
+      if (outcome.tombstone) deps.repo.addTombstone(workspaceId, outcome.tombstone);
+      deps.repo.deleteCategory(resourceId);
+    });
+
+    return ok({ moved: outcome.moves.length, promoted: outcome.promoted.length,
+                graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
   // PATCH /api/workspaces/:id/categories/:categoryId — rename or re-parent.
