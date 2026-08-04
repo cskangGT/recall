@@ -151,8 +151,8 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 464 unit and server tests
-npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
+npm test             # 487 unit and server tests
+npm run test:e2e     # 95 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
 ```
@@ -364,8 +364,6 @@ is a preference — spec §17 rules out a settings page and is right to.
   against both providers; what is missing is an upload — the server reads JSON
   only, and `imagePath` is an unchecked `fs.readFile` path taken from the
   request body.
-- **Deleting a category**, which still carries the unanswered question of where
-  its memories go when it has no parent.
 - **Capture outside the browser** — a macOS-wide shortcut for a PDF, a Slack
   message, or a thought. The extension covers what you read; nothing covers the
   rest.

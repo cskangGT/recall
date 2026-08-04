@@ -509,3 +509,101 @@ describe('what the capture response carries', () => {
     expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
   });
 });
+
+describe('DELETE a category', () => {
+  const rootWith = (name: string) =>
+    repo.getGraphPayload(WS).categories.find((c) => c.name === name)!;
+
+  it('re-parents a child’s memories and deletes none of them', async () => {
+    const before = repo.listMemories(WS).length;
+    const child = repo.getGraphPayload(WS).categories.find((c) => c.parent_id !== null)!;
+    const held = repo.getGraphPayload(WS).memories.filter((m) => m.category_id === child.id);
+
+    const res = await del(`${base}/categories/${child.id}`);
+    expect(res.status).toBe(200);
+
+    const after = repo.getGraphPayload(WS);
+    expect(after.memories).toHaveLength(before);
+    expect(after.categories.some((c) => c.id === child.id)).toBe(false);
+    for (const m of held) {
+      expect(after.memories.find((x) => x.id === m.id)!.category_id).toBe(child.parent_id);
+    }
+  });
+
+  it('promotes a deleted root’s children rather than orphaning them', async () => {
+    const root = rootWith('Fundraising');
+    const kids = repo.getGraphPayload(WS).categories.filter((c) => c.parent_id === root.id);
+    expect(kids.length).toBeGreaterThan(0);
+
+    await del(`${base}/categories/${root.id}`);
+
+    const after = repo.getGraphPayload(WS);
+    for (const k of kids) {
+      expect(after.categories.find((c) => c.id === k.id)!.parent_id).toBeNull();
+    }
+  });
+
+  it('refiles a root’s own memories instead of losing them', async () => {
+    const root = repo.getGraphPayload(WS).categories.find(
+      (c) => c.parent_id === null &&
+        repo.getGraphPayload(WS).memories.some((m) => m.category_id === c.id),
+    )!;
+    const before = repo.listMemories(WS).length;
+    const held = repo.getGraphPayload(WS).memories.filter((m) => m.category_id === root.id);
+
+    const res = await del(`${base}/categories/${root.id}`);
+    expect(res.status).toBe(200);
+    expect((res.body as { moved: number }).moved).toBe(held.length);
+
+    const after = repo.getGraphPayload(WS);
+    expect(after.memories).toHaveLength(before);
+    for (const m of held) {
+      const now = after.memories.find((x) => x.id === m.id)!;
+      // Somewhere real, and not the category that no longer exists.
+      expect(now.category_id).not.toBe(root.id);
+      expect(after.categories.some((c) => c.id === now.category_id)).toBe(true);
+    }
+  });
+
+  it('tombstones the name so the next pass will not recreate it', async () => {
+    const root = rootWith('Fundraising');
+    await del(`${base}/categories/${root.id}`);
+    expect(repo.listTombstones(WS).map((n) => n.toLowerCase())).toContain('fundraising');
+  });
+
+  it('404s a category that is not there', async () => {
+    expect((await del(`${base}/categories/cat_nope`)).status).toBe(404);
+  });
+
+  it('leaves everything alone when it refuses', async () => {
+    // The only category left, still holding memories: there is nowhere for them
+    // to go, and dropping them would break AC-30.
+    repo.createWorkspace({ id: 'ws_one', name: 'One', isDemo: false });
+    const only = { id: 'cat_only', parent_id: null, name: 'Everything', rationale: null,
+      name_locked: false, user_created: false, x: null, y: null, pinned: false,
+      created_by: 'ai' as const };
+    repo.insertCategory('ws_one', only);
+    repo.insertSource('ws_one', {
+      id: 'src_1', workspace_id: 'ws_one', type: 'text', title: 't', raw_content: 'c',
+      scene_description: null, url: null, image_path: null, referenced_urls: [],
+      status: 'complete', error_message: null, created_at: '2026-01-01T00:00:00Z',
+      processed_at: null,
+    });
+    repo.insertMemories('ws_one', [{
+      id: 'mem_1', source_id: 'src_1', category_id: 'cat_only', text: 'a thing',
+      kind: 'fact', confidence: 0.9, vector: [1, 0, 0], entity_ids: [],
+      created_at: '2026-01-01T00:00:00Z', x: null, y: null, pinned: false,
+      category_locked: false,
+    }]);
+    repo.assign({ memoryId: 'mem_1', categoryId: 'cat_only', confidence: 0.9, assignedBy: 'ai' });
+
+    const res = await handle(
+      { method: 'DELETE', path: '/api/workspaces/ws_one/categories/cat_only', body: null },
+      deps,
+    );
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toMatch(/nowhere to go/);
+    expect(repo.listCategories('ws_one')).toHaveLength(1);
+    expect(repo.listMemories('ws_one')).toHaveLength(1);
+  });
+});

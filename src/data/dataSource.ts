@@ -53,6 +53,8 @@ export interface DataSource {
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
   deleteMemory?(memoryId: string): Promise<GraphPayload>;
+  /** Removes a category, refiling its memories. Never deletes a memory (AC-30). */
+  deleteCategory?(categoryId: string): Promise<GraphPayload>;
   updateCategory?(
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
@@ -122,6 +124,14 @@ export class ApiDataSource implements DataSource {
   async undo(reorgId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/reorgs/${encodeURIComponent(reorgId)}/undo`,
+    );
+    return validateSeed(graph);
+  }
+
+  async deleteCategory(categoryId: string): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/categories/${encodeURIComponent(categoryId)}`,
+      { method: 'DELETE' },
     );
     return validateSeed(graph);
   }

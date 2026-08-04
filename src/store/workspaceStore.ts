@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { GraphPayload, GraphNode, GraphEdge } from '../core/types';
 import { selectDataSource, type DataSource } from '../data/dataSource';
 import { buildGraph } from '../graph/buildGraph';
+import { planCategoryDeletion, type DeletionOutcome } from '../core/deleteCategory';
 import { runLayout } from '../graph/layout';
 
 interface WorkspaceState {
@@ -16,6 +17,8 @@ interface WorkspaceState {
   moveMemory: (memoryId: string, categoryId: string) => void;
   /** Throws a memory away. Not reversible — the UI asks first. */
   deleteMemory: (memoryId: string) => void;
+  /** Returns the plan it applied, or the reason it would not. */
+  deleteCategory: (categoryId: string) => DeletionOutcome;
   /** User re-parents a child category. */
   moveCategory: (categoryId: string, parentId: string) => void;
   /** Renames a category and locks it against future reorganization. */
@@ -64,6 +67,41 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       .deleteMemory?.(memoryId)
       .then(get().applyPayload)
       .catch(() => void get().load());
+  },
+
+  /*
+   * Applied locally from the same pure plan the server will recompute, so the
+   * arc redraws on the click rather than a round trip later — and reconciled
+   * from whatever the server returns, because the server's copy of the graph is
+   * the one that counts.
+   */
+  deleteCategory: (categoryId) => {
+    const current = get().payload;
+    if (!current) return { refused: 'Nothing is loaded yet.' };
+
+    const outcome = planCategoryDeletion(current, categoryId);
+    if ('refused' in outcome) return outcome;
+
+    const moved = new Map(outcome.moves.map((m) => [m.memoryId, m.toCategoryId]));
+    const promoted = new Set(outcome.promoted);
+    const next: GraphPayload = {
+      ...current,
+      categories: current.categories
+        .filter((c) => c.id !== categoryId)
+        .map((c) => (promoted.has(c.id) ? { ...c, parent_id: null } : c)),
+      memories: current.memories.map((m) =>
+        moved.has(m.id) ? { ...m, category_id: moved.get(m.id)! } : m,
+      ),
+    };
+    get().applyPayload(next);
+
+    const { source } = get();
+    void source
+      .deleteCategory?.(categoryId)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
+
+    return outcome;
   },
 
   moveMemory: (memoryId, categoryId) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { describeDeletion, planCategoryDeletion } from '../core/deleteCategory';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
 const SOURCE_LABEL: Record<Source['type'], string> = {
@@ -146,6 +147,14 @@ function CategoryDetail({
     : null;
   const locked = category.name_locked || category.user_created;
 
+  /*
+   * Computed for the *label*, so the button says where the memories are going
+   * before it is armed. The server recomputes the same plan from its own copy of
+   * the graph, which is the one that counts — this is what the user is agreeing
+   * to, not what gets applied.
+   */
+  const plan = planCategoryDeletion(payload, category.id);
+
   // The one fact the middle pane cannot show: what this folder is *made of*.
   const mix = (['text', 'link', 'screenshot'] as Source['type'][])
     .map((type) => ({
@@ -196,6 +205,27 @@ function CategoryDetail({
         memories.map((m) => (
           <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
         ))}
+      <div className="inspector__footer">
+        <DeleteButton
+          label={category.name}
+          consequence={'refused' in plan ? undefined : describeDeletion(plan)}
+          disabled={'refused' in plan ? plan.refused : undefined}
+          onConfirm={() => {
+            const done = useWorkspaceStore.getState().deleteCategory(category.id);
+            if ('refused' in done) return useUiStore.getState().toast(done.refused);
+            select(null);
+            useUiStore
+              .getState()
+              .toast(
+                done.moves.length === 0
+                  ? `Deleted ${category.name}.`
+                  : `Deleted ${category.name} — ${done.landing
+                      .map((l) => `${l.count} to ${l.name}`)
+                      .join(', ')}.`,
+              );
+          }}
+        />
+      </div>
     </>
   );
 }
@@ -256,21 +286,53 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
  * about to go, which it can do in place. It disarms on blur, so a stray click
  * does not leave a loaded button sitting on the screen.
  */
-function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+function DeleteButton({
+  label,
+  onConfirm,
+  consequence,
+  disabled,
+}: {
+  label: string;
+  onConfirm: () => void;
+  /**
+   * What deleting will do, shown once the button is armed. A button label is
+   * the wrong place for a sentence, and this one has to be read.
+   */
+  consequence?: string;
+  /** A reason this cannot be done at all, shown instead of arming. */
+  disabled?: string;
+}) {
   const [armed, setArmed] = useState(false);
+
+  if (disabled) {
+    return (
+      <>
+        <p className="inspector__meta" data-testid="delete-refused">{disabled}</p>
+        <button className="danger" data-testid="delete-button" disabled>
+          Delete
+        </button>
+      </>
+    );
+  }
+
   return (
-    <button
-      className={`danger${armed ? ' danger--armed' : ''}`}
-      data-testid="delete-button"
-      onBlur={() => setArmed(false)}
-      onClick={() => {
-        if (!armed) return setArmed(true);
-        setArmed(false);
-        onConfirm();
-      }}
-    >
-      {armed ? `Delete ${label} — click again` : 'Delete'}
-    </button>
+    <>
+      {armed && consequence && (
+        <p className="inspector__meta" data-testid="delete-consequence">{consequence}</p>
+      )}
+      <button
+        className={`danger${armed ? ' danger--armed' : ''}`}
+        data-testid="delete-button"
+        onBlur={() => setArmed(false)}
+        onClick={() => {
+          if (!armed) return setArmed(true);
+          setArmed(false);
+          onConfirm();
+        }}
+      >
+        {armed ? `Delete ${label} — click again` : 'Delete'}
+      </button>
+    </>
   );
 }
 
