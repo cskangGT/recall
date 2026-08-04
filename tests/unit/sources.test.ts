@@ -107,3 +107,47 @@ describe('a failed source is not an empty one', () => {
   });
 });
 
+
+describe('a link saved but not read', () => {
+  const link = (over: Partial<Source> = {}): Source => ({
+    id: 'src_link', type: 'link', title: 'Things You Should Never Do',
+    raw_content: 'An essay about rewriting software from scratch.',
+    scene_description: null, url: 'https://example.com/a', image_path: null,
+    status: 'no_memories', error_message: null, created_at: '2026-01-01T00:00:00Z',
+    ...over,
+  });
+  const graph = (sources: Source[]): GraphPayload => ({
+    ...payload, sources, memories: [], categories: [], entities: [], edges: [],
+  });
+
+  it('is not the same thing as an empty capture', () => {
+    // Both produce zero memories. Only one of them has somewhere to go.
+    const [row] = buildSourceRows(graph([link()]), 'all');
+    expect(row!.unread).toBe(true);
+    expect(row!.empty).toBe(false);
+  });
+
+  it('is an empty capture when there is nothing to open', () => {
+    const [row] = buildSourceRows(graph([link({ type: 'text', url: null })]), 'all');
+    expect(row!.unread).toBe(false);
+    expect(row!.empty).toBe(true);
+  });
+
+  it('is a failure when it failed, whatever its type', () => {
+    const [row] = buildSourceRows(graph([link({ status: 'failed', error_message: 'rate limited' })]), 'all');
+    expect(row!.failed).toBe(true);
+    expect(row!.unread).toBe(false);
+  });
+
+  it('stops being unread once its page has been captured', () => {
+    const withMemory: GraphPayload = {
+      ...graph([link()]),
+      memories: [{
+        id: 'm1', source_id: 'src_link', category_id: 'c1', text: 'A claim', kind: 'fact',
+        confidence: 0.9, vector: [1, 0, 0], entity_ids: [], created_at: '2026-01-02T00:00:00Z',
+        x: null, y: null, pinned: false, category_locked: false,
+      }],
+    };
+    expect(buildSourceRows(withMemory, 'all')[0]!.unread).toBe(false);
+  });
+});

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteRepository } from '../../server/db/sqlite';
 import { importSeed } from '../../server/seed/import';
-import { IngestPipeline, planAssignments } from '../../server/pipeline/ingest';
+import { IngestPipeline, hasBody, planAssignments } from '../../server/pipeline/ingest';
 import type { PlannedAssignment } from '../../server/pipeline/ingest';
 import type { GraphPayload } from '../../src/core/types';
 import { FixtureProvider, FixtureEmbeddings } from '../../server/ai/fixture';
@@ -554,5 +554,76 @@ describe('what a source is called', () => {
     });
     const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
     expect(source.title).not.toBe('');
+  });
+});
+
+describe('a link is something you meant to read, not something you have read', () => {
+  it('never extracts from a bare URL', async () => {
+    // The bug this exists to stop: the extractor was handed `https://…` as its
+    // content, and a language model asked to pull memories out of an address
+    // answers from what it knows about that address. An invented URL produced
+    // "Vantara Labs migrated from Kafka to NATS" — confident, and entirely made
+    // up, and indistinguishable in the corpus from something you read.
+    const url = 'https://blog.vantara-labs.invalid/why-we-moved-off-kafka-to-nats';
+    const result = await pipeline.ingest({
+      workspaceId: WS, type: 'link', url, content: url,
+    });
+
+    expect(result.addedMemoryIds).toHaveLength(0);
+    expect(result.status).toBe('no_memories');
+  });
+
+  it('says it saved the link rather than reporting a failure', async () => {
+    const url = 'https://blog.vantara-labs.invalid/x';
+    const { note } = await pipeline.ingest({ workspaceId: WS, type: 'link', url, content: url });
+    expect(note).toMatch(/Saved the link/);
+    // And it says how to get the content in, which is the whole point of the
+    // extension existing.
+    expect(note).toMatch(/⌘⇧K|paste the text/i);
+  });
+
+  it('still extracts when the extension sends the page', async () => {
+    // Same SourceType, opposite meaning. The extension fills `content` with the
+    // rendered page; that is a thing you have read, and it becomes memories.
+    const result = await pipeline.ingest({
+      workspaceId: WS,
+      type: 'link',
+      url: 'https://example.com/an-article',
+      content: 'They decided to rewrite the code from scratch, which is the single worst '
+        + 'strategic mistake a software company can make. Netscape lost three years to it.',
+    });
+    expect(result.addedMemoryIds.length).toBeGreaterThan(0);
+  });
+
+  it('leaves text captures alone', async () => {
+    const result = await pipeline.ingest({
+      workspaceId: WS, type: 'text', content: 'a note I typed myself',
+    });
+    expect(result.addedMemoryIds.length).toBeGreaterThan(0);
+  });
+});
+
+describe('hasBody', () => {
+  it('is false for the URL sent back as its own content', () => {
+    // Exactly what CommandBar sends for a bare URL.
+    expect(hasBody('https://example.com/a', 'https://example.com/a')).toBe(false);
+  });
+
+  it('is false for a bare URL even when no url field came with it', () => {
+    expect(hasBody('https://example.com/a', null)).toBe(false);
+    expect(hasBody('  https://example.com/a  ', undefined)).toBe(false);
+  });
+
+  it('is false for nothing at all', () => {
+    expect(hasBody('', 'https://example.com/a')).toBe(false);
+    expect(hasBody(undefined, null)).toBe(false);
+  });
+
+  it('is true for a page the extension actually read', () => {
+    expect(hasBody('They decided to rewrite the code from scratch.', 'https://example.com/a')).toBe(true);
+  });
+
+  it('is true for prose that merely mentions a URL', () => {
+    expect(hasBody('See https://example.com/a for the details', 'https://example.com/a')).toBe(true);
   });
 });

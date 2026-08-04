@@ -151,7 +151,7 @@ and the only surface where a reorganization is animated.
 ## Verify
 
 ```bash
-npm test             # 464 unit and server tests
+npm test             # 498 unit and server tests
 npm run test:e2e     # 91 Playwright tests, including the full spec 15.3 click path
 npm run seed         # regenerate seed/, re-checking every gate condition
 npm run rehearse     # 20 consecutive demo runs with per-beat timing (spec 15.4)
@@ -369,6 +369,12 @@ is a preference — spec §17 rules out a settings page and is right to.
 - **Capture outside the browser** — a macOS-wide shortcut for a PDF, a Slack
   message, or a thought. The extension covers what you read; nothing covers the
   rest.
+- **A page per topic.** Opening a category gives you a list of its memories.
+  What it should give you is where you are with that subject: a few sentences
+  the model writes over what you have saved, the memories themselves, and the
+  links you saved to read and haven't. Everything it needs exists — `AskPipeline`
+  already writes cited prose, `relates_to` edges are already computed — except a
+  call that takes a category instead of a typed question.
 - Proposal mode. See `docs/spec-review-summary.md`.
 
 Two things that are fine now and will not stay fine:
