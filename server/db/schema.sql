@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS workspaces (
   auto_reorganize  INTEGER NOT NULL DEFAULT 1,
   model_tier       TEXT NOT NULL DEFAULT 'fast' CHECK (model_tier IN ('fast', 'thorough')),
   is_demo          INTEGER NOT NULL DEFAULT 0,
+  -- 'pro' by default: a self-hosted instance owns its keys and pays nobody.
+  -- Hosted visitor workspaces are created 'free'; billing flips this column.
+  -- Also added by ensureColumn in sqlite.ts for databases created before it —
+  -- CREATE TABLE IF NOT EXISTS cannot grow a column on its own.
+  plan             TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro')),
   created_at       TEXT NOT NULL
 );
 

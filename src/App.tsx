@@ -84,6 +84,18 @@ export function App() {
     }
   }, []);
 
+  // Back from a Stripe checkout that succeeded. The plan itself was flipped by
+  // the webhook server-side; this is only the welcome home. The param is
+  // stripped so a reload does not congratulate twice.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('upgraded') !== '1') return;
+    useUiStore.getState().toast('Recall Pro is on — everything you saved is open.');
+    params.delete('upgraded');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  }, []);
+
   useEffect(() => {
     const onResize = () =>
       setRoomy(

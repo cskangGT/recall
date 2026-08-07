@@ -83,6 +83,11 @@ export interface DataSource {
   /** Re-runs a capture whose processing failed. Only the API can do this. */
   retrySource?(sourceId: string): Promise<GraphPayload>;
   setAutoReorganize?(enabled: boolean): Promise<GraphPayload>;
+  /**
+   * Starts a Pro checkout and returns the Stripe-hosted URL to redirect to.
+   * The plan flips when the server's webhook confirms payment, never client-side.
+   */
+  upgrade?(returnUrl: string): Promise<{ url: string }>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -141,6 +146,10 @@ export class ApiDataSource implements DataSource {
   async captureBatch(items: CaptureInput[]): Promise<CaptureBatchResult> {
     const result = await this.post<CaptureBatchResult>('/capture/batch', { items });
     return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  upgrade(returnUrl: string): Promise<{ url: string }> {
+    return this.post<{ url: string }>('/billing/checkout', { returnUrl });
   }
 
   ask(question: string, history?: AskTurn[]): Promise<AskResult> {

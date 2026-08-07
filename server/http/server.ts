@@ -11,7 +11,9 @@ import { serveStatic } from './static.ts';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
-async function readBody(req: import('node:http').IncomingMessage): Promise<unknown> {
+async function readBody(
+  req: import('node:http').IncomingMessage,
+): Promise<{ parsed: unknown; raw: string | undefined }> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -19,10 +21,12 @@ async function readBody(req: import('node:http').IncomingMessage): Promise<unkno
     if (size > MAX_BODY_BYTES) throw new Error('request body too large');
     chunks.push(chunk as Buffer);
   }
-  if (chunks.length === 0) return null;
+  if (chunks.length === 0) return { parsed: null, raw: undefined };
   const text = Buffer.concat(chunks).toString('utf8');
-  if (text.trim().length === 0) return null;
-  return JSON.parse(text);
+  if (text.trim().length === 0) return { parsed: null, raw: undefined };
+  // The raw text rides along for signature verification: Stripe signs the
+  // bytes it sent, and JSON.parse→stringify is not an identity on them.
+  return { parsed: JSON.parse(text), raw: text };
 }
 
 /**
@@ -95,9 +99,10 @@ export function createApiServer(
       try {
         const path = (req.url ?? '/').split('?')[0] ?? '/';
         let body: unknown = null;
+        let rawBody: string | undefined;
         if (req.method !== 'GET' && req.method !== 'HEAD') {
           try {
-            body = await readBody(req);
+            ({ parsed: body, raw: rawBody } = await readBody(req));
           } catch (err) {
             send(400, { error: err instanceof Error ? err.message : 'malformed body' });
             return;
@@ -108,6 +113,10 @@ export function createApiServer(
             method: req.method ?? 'GET',
             path,
             body,
+            rawBody,
+            stripeSignature: typeof req.headers['stripe-signature'] === 'string'
+              ? req.headers['stripe-signature']
+              : undefined,
             // A header rather than a query parameter: query strings end up in
             // access logs, browser history and shared links, which is exactly
             // where a shared secret should not be.

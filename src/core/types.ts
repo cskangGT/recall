@@ -86,7 +86,8 @@ export interface RelatesToEdge {
 }
 
 export interface GraphPayload {
-  workspace: { id: string; name: string; auto_reorganize: boolean };
+  /** `plan` is optional because seed payloads predate it; absent means 'pro'. */
+  workspace: { id: string; name: string; auto_reorganize: boolean; plan?: 'free' | 'pro' };
   sources: Source[];
   memories: Memory[];
   categories: Category[];

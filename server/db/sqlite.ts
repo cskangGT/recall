@@ -50,18 +50,41 @@ export class SqliteRepository implements Repository {
 
   migrate(): void {
     this.db.exec(readFileSync(join(HERE, 'schema.sql'), 'utf8'));
+    /*
+     * The insurance the README said to buy before it was needed: schema.sql is
+     * CREATE TABLE IF NOT EXISTS only, so a database created before a column
+     * existed never grows it. Now that the launchd agent owns ~/.recall all
+     * day, that file stopped being disposable — every added column must also
+     * appear here, guarded, so an existing corpus catches up on next start.
+     */
+    this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
+  }
+
+  /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
+  private ensureColumn(table: string, column: string, ddl: string): void {
+    const columns = this.db
+      .prepare(`SELECT name FROM pragma_table_info(?)`)
+      .all(table) as { name: string }[];
+    if (columns.some((c) => c.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   }
 
   // ---------------------------------------------------------------- workspace
 
-  createWorkspace(input: { id: string; name: string; isDemo?: boolean }): void {
+  createWorkspace(input: { id: string; name: string; isDemo?: boolean; plan?: 'free' | 'pro' }): void {
     this.db
       .prepare(
-        `INSERT INTO workspaces (id, name, auto_reorganize, model_tier, is_demo, created_at)
-         VALUES (?, ?, 1, 'fast', ?, ?)
+        `INSERT INTO workspaces (id, name, auto_reorganize, model_tier, is_demo, plan, created_at)
+         VALUES (?, ?, 1, 'fast', ?, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
       )
-      .run(input.id, input.name, int(input.isDemo ?? false), new Date().toISOString());
+      .run(
+        input.id,
+        input.name,
+        int(input.isDemo ?? false),
+        input.plan ?? 'pro',
+        new Date().toISOString(),
+      );
   }
 
   deleteWorkspace(id: string): void {
@@ -73,9 +96,15 @@ export class SqliteRepository implements Repository {
 
   getWorkspace(id: string) {
     const row = this.db
-      .prepare('SELECT id, name, auto_reorganize FROM workspaces WHERE id = ?')
-      .get(id) as { id: string; name: string; auto_reorganize: number } | undefined;
+      .prepare('SELECT id, name, auto_reorganize, plan FROM workspaces WHERE id = ?')
+      .get(id) as
+      | { id: string; name: string; auto_reorganize: number; plan: 'free' | 'pro' }
+      | undefined;
     return row ? { ...row, auto_reorganize: bool(row.auto_reorganize) } : null;
+  }
+
+  setPlan(id: string, plan: 'free' | 'pro'): void {
+    this.db.prepare('UPDATE workspaces SET plan = ? WHERE id = ?').run(plan, id);
   }
 
   // ---------------------------------------------------------------- graph read
@@ -105,7 +134,7 @@ export class SqliteRepository implements Repository {
     }
 
     return {
-      workspace: { id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize },
+      workspace: { id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan },
       sources: this.listSources(workspaceId).map(({ workspace_id: _w, ...s }) => ({
         id: s.id, type: s.type, title: s.title, raw_content: s.raw_content,
         scene_description: s.scene_description, url: s.url,

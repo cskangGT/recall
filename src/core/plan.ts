@@ -24,10 +24,19 @@ export type Plan = 'free' | 'pro';
 
 export const FREE_WINDOW_DAYS = 14;
 
+/**
+ * The URL flag wins — it exists so the free tier can be previewed against any
+ * corpus — then the workspace's own plan (the server's billing writes it),
+ * then 'pro': a seed payload predates plans and archiving it would demo an
+ * empty product.
+ */
 export function currentPlan(
   search = typeof window === 'undefined' ? '' : window.location.search,
+  workspacePlan?: Plan,
 ): Plan {
-  return new URLSearchParams(search).get('plan') === 'free' ? 'free' : 'pro';
+  const forced = new URLSearchParams(search).get('plan');
+  if (forced === 'free' || forced === 'pro') return forced;
+  return workspacePlan ?? 'pro';
 }
 
 /**

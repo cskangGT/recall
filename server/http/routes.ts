@@ -1,6 +1,7 @@
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
+import type { StripeBilling } from '../billing/stripe.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -17,6 +18,13 @@ export interface ApiRequest {
   method: string;
   path: string;
   body: unknown;
+  /**
+   * The body exactly as it arrived, for signature verification — Stripe signs
+   * the bytes it sent, and a re-serialized `body` is a different string.
+   */
+  rawBody?: string;
+  /** The webhook caller's `Stripe-Signature` header, if present. */
+  stripeSignature?: string;
   /** The invite token the caller presented, if any. See `writesAllowed`. */
   invite?: string;
   /** The browser's `Origin` header, if the caller was a browser. See `originAllowed`. */
@@ -47,6 +55,8 @@ export interface Deps {
    * want, and what a public deployment must not have.
    */
   inviteToken?: string;
+  /** Absent means billing is not configured and its routes answer 503. */
+  billing?: StripeBilling;
 }
 
 const asRecord = (body: unknown): Record<string, unknown> =>
@@ -126,6 +136,20 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
 
   if (!originAllowed(req)) {
     return forbidden(`${req.origin} may not write to Recall.`);
+  }
+
+  /*
+   * POST /api/billing/webhook — before the invite gate, because Stripe cannot
+   * present an invite token and does not need to: the signature *is* the
+   * authentication, checked against the raw bytes with the endpoint secret.
+   * An unsigned or mis-signed request learns nothing and changes nothing.
+   */
+  if (req.method === 'POST' && segments[1] === 'billing' && segments[2] === 'webhook' && !segments[3]) {
+    if (!deps.billing) return { status: 503, body: { error: 'billing is not configured' } };
+    if (!req.rawBody || !deps.billing.verifySignature(req.rawBody, req.stripeSignature)) {
+      return badRequest('invalid webhook signature');
+    }
+    return ok({ received: true, ...deps.billing.handleEvent(req.rawBody, deps.repo) });
   }
 
   if (!writesAllowed(req, deps)) {
@@ -314,6 +338,30 @@ async function handleWorkspace(
     if (event.status === 'undone') return badRequest('already undone');
     deps.ingest.undo(workspaceId, event);
     return ok({ undone: event.id, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/billing/checkout — the way into Pro.
+   *
+   * Returns the Stripe-hosted checkout URL; the client redirects to it and
+   * comes back to `returnUrl` (with `?upgraded=1` on success). The plan flips
+   * when the webhook confirms payment, never here — a closed checkout tab
+   * proves nothing.
+   */
+  if (req.method === 'POST' && resource === 'billing' && resourceId === 'checkout' && !action) {
+    if (!deps.billing) return { status: 503, body: { error: 'billing is not configured' } };
+    const body = asRecord(req.body);
+    if (typeof body.returnUrl !== 'string' || !/^https?:\/\//.test(body.returnUrl)) {
+      return badRequest('returnUrl must be an http(s) URL');
+    }
+    try {
+      return ok(await deps.billing.createCheckoutSession(workspaceId, body.returnUrl));
+    } catch (err) {
+      return {
+        status: 502,
+        body: { error: err instanceof Error ? err.message : 'checkout failed' },
+      };
+    }
   }
 
   // PATCH /api/workspaces/:id/settings — the workspace's own switches.

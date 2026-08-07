@@ -6,6 +6,7 @@ import type { GraphPayload } from '../../src/core/types.ts';
 import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
+import { selectBilling, StripeBilling } from '../billing/stripe.ts';
 import { createApiServer } from './server.ts';
 
 /**
@@ -65,6 +66,15 @@ if (repo.getWorkspace(WORKSPACE)) {
 
 const { ai: provider, embeddings, live, reason } = selectAi();
 console.log(`ai provider: ${provider.name} (${reason})`);
+
+const billingConfig = selectBilling();
+const billing = billingConfig ? new StripeBilling(billingConfig) : undefined;
+console.log(
+  billing
+    ? `billing: stripe ${billingConfig!.livemode ? 'LIVE' : 'test'} mode` +
+        `${billingConfig!.webhookSecret ? '' : ' (no webhook secret — upgrades will not apply)'}`
+    : 'billing: off (no Stripe test key + price id)',
+);
 /*
  * The dimensionality warning was written when the seed carried 8-dimensional
  * authored vectors and any live provider disagreed with them. The seed now
@@ -117,9 +127,14 @@ const server = createApiServer(
       // Namespaced, because the seed's primary keys are fixed and a second
       // import of them collides — see `namespaceSeed`.
       importSeed(repo, id, namespaceSeed(seedJson as unknown as GraphPayload, id));
+      // A visitor's workspace is the hosted consumer product: free remembers
+      // two weeks, and billing is the way up. A self-hosted instance never
+      // takes this path and stays 'pro' — it owns its keys and pays nobody.
+      repo.setPlan(id, 'free');
       return id;
     },
     inviteToken: INVITE,
+    billing,
   },
   STATIC_ROOT,
   /*

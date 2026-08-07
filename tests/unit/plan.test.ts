@@ -15,6 +15,16 @@ describe('currentPlan', () => {
     expect(currentPlan('?plan=free')).toBe('free');
     expect(currentPlan('?skipWelcome=1&plan=free')).toBe('free');
   });
+
+  it('the workspace plan applies when the URL says nothing', () => {
+    expect(currentPlan('', 'free')).toBe('free');
+    expect(currentPlan('', 'pro')).toBe('pro');
+  });
+
+  it('the URL flag outranks the workspace plan in both directions', () => {
+    expect(currentPlan('?plan=free', 'pro')).toBe('free');
+    expect(currentPlan('?plan=pro', 'free')).toBe('pro');
+  });
 });
 
 describe('freeCutoff', () => {

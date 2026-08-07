@@ -10,6 +10,7 @@ import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
+import { startUpgrade } from '../billing/upgrade';
 import type { SourceType } from '../core/types';
 
 /**
@@ -258,7 +259,10 @@ export function ArcBrowser() {
    * redacting its own evidence would make the product look like it is lying.
    */
   const planCutoff = useMemo(
-    () => (payload ? freeCutoff(payload.memories, currentPlan()) : null),
+    () =>
+      payload
+        ? freeCutoff(payload.memories, currentPlan(undefined, payload.workspace.plan))
+        : null,
     [payload],
   );
   const archivedCount = showingAnswer
@@ -740,9 +744,7 @@ export function ArcBrowser() {
             <button
               className="reading__upgrade"
               data-testid="plan-upgrade"
-              onClick={() =>
-                useUiStore.getState().toast('Recall Pro remembers everything. Payments arrive with the next build.')
-              }
+              onClick={() => void startUpgrade()}
             >
               Remember everything
             </button>
