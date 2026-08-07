@@ -2676,3 +2676,15 @@ button {
   border-color: var(--accent-dim);
   color: var(--accent);
 }
+
+/* ------------------------------------------------------------------ korean
+ * Korean typography: never break inside a word. The lang attribute is set by
+ * src/i18n at load, so this follows the resolved locale, not the browser's.
+ * overflow-wrap stays as the pressure valve for genuinely unbreakable runs.
+ */
+
+:lang(ko) body,
+body:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}

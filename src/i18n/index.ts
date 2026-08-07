@@ -42,6 +42,16 @@ export function resolveLocale(
 
 let locale: Locale = resolveLocale();
 
+/*
+ * The document must say what language it speaks: a reader announces Korean
+ * text with an English voice when the root still claims `lang="en"`, and the
+ * `:lang(ko)` stylesheet rules (word-break: keep-all — Korean must not wrap
+ * mid-word) hang off the same attribute.
+ */
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = locale;
+}
+
 export function currentLocale(): Locale {
   return locale;
 }
