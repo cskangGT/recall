@@ -114,9 +114,7 @@ export function Composer({
             ? t('composer.thinkingAria')
             : text.trim()
               ? t('composer.askAction')
-              : firstRun && (payload?.memories.length ?? 0) > 0
-                ? t('welcome.lookAround')
-                : t('composer.send')
+              : t('composer.send')
         }
         disabled={thinking}
         onClick={() => void submit()}
@@ -124,13 +122,13 @@ export function Composer({
         {/* "Look around" offers to fan the categories out, so it can only be
             offered when there are categories. On an empty workspace it invited
             the one gesture in the app guaranteed to do nothing. */}
+        {/* The doors above own "look around" now — a second button saying the
+            same words two rows apart read as a stutter, not an affordance. */}
         {thinking
           ? t('composer.thinking')
           : text.trim()
             ? t('composer.askAction')
-            : firstRun && (payload?.memories.length ?? 0) > 0
-              ? t('welcome.lookAround')
-              : '↵'}
+            : '↵'}
       </button>
     </div>
   );

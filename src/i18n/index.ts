@@ -102,7 +102,7 @@ const en = {
   // ---------------------------------------------------------------- welcome
   'welcome.title': 'Want to think something through?',
   'welcome.sub':
-    '{memories} memories from {sources} sources, already sorted. Ask me anything about them — or press Enter to look around.',
+    '{memories} memories from {sources} sources, already sorted. Ask me anything about them.',
   'welcome.lookAround': 'Look around',
   'welcome.fill': 'Fill your memory',
   'welcome.fillHint': 'Drop files, notes, or an Instagram export — {product} reads and files them',
@@ -311,7 +311,7 @@ const ko: Record<StringKey, string> = {
 
   'welcome.title': '무언가 정리해보고 싶으신가요?',
   'welcome.sub':
-    '{sources}개의 원본에서 나온 {memories}개의 기억이 이미 정리되어 있어요. 무엇이든 물어보세요 — Enter를 누르면 둘러볼 수 있어요.',
+    '{sources}개의 원본에서 나온 {memories}개의 기억이 이미 정리되어 있어요. 무엇이든 물어보세요.',
   'welcome.lookAround': '둘러보기',
   'welcome.fill': '내 기억 채우기',
   'welcome.fillHint': '파일, 메모, Instagram 내보내기를 놓으면 {product}가 읽고 정리해요',
