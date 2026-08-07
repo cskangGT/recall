@@ -100,7 +100,7 @@ test('the command bars and settings are dialogs', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
 
   for (const [open, testid, name] of [
-    ['Meta+k', 'capture-bar', 'Add to Recall'],
+    ['Meta+k', 'capture-bar', 'Add to Mado'],
     ['Meta+/', 'ask-bar', 'Ask'],
   ] as const) {
     await page.keyboard.press(open);

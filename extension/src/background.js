@@ -52,7 +52,7 @@ async function save(tab) {
       func: extractReadableText,
     });
     if (!injected?.result) {
-      notify('Not saved', "Recall couldn't read that page.");
+      notify('Not saved', "Mado couldn't read that page.");
       return;
     }
 
@@ -70,7 +70,7 @@ async function save(tab) {
 
     if (!res.ok) {
       const detail = await res.json().catch(() => ({}));
-      notify('Not saved', detail.error ?? `Recall answered ${res.status}.`);
+      notify('Not saved', detail.error ?? `Mado answered ${res.status}.`);
       return;
     }
 
@@ -78,12 +78,12 @@ async function save(tab) {
     notify(title, message);
   } catch (err) {
     /*
-     * Almost always one thing: Recall is not running. Say that rather than
+     * Almost always one thing: Mado is not running. Say that rather than
      * "Failed to fetch", because the fix is a command and the user is the only
      * one who can run it.
      */
     notify(
-      'Recall is not running',
+      'Mado is not running',
       `Nothing was saved. Start it with \`npm run agent:install\`, or open ${ENDPOINT_ORIGIN}. (${err.message})`,
     );
   } finally {

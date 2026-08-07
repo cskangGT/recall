@@ -1,5 +1,6 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
+import { t } from '../i18n';
 
 /**
  * What the upgrade buttons do — one function, because the paywall line and the
@@ -15,7 +16,7 @@ export async function startUpgrade(): Promise<void> {
   const ui = useUiStore.getState();
 
   if (!source.upgrade) {
-    ui.toast('Recall Pro remembers everything. Payments live on the hosted build.');
+    ui.toast(t('toast.upgradeSeed'));
     return;
   }
 
@@ -25,7 +26,9 @@ export async function startUpgrade(): Promise<void> {
     window.location.href = url;
   } catch (err) {
     ui.toast(
-      err instanceof Error ? `Couldn't start the upgrade — ${err.message}` : "Couldn't start the upgrade.",
+      err instanceof Error
+        ? t('toast.upgradeFailedWith', { message: err.message })
+        : t('toast.upgradeFailed'),
     );
   }
 }

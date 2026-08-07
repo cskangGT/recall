@@ -38,7 +38,10 @@ export function extractClaims(content: string): string[] {
     for (const sentence of sentences(line)) {
       if (URL_ONLY.test(sentence)) continue;
       const words = sentence.split(/\s+/).length;
-      if (words < MIN_WORDS || words > MAX_WORDS) continue;
+      // Korean packs a claim into fewer space-separated words — particles ride
+      // on the words instead of between them — so the floor drops with it.
+      const minWords = /[\uac00-\ud7a3]/.test(sentence) ? 3 : MIN_WORDS;
+      if (words < minWords || words > MAX_WORDS) continue;
 
       const key = sentence.toLowerCase();
       if (seen.has(key)) continue;

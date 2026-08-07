@@ -1,4 +1,5 @@
 import { useUiStore, STAGE_LABEL, type CaptureStage } from '../store/uiStore';
+import { t } from '../i18n';
 
 /**
  * The account of what just happened to something you dropped in.
@@ -29,7 +30,7 @@ export function CaptureStoryPanel() {
     const current = STAGES.indexOf(stage);
     return (
       <div className="capture-story" data-testid="classify-panel">
-        <div className="capture-story__title">Reading what you just added</div>
+        <div className="capture-story__title">{t('story.progressTitle')}</div>
         <ol className="capture-story__steps">
           {STAGES.map((s, i) => (
             <li
@@ -56,7 +57,7 @@ export function CaptureStoryPanel() {
   return (
     <div className="capture-story capture-story--result" data-testid="capture-story">
       <div className="capture-story__head">
-        <span className="capture-story__title">What Recall saw</span>
+        <span className="capture-story__title">{t('story.title')}</span>
         <button
           className="capture-story__close"
           data-testid="capture-story-close"
@@ -69,7 +70,9 @@ export function CaptureStoryPanel() {
       <p className="capture-story__saw">{story.saw}</p>
 
       <div className="capture-story__label">
-        {story.memories.length === 1 ? '1 memory' : `${story.memories.length} memories`} taken from it
+        {story.memories.length === 1
+          ? t('story.taken.one')
+          : t('story.taken.many', { count: story.memories.length })}
       </div>
 
       {story.memories.map((memory) => (
@@ -77,12 +80,11 @@ export function CaptureStoryPanel() {
           <span className="capture-story__text">{memory.text}</span>
           {memory.echoOf ? (
             <span className="capture-story__echo" data-testid="capture-story-echo">
-              You already saved something close to this — “{memory.echoOf.text}” in{' '}
-              {memory.echoOf.categoryName}
+              {t('story.echo', { text: memory.echoOf.text, category: memory.echoOf.categoryName })}
             </span>
           ) : (
             <span className="capture-story__new" data-testid="capture-story-new">
-              New to Recall
+              {t('story.new')}
             </span>
           )}
         </div>
@@ -96,14 +98,14 @@ export function CaptureStoryPanel() {
       {story.alreadyHeld.map((held, i) => (
         <div key={i} className="capture-story__memory" data-testid="capture-story-held">
           <span className="capture-story__text">{held.text}</span>
-          <span className="capture-story__echo">You already had this — not saved again</span>
+          <span className="capture-story__echo">{t('story.held')}</span>
         </div>
       ))}
 
       {story.destination && (
         <div className="capture-story__dest" data-testid="capture-story-destination">
-          Filed under <strong>{story.destination}</strong>
-          {story.restructured && ' — and it reorganized around it'}
+          {t('story.filed')} <strong>{story.destination}</strong>
+          {story.restructured && t('story.restructured')}
         </div>
       )}
     </div>

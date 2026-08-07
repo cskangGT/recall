@@ -20,7 +20,7 @@ test('the free plan archives old rows and shows the paywall line', async ({ page
   await expect(page.getByTestId('plan-paywall')).toContainText('archived');
 
   await page.getByTestId('plan-upgrade').click();
-  await expect(page.getByTestId('toast')).toContainText('Recall Pro remembers everything');
+  await expect(page.getByTestId('toast')).toContainText('Mado Pro remembers everything');
 });
 
 test('an archived row is present but not draggable, and says why on click', async ({ page }) => {
@@ -33,7 +33,7 @@ test('an archived row is present but not draggable, and says why on click', asyn
   await expect(archived).not.toHaveAttribute('draggable', 'true');
 
   await archived.click();
-  await expect(page.getByTestId('toast')).toContainText('Archived on Recall Free');
+  await expect(page.getByTestId('toast')).toContainText('Archived on Mado Free');
 });
 
 test('pro (the default) shows no paywall anywhere', async ({ page }) => {

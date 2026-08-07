@@ -80,7 +80,7 @@ describe('pages Recall will not try to save', () => {
   const HOME = 'http://127.0.0.1:5170';
 
   it('skips its own UI', () => {
-    expect(skipReason('http://127.0.0.1:5170/', HOME)).toBe("That's Recall itself.");
+    expect(skipReason('http://127.0.0.1:5170/', HOME)).toBe("That's Mado itself.");
   });
 
   it('skips anything that is not a web page', () => {

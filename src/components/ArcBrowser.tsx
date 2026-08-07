@@ -11,6 +11,8 @@ import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
 import { startUpgrade } from '../billing/upgrade';
+import { importFiles } from '../capture/importFiles';
+import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
 /**
@@ -69,6 +71,7 @@ export function ArcBrowser() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
   const [dragId, setDragId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -377,17 +380,17 @@ export function ArcBrowser() {
     if (rejection === 'depth') {
       setRejectedId(node.id);
       setTimeout(() => setRejectedId(null), 420);
-      toast('Recall keeps categories two levels deep.');
+      toast(t('toast.twoLevels'));
       return;
     }
     if (rejection) return;
 
     if (dragged.kind === 'memory') {
       moveMemory(dragged.id, node.id);
-      toast("Moved. Recall won't change this again.");
+      toast(t('toast.moved'));
     } else {
       moveCategory(dragged.id, node.id);
-      toast(`Moved ${dragged.label} into ${node.label}.`);
+      toast(t('toast.movedInto', { a: dragged.label, b: node.label }));
     }
   };
 
@@ -415,10 +418,10 @@ export function ArcBrowser() {
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
   const heading = showingAnswer
-    ? 'What Recall pulled'
+    ? t('answer.heading')
     : openRow
       ? openRow.label
-      : 'Where would you like to look?';
+      : t('welcome.prompt');
 
   return (
     /*
@@ -608,21 +611,52 @@ export function ArcBrowser() {
             */}
             {payload.memories.length === 0 ? (
               <>
-                <p className="arc__greeting-line">Nothing up here yet.</p>
-                <p className="arc__greeting-aside">
-                  Paste a note, a link, or a screenshot below and Recall will read it and
-                  find it a place. The map builds itself from there.
-                </p>
+                <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
+                <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
               </>
             ) : (
               <>
-                <p className="arc__greeting-line">Want to think something through?</p>
+                <p className="arc__greeting-line">{t('welcome.title')}</p>
                 {/* The scale belongs in the sentence, where the eye already is —
                     the Inspector used to shout it from the corner instead. */}
                 <p className="arc__greeting-aside">
-                  {payload.memories.length} memories from {payload.sources.length} sources,
-                  already sorted. Ask me anything about them — or press Enter to look around.
+                  {t('welcome.sub', {
+                    memories: payload.memories.length,
+                    sources: payload.sources.length,
+                  })}
                 </p>
+                {/*
+                  Two doors, because there are two kinds of first visit: someone
+                  ready to pour their own files in, and someone who wants to see
+                  what the tool even is before feeding it anything. The second
+                  door is the old Enter-to-look-around, given a surface.
+                */}
+                <div className="arc__doors">
+                  <button
+                    className="arc__door arc__door--fill"
+                    data-testid="door-fill"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <span className="arc__door-name">{t('welcome.fill')}</span>
+                    <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
+                  </button>
+                  <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
+                    <span className="arc__door-name">{t('welcome.browse')}</span>
+                  </button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  data-testid="door-fill-input"
+                  accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    e.target.value = '';
+                    if (files.length > 0) void importFiles(files);
+                  }}
+                />
               </>
             )}
           </div>
@@ -641,9 +675,7 @@ export function ArcBrowser() {
               a person would call a folder; what is above them is a category
               with a name under it, so the hint says that. */}
           <span className="reading__hint">
-            {showingAnswer
-              ? 'Drag any of these up to a category to keep it'
-              : 'Drag one up to a category to re-file it'}
+            {showingAnswer ? t('reading.hint.answer') : t('reading.hint.folder')}
           </span>
         </div>
 
@@ -665,12 +697,12 @@ export function ArcBrowser() {
                 className="item item--archived"
                 role="button"
                 tabIndex={0}
-                aria-label="Archived memory — upgrade to open"
-                onClick={() => useUiStore.getState().toast('Archived on Recall Free — upgrade to open everything you saved.')}
+                aria-label={t('reading.archived.aria')}
+                onClick={() => useUiStore.getState().toast(t('toast.archivedTap'))}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' && e.key !== ' ') return;
                   e.preventDefault();
-                  useUiStore.getState().toast('Archived on Recall Free — upgrade to open everything you saved.');
+                  useUiStore.getState().toast(t('toast.archivedTap'));
                 }}
               >
                 <span className="item__icon">{source ? SOURCE_ICON[source.type] : '·'}</span>
@@ -678,9 +710,9 @@ export function ArcBrowser() {
                   <span className="item__text item__text--archived" aria-hidden="true">
                     {memory.text}
                   </span>
-                  <span className="item__meta">Archived · saved {memory.created_at.slice(0, 10)}</span>
+                  <span className="item__meta">{t('reading.archived.meta', { date: memory.created_at.slice(0, 10) })}</span>
                 </span>
-                <span className="item__lock" title="Past the free window">
+                <span className="item__lock" title={t('reading.archived.title')}>
                   ◷
                 </span>
               </div>
@@ -727,7 +759,7 @@ export function ArcBrowser() {
                 </span>
               </span>
               {memory.category_locked && (
-                <span className="item__lock" title="Moved by you — AI won't change it">
+                <span className="item__lock" title={t('reading.lock.title')}>
                   ⦿
                 </span>
               )}
@@ -738,15 +770,16 @@ export function ArcBrowser() {
         {archivedCount > 0 && (
           <div className="reading__paywall" data-testid="plan-paywall">
             <span>
-              Recall Free remembers your last {FREE_WINDOW_DAYS} days — {archivedCount}{' '}
-              older {archivedCount === 1 ? 'memory is' : 'memories are'} archived here.
+              {archivedCount === 1
+                ? t('paywall.line.one', { days: FREE_WINDOW_DAYS })
+                : t('paywall.line.many', { days: FREE_WINDOW_DAYS, count: archivedCount })}
             </span>
             <button
               className="reading__upgrade"
               data-testid="plan-upgrade"
               onClick={() => void startUpgrade()}
             >
-              Remember everything
+              {t('paywall.cta')}
             </button>
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
+import { t } from '../i18n';
 import type { CaptureBatchResult, CaptureInput, CaptureResult } from '../data/dataSource';
 import type { ReorgEvent } from '../core/applyReorg';
 import { runBatchPipeline, type BatchItem, type BatchResult } from './batch';
@@ -80,7 +81,9 @@ export async function ingestBatch(items: BatchItem[]): Promise<void> {
     useUiStore.getState().setBatchReveal(null);
     useUiStore
       .getState()
-      .toast(err instanceof Error ? `Couldn't import those — ${err.message}` : "Couldn't import those.");
+      .toast(
+        err instanceof Error ? t('toast.batchFailedWith', { message: err.message }) : t('toast.batchFailed'),
+      );
   } finally {
     running = false;
   }
@@ -102,7 +105,7 @@ async function batchViaEndpoint(
   const skippedCount = response.results.reduce((n, r) => n + r.skipped.length, 0);
   const failed = response.results.filter((r) => r.status === 'failed').length;
   if (failed > 0) {
-    useUiStore.getState().toast(`${failed} of ${items.length} couldn't be read — the rest are in.`);
+    useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
   }
 
   const added = new Set(addedMemoryIds);
@@ -188,7 +191,7 @@ async function batchViaApi(
   }
 
   if (!last) throw new Error(`none of the ${items.length} items could be saved`);
-  if (failed > 0) useUiStore.getState().toast(`${failed} of ${items.length} couldn't be read — the rest are in.`);
+  if (failed > 0) useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
 
   const payload = last.graph;
   const added = new Set(addedMemoryIds);

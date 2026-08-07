@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Recall",
+  "name": "Mado",
   "version": "0.1.0",
-  "description": "Save the page you are reading to Recall, without leaving it.",
+  "description": "Save the page you are reading to Mado, without leaving it.",
 
   "permissions": ["activeTab", "scripting", "notifications"],
 
@@ -11,7 +11,7 @@
   "background": { "service_worker": "src/background.js", "type": "module" },
 
   "action": {
-    "default_title": "Save this page to Recall",
+    "default_title": "Save this page to Mado",
     "default_icon": { "16": "icons/icon-16.png", "48": "icons/icon-48.png" }
   },
 
@@ -20,7 +20,7 @@
   "commands": {
     "save-page": {
       "suggested_key": { "default": "Ctrl+Shift+K", "mac": "Command+Shift+K" },
-      "description": "Save this page to Recall"
+      "description": "Save this page to Mado"
     }
   }
 }

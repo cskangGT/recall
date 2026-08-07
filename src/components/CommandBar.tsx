@@ -4,11 +4,11 @@ import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
-import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { runAsk } from '../ask/runAsk';
+import { t } from '../i18n';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
-import { askedCategories } from '../arc/interest';
-import { useInterestStore } from '../store/interestStore';
 
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
@@ -70,14 +70,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
         aria-labelledby="capture-bar-title"
       >
         <div className="bar__head">
-          <span id="capture-bar-title">Add to Recall</span>
+          <span id="capture-bar-title">{t('capture.title')}</span>
           <span>esc</span>
         </div>
         <textarea
           ref={ref}
           data-testid="capture-input"
           rows={3}
-          placeholder="Paste text, a link, or an image…"
+          placeholder={t('capture.placeholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
@@ -104,7 +104,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
               </button>
             ))}
           </div>
-          <span>⏎ to add</span>
+          <span>{t('capture.submit')}</span>
         </div>
       </div>
     </div>
@@ -113,11 +113,8 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
 
 export function AskBar() {
   const setAskOpen = useUiStore((s) => s.setAskOpen);
-  const setAnswer = useUiStore((s) => s.setAnswer);
   const askThread = useUiStore((s) => s.askThread);
   const clearAskThread = useUiStore((s) => s.clearAskThread);
-  const recordInterest = useInterestStore((s) => s.record);
-  const setHighlight = useUiStore((s) => s.setHighlight);
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
   const setHovered = useUiStore((s) => s.setHovered);
@@ -163,32 +160,9 @@ export function AskBar() {
   };
 
   const ask = async (question: string) => {
-    if (!payload || !question.trim()) return;
+    if (!question.trim()) return;
     setAskOpen(false);
-
-    // The conversation so far rides along, so a follow-up's pronouns resolve.
-    // Snapshotted here: the thread grows when the answer lands, and the model
-    // must see the conversation as it was when the question was asked.
-    const history = useUiStore.getState().askThread;
-
-    const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(question, history).catch(() => answerQuestion(question, payload, history))
-      : answerQuestion(question, payload, history);
-
-    setAnswer({ ...result, question });
-    /*
-     * Asking is the strongest of the three signals the arc ranks by, and until
-     * now it left no trace anywhere: the server writes `ask_history` and reads
-     * it back nowhere, and the client never saw it at all. Recorded against the
-     * top-level categories the answer actually drew on, so the arc reflects what
-     * you were thinking about rather than what you happened to click.
-     */
-    for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
-      recordInterest(categoryId, 'asked');
-    }
-    setHighlight(result.highlighted_node_ids);
-    select(null);
+    await runAsk(question);
   };
 
   return (
@@ -202,7 +176,7 @@ export function AskBar() {
       >
         <div className="bar__head">
           <span id="ask-bar-title" data-testid="bar-mode">
-            {searching ? 'Search' : 'Ask'}
+            {searching ? t('ask.mode.search') : t('ask.mode.ask')}
           </span>
           <span>esc</span>
         </div>
@@ -212,14 +186,14 @@ export function AskBar() {
         {!searching && askThread.length > 0 && (
           <div className="bar__followup" data-testid="ask-followup">
             <span className="bar__followup-q">
-              Following up on “{askThread[askThread.length - 1]!.question}”
+              {t('ask.followingUp', { question: askThread[askThread.length - 1]!.question })}
             </span>
             <button
               className="bar__followup-clear"
               data-testid="ask-followup-clear"
               onClick={clearAskThread}
             >
-              Start fresh
+              {t('ask.startFresh')}
             </button>
           </div>
         )}
@@ -228,8 +202,8 @@ export function AskBar() {
           data-testid="ask-input"
           placeholder={
             askThread.length > 0
-              ? 'Follow up — or start fresh above…'
-              : "Ask across everything you've saved…"
+              ? t('ask.placeholderFollowUp')
+              : t('ask.placeholder')
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -254,7 +228,7 @@ export function AskBar() {
         {searching && (
           <div className="bar__results" data-testid="search-results">
             {results.length === 0 ? (
-              <p className="bar__no-results">No matches.</p>
+              <p className="bar__no-results">{t('ask.noMatches')}</p>
             ) : (
               groups.map((group) => (
                 <div key={group.categoryId} className="bar__group">

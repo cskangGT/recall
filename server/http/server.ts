@@ -90,7 +90,7 @@ export function createApiServer(
       // Before the static handler, not after: a rebound name must not be able
       // to read index.html either, and this is cheaper than serving a file.
       if (loopbackPort !== undefined && !hostAllowed(req.headers.host, loopbackPort)) {
-        send(403, { error: 'Recall only answers to localhost.' });
+        send(403, { error: 'Mado only answers to localhost.' });
         return;
       }
 

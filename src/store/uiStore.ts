@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { t } from '../i18n';
 import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
@@ -28,10 +29,10 @@ export interface BatchRevealState {
 }
 
 export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
-  reading: 'Reading…',
-  extracting: 'Extracting memories…',
-  connecting: 'Finding connections…',
-  reorganizing: 'Reorganizing…',
+  reading: t('stage.reading'),
+  extracting: t('stage.extracting'),
+  connecting: t('stage.connecting'),
+  reorganizing: t('stage.reorganizing'),
 };
 
 export interface Toast {

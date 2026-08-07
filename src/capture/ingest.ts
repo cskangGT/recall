@@ -1,6 +1,7 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { partitionDuplicates } from './duplicate';
 import { useUiStore, type CaptureStage } from '../store/uiStore';
+import { t } from '../i18n';
 import { evaluateReorg } from '../core/gates';
 import { applyReorg, type ReorgEvent } from '../core/applyReorg';
 import type { GraphPayload, Memory, Source } from '../core/types';
@@ -69,7 +70,7 @@ async function ingestViaApi(
   } catch (err) {
     useUiStore.getState().setCaptureStage('idle');
     useUiStore.getState().toast(
-      err instanceof Error ? `Couldn't save that — ${err.message}` : "Couldn't save that.",
+      err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'),
     );
     return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld: [] };
   }
@@ -145,8 +146,8 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
     useUiStore.getState().setCaptureStage('idle');
     useUiStore.getState().toast(
       skipped.length === 1
-        ? 'Already saved — nothing new in this one.'
-        : `Already saved — all ${skipped.length} of these are things you have.`,
+        ? t('toast.alreadySaved.one')
+        : t('toast.alreadySaved.many', { count: skipped.length }),
     );
     return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld };
   }

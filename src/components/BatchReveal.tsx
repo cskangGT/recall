@@ -1,4 +1,7 @@
 import { useUiStore } from '../store/uiStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
+import { runAsk } from '../ask/runAsk';
+import { t } from '../i18n';
 
 /**
  * The reveal a bulk drop plays over the sky.
@@ -40,7 +43,7 @@ export function BatchReveal() {
   const litPerDot = total / dots;
 
   return (
-    <div className={`reveal reveal--${phase}`} data-testid="batch-reveal" role="dialog" aria-label="Organizing your saves">
+    <div className={`reveal reveal--${phase}`} data-testid="batch-reveal" role="dialog" aria-label={t('reveal.aria')}>
       <div className="reveal__sky" aria-hidden="true">
         {Array.from({ length: dots }, (_, i) => {
           const p = dotPlacement(i);
@@ -69,27 +72,33 @@ export function BatchReveal() {
           {phase === 'reading' ? (
             <>
               <span className="reveal__count">
-                {Math.min(read, total)} <span className="reveal__of">of {total}</span>
+                {Math.min(read, total)} <span className="reveal__of">{t('reveal.of')} {total}</span>
               </span>
-              <span className="reveal__stage">Reading…</span>
+              <span className="reveal__stage">{t('reveal.reading')}</span>
             </>
           ) : (
-            <span className="reveal__stage">Finding what goes together…</span>
+            <span className="reveal__stage">{t('reveal.organizing')}</span>
           )}
         </div>
       )}
 
       {phase === 'declare' && summary && (
         <div className="reveal__declare" data-testid="batch-reveal-declare">
-          <h2>
-            Organized <strong>{summary.memories}</strong> memories from{' '}
-            <strong>{summary.sources}</strong> saves into{' '}
-            <strong>{summary.categories.length}</strong> interest
-            {summary.categories.length === 1 ? '' : 's'}.
-          </h2>
+          <h2
+            // The sentence's word order differs per language, so the whole line
+            // comes from the dictionary with <b> markers for the numbers.
+            dangerouslySetInnerHTML={{
+              __html: t('reveal.declare', {
+                memories: summary.memories,
+                sources: summary.sources,
+                interests: summary.categories.length,
+                interestWord: t(summary.categories.length === 1 ? 'reveal.interest.one' : 'reveal.interest.many'),
+              }).replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>'),
+            }}
+          />
           {summary.skipped > 0 && (
             <p className="reveal__skipped">
-              {summary.skipped} thing{summary.skipped === 1 ? ' was' : 's were'} already saved — not written twice.
+              {summary.skipped === 1 ? t('reveal.skipped.one') : t('reveal.skipped.many', { count: summary.skipped })}
             </p>
           )}
           <ul className="reveal__chips">
@@ -97,17 +106,49 @@ export function BatchReveal() {
               <li key={c.id} className={`reveal__chip${c.isNew ? ' reveal__chip--new' : ''}`}>
                 <span className="reveal__chip-name">{c.name}</span>
                 <span className="reveal__chip-count">{c.added}</span>
-                {c.isNew && <span className="reveal__chip-badge">new</span>}
+                {c.isNew && <span className="reveal__chip-badge">{t('reveal.new')}</span>}
               </li>
             ))}
           </ul>
+          {/*
+            The bridge from the visual aha to the functional one: three
+            questions built from what this batch actually filed, so the first
+            "ask your memory" happens within reach of the reveal. In seed mode
+            there is no model to answer a novel question honestly, so the same
+            click opens the category instead — showing, not pretending.
+          */}
+          {summary.categories.length > 0 && (
+            <div className="reveal__ask" data-testid="batch-reveal-ask">
+              <span className="reveal__ask-prompt">{t('reveal.askPrompt')}</span>
+              {summary.categories.slice(0, 3).map((c) => (
+                <button
+                  key={c.id}
+                  className="reveal__ask-q"
+                  data-testid={`batch-reveal-ask-${c.id}`}
+                  onClick={() => {
+                    const ui = useUiStore.getState();
+                    ui.setBatchReveal(null);
+                    if (useWorkspaceStore.getState().source.ask) {
+                      void runAsk(t('reveal.suggested', { name: c.name }));
+                    } else {
+                      ui.setView('browse');
+                      ui.openCategory(c.id);
+                      ui.select(c.id);
+                    }
+                  }}
+                >
+                  {t('reveal.suggested', { name: c.name })}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             className="reveal__dismiss"
             data-testid="batch-reveal-dismiss"
             autoFocus
             onClick={() => useUiStore.getState().setBatchReveal(null)}
           >
-            Look around
+            {t('reveal.dismiss')}
           </button>
         </div>
       )}

@@ -13,6 +13,14 @@ export default defineConfig({
   use: {
     viewport: { width: 1512, height: 982 },
     baseURL: `http://localhost:${PORT}`,
+    /*
+     * Pinned, because the app now speaks the viewer's language: a Seoul clock
+     * defaults it to Korean, and this suite asserts the English copy. Tests on
+     * a Korean machine must see the same app as tests anywhere else; the
+     * Korean surface is exercised through `?lang=ko` on purpose.
+     */
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
   },
   webServer: {
     command: `npm run dev -- --port ${PORT} --strictPort`,

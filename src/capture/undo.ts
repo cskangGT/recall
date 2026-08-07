@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import { t } from '../i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { undoReorg } from '../core/applyReorg';
 
@@ -27,5 +28,5 @@ export function undoLastReorg(): void {
   } else {
     ws.applyPayload(undoReorg(popped));
   }
-  ui.toast('Reverted.');
+  ui.toast(t('toast.reverted'));
 }

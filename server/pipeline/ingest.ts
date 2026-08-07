@@ -307,7 +307,7 @@ export class IngestPipeline {
         return {
           sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [],
           skipped: [], reorg: null,
-          note: "Saved, but Recall couldn't find anything to remember in this. It's in your Sources.",
+          note: "Saved, but Mado couldn't find anything to remember in this. It's in your Sources.",
         };
       }
 

@@ -229,7 +229,7 @@ describe('PATCH category', () => {
     const children = payload.categories.filter((c) => c.parent_id !== null);
     const res = await patch(`${base}/categories/${children[0]!.id}`, { parentId: children[1]!.id });
     expect(res.status).toBe(400);
-    expect((res.body as { error: string }).error).toBe('Recall keeps categories two levels deep.');
+    expect((res.body as { error: string }).error).toBe('Mado keeps categories two levels deep.');
   });
 
   it('400s an update with nothing in it', async () => {

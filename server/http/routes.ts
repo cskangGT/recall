@@ -135,7 +135,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
   if (segments[0] !== 'api') return notFound();
 
   if (!originAllowed(req)) {
-    return forbidden(`${req.origin} may not write to Recall.`);
+    return forbidden(`${req.origin} may not write to Mado.`);
   }
 
   /*
@@ -458,7 +458,7 @@ async function handleWorkspace(
         // The schema trigger would also catch this, but a 400 explains it in
         // the words the UI already uses.
         if (parent.parent_id !== null) {
-          return badRequest('Recall keeps categories two levels deep.');
+          return badRequest('Mado keeps categories two levels deep.');
         }
       }
       fields.parent_id = parentId;

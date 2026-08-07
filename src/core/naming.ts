@@ -40,9 +40,52 @@ const STOP = new Set(
   ).split(' '),
 );
 
+/*
+ * Korean eojeol that are pure function words when they stand alone. Korean
+ * attaches particles to content words (사과를 / 사과가), so a true stopword
+ * list cannot be exhaustive without a morphological analyzer — this catches
+ * the standalone connectives and light verbs that would otherwise dominate
+ * term frequency, and accepts that "사과를" and "사과가" count as different
+ * tokens. Rougher matching, honestly bounded.
+ */
+const KO_STOP = new Set(
+  ('그리고 그래서 하지만 그런데 그러나 또한 또는 및 등 것 수 더 안 못 이 그 저 좀 잘 만 의 ' +
+    '있다 없다 한다 했다 된다 됐다 하는 있는 없는 대한 위한 통해 같은 오늘 어제 내일'
+  ).split(' '),
+);
+
+const HANGUL = /[\uac00-\ud7a3]/;
+
+/*
+ * Trailing particles, stripped so "러닝이" and "러닝을" count as the same
+ * word. One pass, longest first, and only when what remains is still a word
+ * (≥2 chars) — "고기" must not lose its 기. A real morphological analyzer
+ * would do better; this does most of the good for none of the dependency.
+ */
+const KO_PARTICLES = ['으로', '에서', '에게', '까지', '부터', '하고', '이랑',
+  '는', '은', '이', '가', '을', '를', '에', '의', '도', '만', '로', '와', '과'];
+
+function stripParticle(word: string): string {
+  for (const particle of KO_PARTICLES) {
+    if (word.endsWith(particle) && word.length - particle.length >= 2) {
+      return word.slice(0, word.length - particle.length);
+    }
+  }
+  return word;
+}
+
 /** The tokenizer naming ranks with — shared with the local embedder. */
 export function nameTokens(t: string): string[] {
-  return t.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
+  return t
+    .toLowerCase()
+    .replace(/[^a-z0-9\uac00-\ud7a3\s-]/g, ' ')
+    .split(/\s+/)
+    .map((w) => (HANGUL.test(w) ? stripParticle(w) : w))
+    .filter((w) =>
+      HANGUL.test(w)
+        ? w.length > 1 && !KO_STOP.has(w)
+        : w.length > 2 && !STOP.has(w),
+    );
 }
 
 /**
@@ -54,7 +97,14 @@ export function nameTokens(t: string): string[] {
  */
 export function rankedTerms(sampleTexts: string[], allTexts: string[][]): string[] {
   const tf = new Map<string, number>();
-  for (const t of sampleTexts) for (const w of nameTokens(t)) tf.set(w, (tf.get(w) ?? 0) + 1);
+  // Digit-led tokens ("10km", "100명") stay in the lexical index but make bad
+  // names — a category is a subject, not a measurement.
+  for (const t of sampleTexts) {
+    for (const w of nameTokens(t)) {
+      if (/^[0-9]/.test(w)) continue;
+      tf.set(w, (tf.get(w) ?? 0) + 1);
+    }
+  }
 
   const df = new Map<string, number>();
   for (const doc of allTexts) {

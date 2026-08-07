@@ -12,9 +12,8 @@ import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './com
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
-import { ingestBatch } from './capture/batchRun';
-import { parseInstagramZip, IMPORT_WINDOW_DAYS } from './capture/instagramZip';
-import type { BatchItem } from './capture/batch';
+import { importFiles, isTextLike, isZip } from './capture/importFiles';
+import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
@@ -25,18 +24,6 @@ import { fitToBounds } from './graph/camera';
 import { FOCUS_FRACTION } from './arc/layout';
 
 const MIN_VIEWPORT_WIDTH = 1280;
-
-/**
- * What a bulk drop will read. Text-shaped files only — an image in a multi-file
- * drop is skipped rather than failing the batch, because the pipeline behind
- * this reads text (screenshot upload is not built; see README "Not built yet").
- */
-const TEXT_FILE = /\.(txt|md|markdown|csv|json)$/i;
-const isTextLike = (f: File): boolean => f.type.startsWith('text/') || TEXT_FILE.test(f.name);
-
-/** "meeting-notes_2026.md" → "meeting notes 2026" */
-const titleFromFilename = (name: string): string =>
-  name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
 
 /*
  * A floor on height as well as width.
@@ -90,7 +77,7 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('upgraded') !== '1') return;
-    useUiStore.getState().toast('Recall Pro is on — everything you saved is open.');
+    useUiStore.getState().toast(t('toast.upgraded'));
     params.delete('upgraded');
     const query = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
@@ -183,7 +170,7 @@ export function App() {
     if (event) {
       ui.pushReorg(event);
     } else {
-      ui.toast('Added 2 memories.');
+      ui.toast(t('toast.added', { count: 2 }));
     }
     setAnimation(null);
     busy.current = false;
@@ -251,7 +238,7 @@ export function App() {
           e.preventDefault();
           ws.deleteMemory(memory.id);
           ui.select(null);
-          ui.toast('Deleted.');
+          ui.toast(t('toast.deleted'));
           return;
         }
       }
@@ -311,70 +298,18 @@ export function App() {
         useUiStore.getState().setDropActive(false);
 
         /*
-         * One file keeps the single-capture path and its choreography. Two or
-         * more become a batch: read here (a File is only readable while the
-         * event's DataTransfer is alive), then handed to the batch driver,
-         * which owns the reveal. `busy` still guards both paths — a bulk drop
-         * during a capture is dropped exactly like a second capture is.
+         * One file keeps the single-capture path and its choreography. A ZIP
+         * or several text files become a batch — importFiles is the shared
+         * routine the welcome screen's file picker also uses, so a drop and a
+         * pick can never behave differently. `busy` still guards both paths.
          */
         const files = Array.from(e.dataTransfer.files);
-
-        // An Instagram export: one ZIP that becomes a whole batch. Checked
-        // before the text-file count, because a ZIP is one file and would
-        // otherwise fall through to the single-capture path.
-        const zip = files.find((f) => /\.zip$/i.test(f.name));
-        if (zip) {
+        if (files.some(isZip) || files.filter(isTextLike).length >= 2) {
           if (busy.current) return;
           busy.current = true;
-          void zip
-            .arrayBuffer()
-            .then(async (buf) => {
-              const parsed = await parseInstagramZip(buf);
-              if (parsed.items.length === 0) {
-                useUiStore
-                  .getState()
-                  .toast(`Found ${parsed.total} saved posts, but none from the last ${IMPORT_WINDOW_DAYS} days.`);
-                return;
-              }
-              await ingestBatch(parsed.items);
-              if (parsed.older > 0) {
-                useUiStore
-                  .getState()
-                  .toast(
-                    `Imported the last ${IMPORT_WINDOW_DAYS} days — ${parsed.older} older ` +
-                      `${parsed.older === 1 ? 'post' : 'posts'} stayed in the export.`,
-                  );
-              }
-            })
-            .catch((err: unknown) => {
-              useUiStore
-                .getState()
-                .toast(
-                  err instanceof Error
-                    ? `Couldn't read that export — ${err.message}`
-                    : "Couldn't read that export.",
-                );
-            })
-            .finally(() => {
-              busy.current = false;
-            });
-          return;
-        }
-
-        const textFiles = files.filter(isTextLike);
-        if (textFiles.length >= 2) {
-          if (busy.current) return;
-          busy.current = true;
-          void Promise.all(
-            textFiles.map(async (f): Promise<BatchItem> => ({
-              title: titleFromFilename(f.name),
-              content: await f.text(),
-            })),
-          )
-            .then((items) => ingestBatch(items))
-            .finally(() => {
-              busy.current = false;
-            });
+          void importFiles(files).finally(() => {
+            busy.current = false;
+          });
           return;
         }
         void capture();
@@ -396,7 +331,7 @@ export function App() {
 
       {dropActive && (
         <div className="dropzone" data-testid="dropzone">
-          <div className="dropzone__inner">Drop it anywhere — Recall will read it and file it</div>
+          <div className="dropzone__inner">{t('drop.hint')}</div>
         </div>
       )}
       <LeftRail />
@@ -414,10 +349,10 @@ export function App() {
         {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
-            <h2>Nothing saved yet.</h2>
-            <p>Add a note, a link, or a screenshot and Recall will start building your map.</p>
+            <h2>{t('map.empty.title')}</h2>
+            <p>{t('map.empty.sub')}</p>
             <button onClick={() => useUiStore.getState().setCaptureOpen(true)}>
-              Add your first item
+              {t('map.empty.cta')}
             </button>
           </div>
         )}

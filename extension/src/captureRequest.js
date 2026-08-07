@@ -41,7 +41,7 @@ function truncate(text) {
 }
 
 /**
- * Pages Recall must not try to save.
+ * Pages Mado must not try to save.
  *
  * Its own UI, because saving the tool into itself is never what you meant, and
  * anything that is not http(s) — chrome://, file://, about: — where the
@@ -52,12 +52,12 @@ export function skipReason(url, endpointOrigin) {
   try {
     parsed = new URL(url);
   } catch {
-    return 'That page has no address Recall can read.';
+    return 'That page has no address Mado can read.';
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return 'Recall can only read normal web pages.';
+    return 'Mado can only read normal web pages.';
   }
-  if (parsed.origin === endpointOrigin) return "That's Recall itself.";
+  if (parsed.origin === endpointOrigin) return "That's Mado itself.";
   return null;
 }
 
@@ -117,18 +117,18 @@ export function buildCaptureRequest(page) {
  */
 export function describeResult(result) {
   if (result.reorg?.banner_text) {
-    return { title: 'Recall reorganized', message: result.reorg.banner_text.replace(/\*\*/g, '') };
+    return { title: 'Mado reorganized', message: result.reorg.banner_text.replace(/\*\*/g, '') };
   }
   if (result.status === 'complete' && result.addedMemoryIds?.length > 0) {
     const where = result.touchedCategories?.[0]?.name;
     const n = result.addedMemoryIds.length;
     return {
       title: `Saved ${n} ${n === 1 ? 'thing' : 'things'}`,
-      message: where ? `to ${where}` : 'Recall filed it.',
+      message: where ? `to ${where}` : 'Mado filed it.',
     };
   }
   if (result.skipped?.length > 0) {
     return { title: 'Already saved', message: 'Nothing new in this one.' };
   }
-  return { title: 'Recall', message: result.note ?? 'Saved, but nothing to remember in it.' };
+  return { title: 'Mado', message: result.note ?? 'Saved, but nothing to remember in it.' };
 }

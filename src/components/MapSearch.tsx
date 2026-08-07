@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { search } from '../search/search';
@@ -96,8 +97,8 @@ export function MapSearch() {
         </span>
         <input
           data-testid="map-search-input"
-          aria-label="Search your memories"
-          placeholder="Find something on the map…"
+          aria-label={t('map.search.label')}
+          placeholder={t('map.search.placeholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
