@@ -138,6 +138,7 @@ export class FixtureProvider implements AiProvider {
     operation?: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]> {
     const allTexts = input.clusters.map((x) => x.sample_texts);
     if (input.operation === 'new_category') {

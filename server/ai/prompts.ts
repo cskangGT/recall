@@ -121,6 +121,9 @@ export function buildExtractPrompt(input: {
     'context. Write it as a full sentence in the past or present tense. Do not',
     'summarise the source; state what it says.',
     '',
+    'Write every memory, the summary, and the title in the language the source',
+    'is written in — a Korean caption yields Korean memories, never a translation.',
+    '',
     `At most ${MAX_MEMORIES}. Returning none is a valid answer — plenty of things`,
     'are not worth remembering, and an empty list is better than padding.',
     '',
@@ -194,6 +197,8 @@ export function buildNamePrompt(input: {
   clusters: NameCluster[];
   forbiddenNames: string[];
   retryReasons?: Record<string, string>;
+  /** The viewer's language — a category name is UI, not content. */
+  locale?: 'en' | 'ko';
 }): string {
   /*
    * Phrased per operation rather than interpolated raw. "Name the result of this
@@ -217,6 +222,10 @@ export function buildNamePrompt(input: {
     'One to three words. A name a person would recognise as their own category.',
     'Never a container word — "Miscellaneous", "Other", "General", "Various" are',
     'refusals to decide, not names.',
+    '',
+    // The names sit in the chrome next to translated labels — mixed-language
+    // shelves read as a bug even when every individual name is good.
+    input.locale === 'ko' ? 'Write the names in Korean (한국어로).' : '',
     '',
     /*
      * The headings below are identifiers, and the model has to be told so.

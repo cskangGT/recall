@@ -25,6 +25,8 @@ export interface BatchRevealState {
     skipped: number;
     sources: number;
     categories: BatchCategorySummary[];
+    /** The stretch of time this batch rescued, when the import knows it. */
+    period?: { from: string; to: string } | null;
   } | null;
 }
 

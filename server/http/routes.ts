@@ -214,6 +214,7 @@ async function handleWorkspace(
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
+      locale: body.locale === 'ko' || body.locale === 'en' ? body.locale : undefined,
     });
 
     /*
@@ -284,10 +285,11 @@ async function handleWorkspace(
         content: typeof item.content === 'string' ? item.content : undefined,
         title: typeof item.title === 'string' ? item.title : undefined,
         url: typeof item.url === 'string' ? item.url : undefined,
+        locale: body.locale === 'ko' || body.locale === 'en' ? body.locale : undefined,
       });
     }
 
-    const { results, reorg } = await deps.ingest.ingestBatch(items);
+    const { results, reorgs } = await deps.ingest.ingestBatch(items);
     const summaries = results.map((r) => ({
       sourceId: r.sourceId,
       status: r.status,
@@ -297,8 +299,8 @@ async function handleWorkspace(
       note: r.note,
     }));
 
-    if (body.includeGraph === false) return ok({ results: summaries, reorg });
-    return ok({ results: summaries, reorg, graph: deps.repo.getGraphPayload(workspaceId) });
+    if (body.includeGraph === false) return ok({ results: summaries, reorgs });
+    return ok({ results: summaries, reorgs, graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
   // POST /api/workspaces/:id/reset — back to the pristine seed corpus.

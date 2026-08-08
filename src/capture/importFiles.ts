@@ -32,7 +32,7 @@ export async function importFiles(files: File[]): Promise<void> {
         ui.toast(t('toast.zipNoneRecent', { total: parsed.total, days: IMPORT_WINDOW_DAYS }));
         return;
       }
-      await ingestBatch(parsed.items);
+      await ingestBatch(parsed.items, { period: parsed.period });
       if (parsed.older === 1) {
         useUiStore.getState().toast(t('toast.zipOlder.one', { days: IMPORT_WINDOW_DAYS }));
       } else if (parsed.older > 1) {

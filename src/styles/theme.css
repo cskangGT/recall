@@ -2688,3 +2688,30 @@ body:lang(ko) {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+
+/* Reveal: the rescued-period stamp and the top-three interests. */
+.reveal__period {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--accent);
+}
+
+.reveal__chip {
+  animation: rise 0.45s ease backwards;
+}
+
+.reveal__chip--top {
+  font-size: var(--text-lg);
+  padding: 9px 16px;
+  border-color: var(--accent-dim);
+}
+
+.reveal__chip--top .reveal__chip-name {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal__chip {
+    animation: none;
+  }
+}

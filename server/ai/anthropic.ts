@@ -96,6 +96,7 @@ export class AnthropicProvider implements AiProvider {
     operation: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]> {
     const accepted: NamedCluster[] = [];
     let pending = input.clusters;

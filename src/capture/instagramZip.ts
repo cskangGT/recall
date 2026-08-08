@@ -42,6 +42,8 @@ export interface InstagramImport {
   unreadable: number;
   /** Collections found in the export, by name. */
   collections: string[];
+  /** The date range of the imported window, when any post carried a date. */
+  period: { from: string; to: string } | null;
 }
 
 export const IMPORT_WINDOW_DAYS = 14;
@@ -112,6 +114,12 @@ export async function parseInstagramZip(
     older: readable.length - within.length,
     unreadable: posts.length - readable.length,
     collections: collectionNames,
+    period: (() => {
+      const dated = within.map((p) => p.savedAt).filter((t): t is number => t !== null);
+      if (dated.length === 0) return null;
+      const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+      return { from: day(Math.min(...dated)), to: day(Math.max(...dated)) };
+    })(),
   };
 }
 

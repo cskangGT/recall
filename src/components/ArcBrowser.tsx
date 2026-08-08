@@ -685,10 +685,14 @@ export function ArcBrowser() {
           </p>
         )}
 
-        {contents.map((memory) => {
+        {contents.map((memory, index) => {
           const source = payload.sources.find((s) => s.id === memory.source_id);
           const home = payload.categories.find((c) => c.id === memory.category_id);
           const archived = !showingAnswer && isArchivedByPlan(memory.created_at, planCutoff);
+          // Several memories from one capture sit together in the list; naming
+          // the source once per run reads as provenance, once per row as an
+          // echo — the screen looked like it was stuttering.
+          const repeatedSource = index > 0 && contents[index - 1]!.source_id === memory.source_id;
           if (archived) {
             return (
               <div
@@ -755,7 +759,7 @@ export function ArcBrowser() {
                 <span className="item__text">{memory.text}</span>
                 <span className="item__meta">
                   {home && home.id !== openRow?.id ? `${home.name} · ` : ''}
-                  {source?.title ?? 'Unknown source'}
+                  {repeatedSource ? '〃' : (source?.title ?? t('inspector.unknown'))}
                 </span>
               </span>
               {memory.category_locked && (

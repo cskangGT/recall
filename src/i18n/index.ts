@@ -165,6 +165,7 @@ const en = {
   'reveal.dismiss': 'Look around',
   'reveal.askPrompt': 'Now ask your memory something:',
   'reveal.suggested': 'What did I save about {name}?',
+  'reveal.period': '{from} – {to} — the weeks you almost let slip away, caught.',
 
   // ---------------------------------------------------------------- banner
   'banner.title': `${PRODUCT} reorganized your map`,
@@ -367,6 +368,7 @@ const ko: Record<StringKey, string> = {
   'reveal.dismiss': '둘러보기',
   'reveal.askPrompt': '이제 당신의 기억에게 물어보세요:',
   'reveal.suggested': '내가 저장한 {name}, 뭐가 있었지?',
+  'reveal.period': '{from} ~ {to} — 잃어버릴 뻔했던 시간의 기억을 붙잡았어요.',
 
   'banner.title': `${PRODUCT}가 지도를 다시 정리했어요`,
   'banner.undo': '되돌리기',

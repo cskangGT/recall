@@ -48,7 +48,13 @@ export interface BatchResult {
   /** Claims the corpus (or an earlier item in this batch) already held. */
   skippedCount: number;
   categories: BatchCategorySummary[];
-  event: ReorgEvent | null;
+  /**
+   * Every structural operation the batch settled into, oldest first. A first
+   * fill runs the gates to convergence rather than once — the reveal
+   * summarizes everything anyway, and one split over ninety-nine memories
+   * leaves a pile with a name, not a map.
+   */
+  events: ReorgEvent[];
 }
 
 let counter = 0;
@@ -186,16 +192,25 @@ export function runBatchPipeline(
     categories: [...base.categories, ...opened.map((o) => o.category)],
   };
 
-  const touched = [...addedByCategory.keys()];
-  const candidate = attached.workspace.auto_reorganize
-    ? evaluateReorg(attached, touched)
-    : null;
-
+  const scope = new Set(addedByCategory.keys());
   let payload = attached;
-  let event: ReorgEvent | null = null;
-  if (candidate) {
-    const names = splitNames(candidate, attached);
-    ({ payload, event } = applyReorg(attached, candidate, names));
+  const events: ReorgEvent[] = [];
+
+  if (attached.workspace.auto_reorganize) {
+    // To convergence, capped — same regime as the server's batch (see
+    // BatchResult.events). Each round widens the scope with what the last
+    // operation touched or created.
+    const MAX_ROUNDS = 5;
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const candidate = evaluateReorg(payload, [...scope]);
+      if (!candidate) break;
+      const names = splitNames(candidate, payload);
+      const applied = applyReorg(payload, candidate, names);
+      payload = applied.payload;
+      events.push(applied.event);
+      for (const id of applied.event.affected_category_ids) scope.add(id);
+      for (const id of applied.event.created_category_ids) scope.add(id);
+    }
   }
 
   const nameOf = new Map(payload.categories.map((c) => [c.id, c.name] as const));
@@ -218,7 +233,7 @@ export function runBatchPipeline(
     claimCount,
     skippedCount,
     categories,
-    event,
+    events,
   };
 }
 

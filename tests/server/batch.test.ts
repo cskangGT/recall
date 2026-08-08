@@ -50,8 +50,8 @@ const ITEMS = [
 ];
 
 describe('IngestPipeline.ingestBatch', () => {
-  it('persists every source, suppresses per-item reorgs, and fires the gates once', async () => {
-    const { results, reorg } = await deps.ingest.ingestBatch(
+  it('persists every source, suppresses per-item reorgs, and runs the gates after', async () => {
+    const { results, reorgs } = await deps.ingest.ingestBatch(
       ITEMS.map((i) => ({ workspaceId: WS, type: 'text' as const, content: i.content, title: i.title })),
     );
 
@@ -64,10 +64,10 @@ describe('IngestPipeline.ingestBatch', () => {
     expect(results[1]!.skipped).toHaveLength(2);
     expect(results[2]!.skipped).toHaveLength(2);
 
-    // The demo condition still tips — one split, after everything attached.
-    expect(reorg).not.toBeNull();
-    expect(reorg!.operation).toBe('split');
-    expect(repo.listReorgEvents(WS, 10)).toHaveLength(1);
+    // The demo condition still tips — the first settled operation is the split.
+    expect(reorgs.length).toBeGreaterThanOrEqual(1);
+    expect(reorgs[0]!.operation).toBe('split');
+    expect(repo.listReorgEvents(WS, 10).length).toBe(reorgs.length);
 
     // Every item is a source row — a capture is never lost, in bulk either.
     const sources = repo.listSources(WS);
@@ -78,10 +78,10 @@ describe('IngestPipeline.ingestBatch', () => {
 
   it('honors auto_reorganize off for the batch pass too', async () => {
     repo.setAutoReorganize(WS, false);
-    const { reorg } = await deps.ingest.ingestBatch(
+    const { reorgs } = await deps.ingest.ingestBatch(
       ITEMS.map((i) => ({ workspaceId: WS, type: 'text' as const, content: i.content, title: i.title })),
     );
-    expect(reorg).toBeNull();
+    expect(reorgs).toHaveLength(0);
     expect(repo.listReorgEvents(WS, 10)).toHaveLength(0);
   });
 });
@@ -93,11 +93,11 @@ describe('POST capture/batch', () => {
 
     const body = res.body as {
       results: { sourceId: string; status: string; addedMemoryIds: string[] }[];
-      reorg: { operation: string } | null;
+      reorgs: { operation: string }[];
       graph: GraphPayload;
     };
     expect(body.results).toHaveLength(3);
-    expect(body.reorg!.operation).toBe('split');
+    expect(body.reorgs[0]!.operation).toBe('split');
 
     const graph = validateSeed(body.graph);
     expect(graph.memories).toHaveLength(49);

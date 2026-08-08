@@ -1,4 +1,5 @@
 import type { GraphPayload } from '../core/types';
+import { currentLocale } from '../i18n';
 import { validateSeed } from './validateSeed';
 import workspaceJson from '../../seed/workspace.json';
 
@@ -46,8 +47,8 @@ export interface CaptureBatchResult {
     skipped: { text: string; similarity: number }[];
     note?: string;
   }[];
-  /** The batch's single structural operation, if the gates fired. */
-  reorg: CaptureResult['reorg'];
+  /** Every structural operation the batch settled into, oldest first. */
+  reorgs: NonNullable<CaptureResult['reorg']>[];
   graph: GraphPayload;
 }
 
@@ -139,12 +140,17 @@ export class ApiDataSource implements DataSource {
   }
 
   async capture(input: CaptureInput): Promise<CaptureResult> {
-    const result = await this.post<CaptureResult>('/capture', input);
+    // The locale rides along so category names arrive in the viewer's
+    // language — a name is UI, and the server has no other way to know.
+    const result = await this.post<CaptureResult>('/capture', { ...input, locale: currentLocale() });
     return { ...result, graph: validateSeed(result.graph) };
   }
 
   async captureBatch(items: CaptureInput[]): Promise<CaptureBatchResult> {
-    const result = await this.post<CaptureBatchResult>('/capture/batch', { items });
+    const result = await this.post<CaptureBatchResult>('/capture/batch', {
+      items,
+      locale: currentLocale(),
+    });
     return { ...result, graph: validateSeed(result.graph) };
   }
 

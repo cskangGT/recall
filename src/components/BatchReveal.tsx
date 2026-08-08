@@ -96,14 +96,31 @@ export function BatchReveal() {
               }).replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>'),
             }}
           />
+          {summary.period && (
+            <p className="reveal__period" data-testid="batch-reveal-period">
+              {t('reveal.period', { from: summary.period.from, to: summary.period.to })}
+            </p>
+          )}
           {summary.skipped > 0 && (
             <p className="reveal__skipped">
               {summary.skipped === 1 ? t('reveal.skipped.one') : t('reveal.skipped.many', { count: summary.skipped })}
             </p>
           )}
+          {/* Biggest interests first and biggest on screen — "this is what
+              your mind has been on" should be readable before it is read. */}
           <ul className="reveal__chips">
-            {summary.categories.map((c) => (
-              <li key={c.id} className={`reveal__chip${c.isNew ? ' reveal__chip--new' : ''}`}>
+            {summary.categories.map((c, i) => (
+              <li
+                key={c.id}
+                className={[
+                  'reveal__chip',
+                  c.isNew ? 'reveal__chip--new' : '',
+                  i < 3 ? 'reveal__chip--top' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                style={{ animationDelay: `${i * 90}ms` }}
+              >
                 <span className="reveal__chip-name">{c.name}</span>
                 <span className="reveal__chip-count">{c.added}</span>
                 {c.isNew && <span className="reveal__chip-badge">{t('reveal.new')}</span>}

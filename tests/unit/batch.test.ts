@@ -136,14 +136,15 @@ describe('runBatchPipeline', () => {
     expect(second.payload.memories).toHaveLength(first.payload.memories.length);
   });
 
-  it('applies at most one structural operation per batch (spec 8.4.3)', () => {
+  it('runs the gates to convergence, capped, and reports every operation', () => {
     const items = Array.from({ length: 8 }, (_, i) => ({
       title: `note ${i}`,
       content: `Braintrust eval harness observation number ${i} about the agent tooling stack.`,
     }));
     const result = runBatchPipeline(base, items, NOW);
-    // Whatever happened, it is one event or none — never a list.
-    expect(Array.isArray(result.event)).toBe(false);
+    // A first fill may settle through several operations — but never past the cap.
+    expect(Array.isArray(result.events)).toBe(true);
+    expect(result.events.length).toBeLessThanOrEqual(5);
   });
 
   it('respects auto_reorganize off — memories file, structure holds still', () => {
@@ -152,7 +153,7 @@ describe('runBatchPipeline', () => {
       workspace: { ...base.workspace, auto_reorganize: false },
     };
     const result = runBatchPipeline(frozen, [AI_NOTE, ALIEN_NOTE], NOW);
-    expect(result.event).toBeNull();
+    expect(result.events).toHaveLength(0);
     expect(result.addedMemoryIds.length).toBeGreaterThan(0);
   });
 

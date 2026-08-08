@@ -38,6 +38,8 @@ export interface IngestInput {
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];
+  /** The viewer's language — category names are UI, not content. */
+  locale?: 'en' | 'ko';
 }
 
 export interface IngestResult {
@@ -60,8 +62,17 @@ export interface IngestResult {
 export interface BatchIngestResult {
   /** One per input, in input order. Per-item `reorg` is always null here. */
   results: IngestResult[];
-  /** The single structural operation of the whole batch, if the gates fired. */
-  reorg: ReorgEventRow | null;
+  /**
+   * Every structural operation the batch settled into, oldest first.
+   *
+   * A first fill is a different regime from a daily capture: spec 8.4.3's
+   * one-op-per-ingest exists so a person can absorb one structural idea per
+   * beat, but a bulk import's reveal summarizes the whole result at once —
+   * so the gates run until they go quiet (capped), not once. Ninety-nine
+   * memories that got exactly one split came out as one category holding
+   * eighty-six of them, which is a pile with a name, not a map.
+   */
+  reorgs: ReorgEventRow[];
 }
 
 const now = () => new Date().toISOString();
@@ -204,7 +215,7 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    return this.process(input.workspaceId, source, options);
+    return this.process(input.workspaceId, source, { ...options, locale: input.locale });
   }
 
   /**
@@ -231,7 +242,7 @@ export class IngestPipeline {
       for (const categoryId of result.touchedCategoryIds) touched.add(categoryId);
     }
 
-    let reorg: ReorgEventRow | null = null;
+    const reorgs: ReorgEventRow[] = [];
     const workspaceId = inputs[0]?.workspaceId;
     // The trigger source is the last item that actually landed memories — the
     // capture that tipped the geometry, which is what the column means.
@@ -242,14 +253,30 @@ export class IngestPipeline {
       touched.size > 0 &&
       this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false
     ) {
-      try {
-        reorg = await this.reorganize(workspaceId, trigger.sourceId, [...touched]);
-      } catch {
-        reorg = null; // silent by design — the memories all landed (spec §7.4)
+      /*
+       * Run the gates until they go quiet. Each round widens the scope with
+       * whatever the last operation touched or created — a split's children
+       * are exactly the categories the next round needs to look at. The cap
+       * is a backstop, not a target; the gates converge on their own because
+       * every operation reduces the tension that fired it.
+       */
+      const MAX_ROUNDS = 5;
+      const scope = new Set(touched);
+      const locale = inputs[0]?.locale;
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        try {
+          const reorg = await this.reorganize(workspaceId, trigger.sourceId, [...scope], locale);
+          if (!reorg) break;
+          reorgs.push(reorg);
+          for (const id of reorg.affected_category_ids) scope.add(id);
+          for (const id of reorg.created_category_ids) scope.add(id);
+        } catch {
+          break; // silent by design — the memories all landed (spec §7.4)
+        }
       }
     }
 
-    return { results, reorg };
+    return { results, reorgs };
   }
 
   /**
@@ -277,7 +304,7 @@ export class IngestPipeline {
   private async process(
     workspaceId: string,
     source: SourceRow,
-    options: { reorganize?: boolean } = {},
+    options: { reorganize?: boolean; locale?: 'en' | 'ko' } = {},
   ): Promise<IngestResult> {
     const sourceId = source.id;
     const input = {
@@ -320,7 +347,7 @@ export class IngestPipeline {
       const plan = planAssignments(payload, extracted.memories.map((m) => m.text), vectors);
       // Named before the transaction opens, because this is the one part that
       // has to ask a model and a transaction cannot wait for one.
-      const names = await this.nameNewCategories(input.workspaceId, plan, extracted, payload);
+      const names = await this.nameNewCategories(input.workspaceId, plan, extracted, payload, options.locale);
       const result = this.repo.transaction(() =>
         this.persist(input.workspaceId, sourceId, extracted, vectors, payload, plan, names),
       );
@@ -353,7 +380,7 @@ export class IngestPipeline {
       let reorg: ReorgEventRow | null = null;
       if (options.reorganize !== false && this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
         try {
-          reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds);
+          reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds, options.locale);
         } catch {
           reorg = null;
         }
@@ -391,6 +418,7 @@ export class IngestPipeline {
     plan: PlannedAssignment[],
     extracted: Awaited<ReturnType<AiProvider['extract']>>,
     payload: GraphPayload,
+    locale?: 'en' | 'ko',
   ): Promise<Map<string, string>> {
     const opening = plan.filter((p): p is Extract<PlannedAssignment, { kind: 'new' }> => p.kind === 'new');
     if (opening.length === 0) return new Map();
@@ -408,6 +436,7 @@ export class IngestPipeline {
         sample_texts: [extracted.memories[o.index]!.text],
       })),
       forbiddenNames: [...siblings, ...tombstones],
+      locale,
     });
 
     return new Map(named.map((n) => [n.cluster_id, n.name]));
@@ -574,6 +603,7 @@ export class IngestPipeline {
     workspaceId: string,
     sourceId: string,
     touchedCategoryIds: string[],
+    locale?: 'en' | 'ko',
   ): Promise<ReorgEventRow | null> {
     const before = this.repo.getGraphPayload(workspaceId);
     const candidate = evaluateReorg(before, touchedCategoryIds);
@@ -607,6 +637,7 @@ export class IngestPipeline {
       const named = await this.ai.nameClusters({
         operation: candidate.operation,
         clusters,
+        locale,
         // A split must not reuse the name it is dividing; a merge may keep the
         // surviving category's name, so those names stay allowed.
         forbiddenNames:

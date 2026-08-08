@@ -132,6 +132,8 @@ export interface AiProvider {
     clusters: NameCluster[];
     /** Sibling names the result must not collide with. */
     forbiddenNames: string[];
+    /** The viewer's language — names are UI, not content. */
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]>;
   answer(input: {
     question: string;

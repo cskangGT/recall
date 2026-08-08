@@ -21,7 +21,10 @@ const ORGANIZE_MS = 1900;
 
 let running = false;
 
-export async function ingestBatch(items: BatchItem[]): Promise<void> {
+export async function ingestBatch(
+  items: BatchItem[],
+  meta: { period?: { from: string; to: string } | null } = {},
+): Promise<void> {
   const ws = useWorkspaceStore.getState();
   if (running || !ws.payload || items.length === 0) return;
   running = true;
@@ -64,7 +67,8 @@ export async function ingestBatch(items: BatchItem[]): Promise<void> {
     useWorkspaceStore.getState().applyPayload(result.payload);
     // Putting something in is looking around — same rule as single capture.
     useUiStore.getState().dismissWelcome();
-    if (result.event) useUiStore.getState().pushReorg(result.event);
+    // Oldest first, so the banner (history[0]) ends on the latest change.
+    for (const event of result.events) useUiStore.getState().pushReorg(event);
 
     useUiStore.getState().setBatchReveal({
       phase: 'declare',
@@ -75,6 +79,7 @@ export async function ingestBatch(items: BatchItem[]): Promise<void> {
         skipped: result.skippedCount,
         sources: items.length,
         categories: result.categories,
+        period: meta.period ?? null,
       },
     });
   } catch (err) {
@@ -129,17 +134,15 @@ async function batchViaEndpoint(
         isNew: !knownCategoryIds.has(id),
       }))
       .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
-    event: response.reorg
-      ? {
-          id: response.reorg.id,
-          operation: response.reorg.operation as ReorgEvent['operation'],
-          affected_category_ids: response.reorg.affected_category_ids,
-          created_category_ids: response.reorg.created_category_ids,
-          banner_text: response.reorg.banner_text,
-          before_state: response.graph,
-          created_at: new Date().toISOString(),
-        }
-      : null,
+    events: response.reorgs.map((reorg) => ({
+      id: reorg.id,
+      operation: reorg.operation as ReorgEvent['operation'],
+      affected_category_ids: reorg.affected_category_ids,
+      created_category_ids: reorg.created_category_ids,
+      banner_text: reorg.banner_text,
+      before_state: response.graph,
+      created_at: new Date().toISOString(),
+    })),
   };
 }
 
@@ -162,7 +165,7 @@ async function batchViaApi(
   const addedMemoryIds: string[] = [];
   let skippedCount = 0;
   let failed = 0;
-  let event: ReorgEvent | null = null;
+  const events: ReorgEvent[] = [];
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
@@ -172,7 +175,7 @@ async function batchViaApi(
       addedMemoryIds.push(...result.addedMemoryIds);
       skippedCount += result.skipped?.length ?? 0;
       if (result.reorg) {
-        event = {
+        events.push({
           id: result.reorg.id,
           operation: result.reorg.operation as ReorgEvent['operation'],
           affected_category_ids: result.reorg.affected_category_ids,
@@ -180,7 +183,7 @@ async function batchViaApi(
           banner_text: result.reorg.banner_text,
           before_state: result.graph,
           created_at: new Date().toISOString(),
-        };
+        });
       }
     } catch {
       failed++;
@@ -215,6 +218,6 @@ async function batchViaApi(
         isNew: !knownCategoryIds.has(id),
       }))
       .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
-    event,
+    events,
   };
 }
