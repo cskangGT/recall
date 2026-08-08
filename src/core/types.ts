@@ -115,6 +115,8 @@ export interface GraphNode {
   pinned: boolean;
   /** Parent category id for memories and child categories; null for roots and entities. */
   parentId: string | null;
+  /** Member count for category nodes — drawn into the label so size never has to carry it alone. */
+  count?: number;
 }
 
 export type EdgeKind = 'contains' | 'mentions' | 'relates_to';

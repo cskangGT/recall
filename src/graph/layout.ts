@@ -58,20 +58,52 @@ export function runLayout(
   opts: { ticks?: number } = {},
 ): GraphNode[] {
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const isSeeded = (n: GraphNode): boolean => !(n.x === 0 && n.y === 0);
+
+  /*
+   * Territories before residents.
+   *
+   * A bulk import arrives with no positions at all, so every root category —
+   * and every entity — lands on (0,0). Thirty ticks of a deliberately weak
+   * simulation cannot un-stack four categories and their swarms, which is how
+   * the map became one amber pile. So unseeded roots are dealt onto a ring
+   * around (and clear of) whatever is already composed, and only then does the
+   * simulation resolve the details. Deterministic: same input, same ring.
+   */
+  const seededBound = nodes.filter(isSeeded).reduce(
+    (r, n) => Math.max(r, Math.hypot(n.x, n.y)),
+    0,
+  );
+  const looseRoots = nodes.filter((n) => !isSeeded(n) && !n.parentId && n.kind !== 'entity');
+  const ringRadius = seededBound > 0 ? seededBound + 220 : 240;
+  const phase = looseRoots.length > 0 ? hashToUnit(looseRoots[0]!.id) * Math.PI * 2 : 0;
+  const placedRoots = new Map<string, { x: number; y: number }>();
+  looseRoots.forEach((n, i) => {
+    const angle = phase + (i / looseRoots.length) * Math.PI * 2;
+    placedRoots.set(n.id, {
+      x: Math.cos(angle) * ringRadius,
+      y: Math.sin(angle) * ringRadius,
+    });
+  });
 
   const sim: SimNode[] = nodes.map((n) => {
-    const seeded = !(n.x === 0 && n.y === 0);
+    const seeded = isSeeded(n);
     let x = n.x;
     let y = n.y;
 
-    // A node that arrived without a position starts beside its parent,
-    // deterministically, and is only loosely held there.
-    if (!seeded && n.parentId) {
+    const placed = placedRoots.get(n.id);
+    if (placed) {
+      x = placed.x;
+      y = placed.y;
+    } else if (!seeded && n.parentId) {
+      // A node that arrived without a position starts beside its parent,
+      // deterministically, and is only loosely held there.
       const parent = byId.get(n.parentId);
       if (parent) {
+        const at = placedRoots.get(parent.id) ?? parent;
         const angle = hashToUnit(n.id) * Math.PI * 2;
-        x = parent.x + Math.cos(angle) * 72;
-        y = parent.y + Math.sin(angle) * 72;
+        x = at.x + Math.cos(angle) * 72;
+        y = at.y + Math.sin(angle) * 72;
       }
     }
 
@@ -84,6 +116,27 @@ export function runLayout(
     }
     return copy;
   });
+
+  /*
+   * Entities have no parent, so the pass above leaves an unseeded one at the
+   * origin — and its `mentions` links (strength 0.02) will never carry it to
+   * its memories. Start it at the centroid of the memories that mention it,
+   * nudged apart by a per-id angle so co-mentioned entities do not stack.
+   */
+  const simById0 = new Map(sim.map((n) => [n.id, n]));
+  for (const n of sim) {
+    if (n.kind !== 'entity' || n.seeded) continue;
+    const anchors = edges
+      .filter((e) => e.kind === 'mentions' && e.target === n.id)
+      .map((e) => simById0.get(e.source))
+      .filter((m): m is SimNode => !!m);
+    if (anchors.length === 0) continue;
+    const cx = anchors.reduce((s, m) => s + m.x, 0) / anchors.length;
+    const cy = anchors.reduce((s, m) => s + m.y, 0) / anchors.length;
+    const angle = hashToUnit(n.id) * Math.PI * 2;
+    n.x = n.targetX = cx + Math.cos(angle) * 36;
+    n.y = n.targetY = cy + Math.sin(angle) * 36;
+  }
 
   const simById = new Map(sim.map((n) => [n.id, n]));
   const simEdges: SimEdge[] = edges
@@ -105,7 +158,8 @@ export function runLayout(
     .force(
       'collide',
       forceCollide<SimNode>()
-        .radius((d) => d.radius + 3)
+        // Categories carry a swarm of members; the extra padding is their yard.
+        .radius((d) => (d.kind === 'memory' || d.kind === 'entity' ? d.radius + 3 : d.radius + 14))
         .strength(0.7),
     )
     .velocityDecay(0.5)
@@ -121,5 +175,6 @@ export function runLayout(
     radius: n.radius,
     pinned: n.pinned,
     parentId: n.parentId,
+    count: n.count,
   }));
 }

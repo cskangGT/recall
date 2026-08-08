@@ -303,8 +303,10 @@ describe('hitTest', () => {
     expect(hitTest([big, small], camera, viewport, { sx: 500, sy: 400 })?.id).toBe('mem');
   });
 
-  it('scales the hit radius with zoom', () => {
-    expect(hitTest([big], { x: 0, y: 0, zoom: 2 }, viewport, { sx: 550, sy: 400 })?.id).toBe('cat');
+  it('scales the hit radius with the painted (√zoom-damped) radius', () => {
+    // Categories paint at radius * √zoom — at zoom 4 this node paints at 60px,
+    // so a point 50px out is inside it; at zoom 1 it paints at 30px and misses.
+    expect(hitTest([big], { x: 0, y: 0, zoom: 4 }, viewport, { sx: 550, sy: 400 })?.id).toBe('cat');
     expect(hitTest([big], camera, viewport, { sx: 550, sy: 400 })).toBeNull();
   });
 });

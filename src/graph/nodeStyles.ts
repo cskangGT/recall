@@ -34,19 +34,34 @@ export const MEMORY_ZOOM_CUTOFF = 0;
 export const ENTITY_ZOOM_CUTOFF = 0;
 /** Labels are still staged — 31 entity labels at fit zoom is unreadable. */
 export const CHILD_LABEL_ZOOM_CUTOFF = 0.42;
-export const ENTITY_LABEL_ZOOM_CUTOFF = 1.0;
+export const ENTITY_LABEL_ZOOM_CUTOFF = 1.5;
+/** Below this zoom, entity dots and their `mentions` edges recede to a whisper. */
+export const ENTITY_DIM_ZOOM = 1.0;
 
 export function radiusFor(kind: NodeKind, memberCount: number): number {
   switch (kind) {
     case 'parent_category':
-      return Math.min(44, 28 + memberCount * 1.2);
+      // sqrt, not linear: an 18-memory category should look bigger than a
+      // 2-memory one, not eighteen times more important.
+      return Math.min(40, 17 + Math.sqrt(memberCount) * 5.2);
     case 'child_category':
-      return Math.min(28, 18 + memberCount * 0.9);
+      return Math.min(24, 11 + Math.sqrt(memberCount) * 3.6);
     case 'memory':
       return 6;
     case 'entity':
-      return 10;
+      return 7;
   }
+}
+
+/**
+ * Screen-space radius. Categories and entities are landmarks, not content:
+ * their painted size follows √zoom, so a tightly clustered import (whose fit
+ * zoom lands near the 3× cap) does not fill the frame with amber, and zooming
+ * out does not erase the structure. Memories are content and scale linearly.
+ * hitTest uses this too, so what you see is what you click.
+ */
+export function screenRadius(kind: NodeKind, radius: number, zoom: number): number {
+  return kind === 'memory' ? radius * zoom : radius * Math.sqrt(zoom);
 }
 
 export function colorFor(kind: NodeKind): string {

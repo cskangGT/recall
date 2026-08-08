@@ -230,8 +230,14 @@ export function buildNamePrompt(input: {
     'refusals to decide, not names.',
     '',
     // The names sit in the chrome next to translated labels — mixed-language
-    // shelves read as a bug even when every individual name is good.
-    input.locale === 'ko' ? 'Write the names in Korean (한국어로).' : '',
+    // shelves read as a bug even when every individual name is good. Stated
+    // as a hard rule with an example: the soft version still produced
+    // "CTO Workflow Design" for a Korean viewer over Korean notes.
+    input.locale === 'ko'
+      ? 'Every name MUST be in Korean (한국어). This applies even when the notes below\n' +
+        'are in English — the name is a UI label for a Korean-language viewer.\n' +
+        'An English name is a wrong answer. ("Workflow Design" ✗ → "업무 설계" ✓)'
+      : '',
     '',
     /*
      * The headings below are identifiers, and the model has to be told so.
