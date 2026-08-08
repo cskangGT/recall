@@ -2715,3 +2715,27 @@ body:lang(ko) {
     animation: none;
   }
 }
+
+/* The fill door's disclosed sources — one quiet row, appearing in place. */
+.arc__sources {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+  animation: rise 0.25s ease;
+}
+
+.arc__source {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.arc__source:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}

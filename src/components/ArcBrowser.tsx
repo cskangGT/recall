@@ -12,6 +12,7 @@ import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
 import { startUpgrade } from '../billing/upgrade';
 import { importFiles } from '../capture/importFiles';
+import { importAppleNotesFlow } from '../capture/batchRun';
 import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
@@ -72,6 +73,8 @@ export function ArcBrowser() {
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
   const [dragId, setDragId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fillOpen, setFillOpen] = useState(false);
+  const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -417,6 +420,64 @@ export function ArcBrowser() {
 
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
+  /*
+   * The fill door, shared by both greetings. On an empty workspace it is the
+   * whole point of the screen; on a seeded one it stands beside "look around".
+   * One door either way: when the local Mac server offers a second source it
+   * opens into the choice, otherwise it IS the file picker.
+   */
+  const fillDoor = (
+    <>
+      <button
+        className="arc__door arc__door--fill"
+        data-testid="door-fill"
+        aria-expanded={canImportNotes ? fillOpen : undefined}
+        onClick={() => {
+          if (canImportNotes) setFillOpen((v) => !v);
+          else fileInputRef.current?.click();
+        }}
+      >
+        <span className="arc__door-name">{t('welcome.fill')}</span>
+        <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
+      </button>
+    </>
+  );
+
+  const fillSources = fillOpen && canImportNotes && (
+    <div className="arc__sources" data-testid="fill-sources">
+      <button
+        className="arc__source"
+        data-testid="source-files"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {t('welcome.sourceFiles')}
+      </button>
+      <button
+        className="arc__source"
+        data-testid="source-notes"
+        onClick={() => void importAppleNotesFlow()}
+      >
+        {t('welcome.notes')}
+      </button>
+    </div>
+  );
+
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      multiple
+      hidden
+      data-testid="door-fill-input"
+      accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        if (files.length > 0) void importFiles(files);
+      }}
+    />
+  );
+
   const heading = showingAnswer
     ? t('answer.heading')
     : openRow
@@ -613,6 +674,9 @@ export function ArcBrowser() {
               <>
                 <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
                 <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
+                <div className="arc__doors">{fillDoor}</div>
+                {fillSources}
+                {fileInput}
               </>
             ) : (
               <>
@@ -632,31 +696,13 @@ export function ArcBrowser() {
                   door is the old Enter-to-look-around, given a surface.
                 */}
                 <div className="arc__doors">
-                  <button
-                    className="arc__door arc__door--fill"
-                    data-testid="door-fill"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <span className="arc__door-name">{t('welcome.fill')}</span>
-                    <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
-                  </button>
+                  {fillDoor}
                   <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
                     <span className="arc__door-name">{t('welcome.browse')}</span>
                   </button>
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  data-testid="door-fill-input"
-                  accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files ?? []);
-                    e.target.value = '';
-                    if (files.length > 0) void importFiles(files);
-                  }}
-                />
+                {fillSources}
+                {fileInput}
               </>
             )}
           </div>

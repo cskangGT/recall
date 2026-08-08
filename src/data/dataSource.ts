@@ -52,6 +52,10 @@ export interface CaptureBatchResult {
   graph: GraphPayload;
 }
 
+export interface NotesImportResult extends CaptureBatchResult {
+  notes: { total: number; imported: number; droppedSecretLines: number };
+}
+
 export interface AskResult {
   answer: string;
   citations: { n: number; memory_id: string; source_id: string }[];
@@ -72,6 +76,8 @@ export interface DataSource {
   capture?(input: CaptureInput): Promise<CaptureResult>;
   /** Many items, one reorganization — the server half of the bulk-drop reveal. */
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
+  /** Reads the Mac's Notes.app — only a local darwin server can. */
+  importAppleNotes?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
@@ -149,6 +155,14 @@ export class ApiDataSource implements DataSource {
   async captureBatch(items: CaptureInput[]): Promise<CaptureBatchResult> {
     const result = await this.post<CaptureBatchResult>('/capture/batch', {
       items,
+      locale: currentLocale(),
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async importAppleNotes(days = 14): Promise<NotesImportResult> {
+    const result = await this.post<NotesImportResult>('/import/apple-notes', {
+      days,
       locale: currentLocale(),
     });
     return { ...result, graph: validateSeed(result.graph) };

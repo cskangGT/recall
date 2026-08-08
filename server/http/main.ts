@@ -7,6 +7,7 @@ import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
 import { selectBilling, StripeBilling } from '../billing/stripe.ts';
+import { readAppleNotes } from '../notes/appleNotes.ts';
 import { createApiServer } from './server.ts';
 
 /**
@@ -135,6 +136,8 @@ const server = createApiServer(
     },
     inviteToken: INVITE,
     billing,
+    // Only a Mac can press the Notes button — a hosted box answers 501.
+    readNotes: process.platform === 'darwin' ? readAppleNotes : undefined,
   },
   STATIC_ROOT,
   /*

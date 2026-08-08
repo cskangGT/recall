@@ -94,6 +94,95 @@ export async function ingestBatch(
   }
 }
 
+/**
+ * The Notes button: ask the local server to read Apple Notes, then land the
+ * result in the same reveal a file drop gets. One round trip; the dots pour
+ * on the answer because there is no honest per-note progress to show.
+ */
+export async function importAppleNotesFlow(): Promise<void> {
+  const ws = useWorkspaceStore.getState();
+  const ui = useUiStore.getState();
+  if (running || !ws.payload) return;
+  if (!ws.source.importAppleNotes) {
+    ui.toast(t('toast.notesNeedsLocal'));
+    return;
+  }
+  running = true;
+
+  const reduced =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  ui.setBatchReveal({ phase: 'organizing', total: 1, read: 1, summary: null });
+
+  try {
+    const before = ws.payload;
+    const knownCategoryIds = new Set(before.categories.map((c) => c.id));
+    const response = await ws.source.importAppleNotes();
+
+    if (response.notes.droppedSecretLines > 0) {
+      useUiStore
+        .getState()
+        .toast(t('toast.notesSecrets', { count: response.notes.droppedSecretLines }));
+    }
+    if (response.notes.imported === 0) {
+      useUiStore.getState().setBatchReveal(null);
+      useUiStore.getState().toast(t('toast.notesEmpty'));
+      return;
+    }
+
+    const addedMemoryIds = response.results.flatMap((r) => r.addedMemoryIds);
+    const skippedCount = response.results.reduce((n, r) => n + r.skipped.length, 0);
+    const added = new Set(addedMemoryIds);
+    const byCategory = new Map<string, number>();
+    for (const m of response.graph.memories) {
+      if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
+    }
+    const nameOf = new Map(response.graph.categories.map((c) => [c.id, c.name] as const));
+
+    if (!reduced) await wait(ORGANIZE_MS);
+    useWorkspaceStore.getState().applyPayload(response.graph);
+    useUiStore.getState().dismissWelcome();
+    for (const reorg of response.reorgs) {
+      useUiStore.getState().pushReorg({
+        id: reorg.id,
+        operation: reorg.operation as ReorgEvent['operation'],
+        affected_category_ids: reorg.affected_category_ids,
+        created_category_ids: reorg.created_category_ids,
+        banner_text: reorg.banner_text,
+        before_state: response.graph,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    useUiStore.getState().setBatchReveal({
+      phase: 'declare',
+      total: response.notes.imported,
+      read: response.notes.imported,
+      summary: {
+        memories: addedMemoryIds.length,
+        skipped: skippedCount,
+        sources: response.notes.imported,
+        categories: [...byCategory.entries()]
+          .map(([id, count]) => ({
+            id,
+            name: nameOf.get(id) ?? '',
+            added: count,
+            isNew: !knownCategoryIds.has(id),
+          }))
+          .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+      },
+    });
+  } catch (err) {
+    useUiStore.getState().setBatchReveal(null);
+    useUiStore
+      .getState()
+      .toast(
+        err instanceof Error ? t('toast.batchFailedWith', { message: err.message }) : t('toast.batchFailed'),
+      );
+  } finally {
+    running = false;
+  }
+}
+
 /** The batch endpoint: one round trip, one reorganization, one graph. */
 async function batchViaEndpoint(
   captureBatch: (items: CaptureInput[]) => Promise<CaptureBatchResult>,

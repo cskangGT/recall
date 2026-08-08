@@ -2,6 +2,7 @@ import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
 import type { StripeBilling } from '../billing/stripe.ts';
+import type { NotesReadResult } from '../notes/appleNotes.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -57,6 +58,12 @@ export interface Deps {
   inviteToken?: string;
   /** Absent means billing is not configured and its routes answer 503. */
   billing?: StripeBilling;
+  /**
+   * Reads the Mac's own Notes.app — a capability only a local darwin server
+   * has, injected so the route can be tested without one and a hosted
+   * deployment simply lacks it.
+   */
+  readNotes?: (days: number) => Promise<NotesReadResult>;
 }
 
 const asRecord = (body: unknown): Record<string, unknown> =>
@@ -340,6 +347,66 @@ async function handleWorkspace(
     if (event.status === 'undone') return badRequest('already undone');
     deps.ingest.undo(workspaceId, event);
     return ok({ undone: event.id, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/import/apple-notes — the notes button.
+   *
+   * The web app cannot read Notes; this server, running on the user's own
+   * Mac as the user, can. Reading and redaction live in server/notes; the
+   * items then take the exact same batch path a file drop takes, so the two
+   * ways in can never behave differently.
+   */
+  if (req.method === 'POST' && resource === 'import' && resourceId === 'apple-notes' && !action) {
+    if (!deps.readNotes) {
+      return { status: 501, body: { error: 'this server cannot reach Apple Notes' } };
+    }
+    const body = asRecord(req.body);
+    const days =
+      typeof body.days === 'number' && body.days > 0 ? Math.min(body.days, 3650) : 14;
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+
+    let read: NotesReadResult;
+    try {
+      read = await deps.readNotes(days);
+    } catch (err) {
+      return {
+        status: 502,
+        body: { error: err instanceof Error ? err.message : 'could not read Notes' },
+      };
+    }
+
+    const items = read.notes.slice(0, 100).map((n) => ({
+      workspaceId,
+      type: 'text' as const,
+      title: n.title || n.content.slice(0, 60),
+      content: n.content,
+      locale,
+    }));
+
+    if (items.length === 0) {
+      return ok({
+        results: [], reorgs: [],
+        notes: { total: read.total, imported: 0, droppedSecretLines: read.droppedSecretLines },
+        graph: deps.repo.getGraphPayload(workspaceId),
+      });
+    }
+
+    const { results, reorgs } = await deps.ingest.ingestBatch(items);
+    return ok({
+      results: results.map((r) => ({
+        sourceId: r.sourceId,
+        status: r.status,
+        addedMemoryIds: r.addedMemoryIds,
+        touchedCategoryIds: r.touchedCategoryIds,
+        skipped: r.skipped,
+        note: r.note,
+      })),
+      reorgs,
+      notes: { total: read.total, imported: items.length, droppedSecretLines: read.droppedSecretLines },
+      graph: deps.repo.getGraphPayload(workspaceId),
+    });
   }
 
   /*

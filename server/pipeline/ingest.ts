@@ -184,13 +184,38 @@ export class IngestPipeline {
   private readonly ai: AiProvider;
   private readonly embeddings: EmbeddingProvider;
 
+  /**
+   * All ingest work runs through here, one at a time.
+   *
+   * Spec 5.3 has always said captures process serially — parallel
+   * reorganization of one taxonomy produces conflicting structural decisions —
+   * but nothing enforced it, and the Notes button made the race real: two
+   * imports interleaving transactions on one SQLite connection came out as
+   * FOREIGN KEY failures on perfectly good notes. A promise chain is the whole
+   * queue; the failure of one job must not dam the jobs behind it.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private serialize<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(work, work);
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   constructor(repo: Repository, ai: AiProvider, embeddings: EmbeddingProvider) {
     this.repo = repo;
     this.ai = ai;
     this.embeddings = embeddings;
   }
 
-  async ingest(
+  ingest(input: IngestInput, options: { reorganize?: boolean } = {}): Promise<IngestResult> {
+    return this.serialize(() => this.ingestInner(input, options));
+  }
+
+  private async ingestInner(
     input: IngestInput,
     options: { reorganize?: boolean } = {},
   ): Promise<IngestResult> {
@@ -232,12 +257,18 @@ export class IngestPipeline {
    * a batch that dies at item 17 of 30 with nothing to show would lose the
    * user's trust at the exact moment built to earn it.
    */
-  async ingestBatch(inputs: IngestInput[]): Promise<BatchIngestResult> {
+  ingestBatch(inputs: IngestInput[]): Promise<BatchIngestResult> {
+    // One serialized section for the whole batch — items inside call the
+    // unserialized inner path, or the batch would deadlock behind itself.
+    return this.serialize(() => this.ingestBatchInner(inputs));
+  }
+
+  private async ingestBatchInner(inputs: IngestInput[]): Promise<BatchIngestResult> {
     const results: IngestResult[] = [];
     const touched = new Set<string>();
 
     for (const input of inputs) {
-      const result = await this.ingest(input, { reorganize: false });
+      const result = await this.ingestInner(input, { reorganize: false });
       results.push(result);
       for (const categoryId of result.touchedCategoryIds) touched.add(categoryId);
     }
@@ -289,15 +320,17 @@ export class IngestPipeline {
    * Only failures are retried. Re-running a completed source would extract its
    * memories a second time, and nothing here de-duplicates.
    */
-  async retry(workspaceId: string, sourceId: string): Promise<IngestResult> {
-    const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
-    if (!source) throw new Error(`unknown source ${sourceId}`);
-    if (source.status !== 'failed') {
-      throw new Error(`source ${sourceId} is ${source.status}, not failed`);
-    }
+  retry(workspaceId: string, sourceId: string): Promise<IngestResult> {
+    return this.serialize(async () => {
+      const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
+      if (!source) throw new Error(`unknown source ${sourceId}`);
+      if (source.status !== 'failed') {
+        throw new Error(`source ${sourceId} is ${source.status}, not failed`);
+      }
 
-    this.repo.updateSourceStatus(sourceId, 'processing', { error_message: null });
-    return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
+      this.repo.updateSourceStatus(sourceId, 'processing', { error_message: null });
+      return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
+    });
   }
 
   /** Steps 2-6, shared by a first attempt and a retry. */

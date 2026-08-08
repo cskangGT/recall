@@ -166,6 +166,7 @@ const en = {
   'reveal.askPrompt': 'Now ask your memory something:',
   'reveal.suggested': 'What did I save about {name}?',
   'reveal.period': '{from} – {to} — the weeks you almost let slip away, caught.',
+  'reveal.nothingNew': 'Nothing new to remember — you already have all of this.',
 
   // ---------------------------------------------------------------- banner
   'banner.title': `${PRODUCT} reorganized your map`,
@@ -289,6 +290,11 @@ const en = {
   'toast.movedInto': 'Moved {a} into {b}.',
   'toast.retrySeed': 'Retry needs the server — this is seed mode.',
   'toast.nothingReadable': "Couldn't read those files — text, markdown, or a ZIP export work best.",
+  'toast.notesNeedsLocal': `Connecting Apple Notes needs ${PRODUCT} running on your Mac.`,
+  'toast.notesSecrets': '{count} line(s) looked like credentials and stayed on your Mac.',
+  'toast.notesEmpty': 'No notes from the last two weeks to bring in.',
+  'welcome.notes': "This Mac's notes",
+  'welcome.sourceFiles': 'Files or an Instagram export',
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -369,6 +375,7 @@ const ko: Record<StringKey, string> = {
   'reveal.askPrompt': '이제 당신의 기억에게 물어보세요:',
   'reveal.suggested': '내가 저장한 {name}, 뭐가 있었지?',
   'reveal.period': '{from} ~ {to} — 잃어버릴 뻔했던 시간의 기억을 붙잡았어요.',
+  'reveal.nothingNew': '새로 기억할 것이 없었어요 — 이미 다 갖고 계세요.',
 
   'banner.title': `${PRODUCT}가 지도를 다시 정리했어요`,
   'banner.undo': '되돌리기',
@@ -483,6 +490,11 @@ const ko: Record<StringKey, string> = {
   'toast.movedInto': '{a}를 {b}로 옮겼어요.',
   'toast.retrySeed': '다시 시도는 서버가 필요해요 — 지금은 시드 모드예요.',
   'toast.nothingReadable': '읽을 수 있는 파일이 없어요 — 텍스트, 마크다운, ZIP 내보내기가 가장 잘 돼요.',
+  'toast.notesNeedsLocal': `Apple 메모 연결은 Mac에서 실행 중인 ${PRODUCT}가 필요해요.`,
+  'toast.notesSecrets': '자격증명으로 보이는 {count}줄은 Mac 밖으로 내보내지 않았어요.',
+  'toast.notesEmpty': '최근 2주 안에 가져올 메모가 없어요.',
+  'welcome.notes': '이 Mac의 메모',
+  'welcome.sourceFiles': '파일 · Instagram 내보내기',
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = { en, ko };

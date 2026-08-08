@@ -84,6 +84,9 @@ export function BatchReveal() {
 
       {phase === 'declare' && summary && (
         <div className="reveal__declare" data-testid="batch-reveal-declare">
+          {summary.memories === 0 ? (
+            <h2>{t('reveal.nothingNew')}</h2>
+          ) : (
           <h2
             // The sentence's word order differs per language, so the whole line
             // comes from the dictionary with <b> markers for the numbers.
@@ -96,6 +99,7 @@ export function BatchReveal() {
               }).replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>'),
             }}
           />
+          )}
           {summary.period && (
             <p className="reveal__period" data-testid="batch-reveal-period">
               {t('reveal.period', { from: summary.period.from, to: summary.period.to })}
