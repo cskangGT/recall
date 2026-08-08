@@ -556,3 +556,22 @@ describe('what a source is called', () => {
     expect(source.title).not.toBe('');
   });
 });
+
+describe('reinforcement — duplicates count instead of repeating', () => {
+  it('a re-captured source bumps times_seen on the held memories', async () => {
+    const first = await capture();
+    expect(first.addedMemoryIds).toHaveLength(2);
+
+    const second = await capture();
+    expect(second.addedMemoryIds).toHaveLength(0);
+    expect(second.skipped).toHaveLength(2);
+
+    const memories = repo.listMemories(WS);
+    const reinforced = memories.filter((m) => (m.times_seen ?? 1) > 1);
+    expect(reinforced).toHaveLength(2);
+    for (const m of reinforced) expect(m.times_seen).toBe(2);
+    // And the graph payload carries the count to the client.
+    const payload = repo.getGraphPayload(WS);
+    expect(payload.memories.filter((m) => (m.times_seen ?? 1) > 1)).toHaveLength(2);
+  });
+});

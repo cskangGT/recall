@@ -2739,3 +2739,16 @@ body:lang(ko) {
   border-color: var(--accent-dim);
   color: var(--accent);
 }
+
+/* Reinforcement: the ×N that says a thought keeps coming back. */
+.item__times {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--times {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}

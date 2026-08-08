@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS memories (
   x             REAL,
   y             REAL,
   pinned        INTEGER NOT NULL DEFAULT 0,
+  -- How many times this thought has arrived; duplicates reinforce, not repeat.
+  -- Also added by ensureColumn for databases created before it.
+  times_seen    INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL
 );
 

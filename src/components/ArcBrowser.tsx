@@ -821,6 +821,15 @@ export function ArcBrowser() {
                   {repeatedSource ? '〃' : (source?.title ?? t('inspector.unknown'))}
                 </span>
               </span>
+              {(memory.times_seen ?? 1) > 1 && (
+                <span
+                  className="item__times"
+                  data-testid="item-times"
+                  title={t('reading.times.title', { n: memory.times_seen! })}
+                >
+                  ×{memory.times_seen}
+                </span>
+              )}
               {memory.category_locked && (
                 <span className="item__lock" title={t('reading.lock.title')}>
                   ⦿

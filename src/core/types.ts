@@ -54,6 +54,14 @@ export interface Memory {
   y: number | null;
   pinned: boolean;
   created_at: string;
+  /**
+   * How many times this thought has arrived. A duplicate capture is never
+   * written twice — it *reinforces* what is already held, and the count is
+   * the honest importance signal: saving the same idea three times says more
+   * than any ranking heuristic. Optional because seed payloads predate it;
+   * absent means 1.
+   */
+  times_seen?: number;
 }
 
 export interface Category {

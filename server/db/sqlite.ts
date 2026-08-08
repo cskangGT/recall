@@ -58,6 +58,7 @@ export class SqliteRepository implements Repository {
      * appear here, guarded, so an existing corpus catches up on next start.
      */
     this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
+    this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
   }
 
   /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
@@ -279,7 +280,12 @@ export class SqliteRepository implements Repository {
       y: (r.y as number | null) ?? null,
       pinned: bool(r.pinned),
       created_at: r.created_at as string,
+      times_seen: (r.times_seen as number | undefined) ?? 1,
     }));
+  }
+
+  reinforceMemory(id: string): void {
+    this.db.prepare('UPDATE memories SET times_seen = times_seen + 1 WHERE id = ?').run(id);
   }
 
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void {

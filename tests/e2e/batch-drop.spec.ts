@@ -85,8 +85,10 @@ test('a second identical drop writes nothing twice', async ({ page }) => {
 
   await dropFiles(page, FILES);
   await expect(page.getByTestId('batch-reveal-declare')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('batch-reveal-declare')).toContainText('Organized 0 memories');
-  expect(firstDeclaration).not.toContain('Organized 0 memories');
+  await expect(page.getByTestId('batch-reveal-declare')).toContainText('Nothing new to remember');
+  // And the return visits are counted out loud, not swallowed.
+  await expect(page.getByTestId('batch-reveal-declare')).toContainText('came back again');
+  expect(firstDeclaration).not.toContain('Nothing new to remember');
 });
 
 test('a single file drop keeps the single-capture path', async ({ page }) => {

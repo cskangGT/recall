@@ -94,7 +94,15 @@ const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice
  * that says two related things opens two categories for them.
  */
 export type PlannedAssignment =
-  | { kind: 'skip'; index: number; text: string; similarity: number }
+  | {
+      kind: 'skip';
+      index: number;
+      text: string;
+      similarity: number;
+      /** The held memory this arrival reinforces — absent when it duplicates
+       *  something from this same batch that has no id yet. */
+      reinforcesMemoryId?: string;
+    }
   | { kind: 'existing'; index: number; categoryId: string; score: number }
   /** Joins a category an earlier memory in this same batch opened. */
   | { kind: 'joins'; index: number; clusterId: string; score: number }
@@ -122,7 +130,25 @@ export function planAssignments(
      * being discarded, and so it contributes no provisional profile of its own.
      */
     if (decision.score >= DUPLICATE_SIMILARITY) {
-      plan.push({ kind: 'skip', index, text, similarity: decision.score });
+      /*
+       * A duplicate is a signal, not noise: the same thought arriving again is
+       * the most honest importance measure there is. Find the held memory it
+       * echoes so persist() can count it — times_seen is what the UI ranks,
+       * sizes and says "this thought keeps coming back" with.
+       */
+      let nearest: { id: string; score: number } | null = null;
+      for (const m of payload.memories) {
+        const score = cosine(vector, m.vector);
+        if (!nearest || score > nearest.score) nearest = { id: m.id, score };
+      }
+      plan.push({
+        kind: 'skip',
+        index,
+        text,
+        similarity: decision.score,
+        reinforcesMemoryId:
+          nearest && nearest.score >= DUPLICATE_SIMILARITY ? nearest.id : undefined,
+      });
       return;
     }
 
@@ -506,6 +532,7 @@ export class IngestPipeline {
       const step = plan[i]!;
       if (step.kind === 'skip') {
         skipped.push({ text: step.text, similarity: step.similarity });
+        if (step.reinforcesMemoryId) this.repo.reinforceMemory(step.reinforcesMemoryId);
         return;
       }
 

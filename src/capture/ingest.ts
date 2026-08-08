@@ -152,10 +152,22 @@ export async function ingestItem(input?: CaptureInput): Promise<IngestResult> {
     return { event: null, addedMemoryIds: [], targetCategoryId: null, alreadyHeld };
   }
 
+  // What was already held is not rewritten — it is counted. `of` is the held
+  // memory each skipped candidate echoes; its times_seen is the visible trace.
+  const reinforcedIds = new Map<string, number>();
+  for (const sk of skipped) {
+    reinforcedIds.set(sk.of.id, (reinforcedIds.get(sk.of.id) ?? 0) + 1);
+  }
+  const withReinforcement = ws.payload.memories.map((m) =>
+    reinforcedIds.has(m.id)
+      ? { ...m, times_seen: (m.times_seen ?? 1) + reinforcedIds.get(m.id)! }
+      : m,
+  );
+
   const attached: GraphPayload = {
     ...ws.payload,
     sources: [...ws.payload.sources, demoItem.source as Source],
-    memories: [...ws.payload.memories, ...newMemories],
+    memories: [...withReinforcement, ...newMemories],
   };
 
   const touched = [...new Set(newMemories.map((m) => m.category_id))];

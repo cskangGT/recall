@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
+import { relatedMemories } from '../core/related';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
@@ -204,6 +205,7 @@ function CategoryDetail({
 }
 
 function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPayload }) {
+  const related = relatedMemories(payload, memory.id);
   const select = useUiStore((s) => s.select);
   const category = payload.categories.find((c) => c.id === memory.category_id);
   const source = payload.sources.find((s) => s.id === memory.source_id);
@@ -220,6 +222,11 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
           </button>
         )}
         <span className="chip">{memory.kind}</span>
+        {(memory.times_seen ?? 1) > 1 && (
+          <span className="chip chip--times" data-testid="times-chip">
+            {t('inspector.timesSeen', { n: memory.times_seen! })}
+          </span>
+        )}
         {memory.category_locked && <span className="chip chip--lock">{t('inspector.movedLock')}</span>}
       </div>
       {entities.length > 0 && (
@@ -232,6 +239,14 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
         </div>
       )}
       {source && <SourceCard source={source} />}
+      {related.length > 0 && (
+        <>
+          <div className="inspector__eyebrow">{t('inspector.related')}</div>
+          {related.map(({ memory: m }) => (
+            <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
+          ))}
+        </>
+      )}
       <div className="inspector__footer">
         <DeleteButton
           label={t('inspector.deleteMemoryLabel')}

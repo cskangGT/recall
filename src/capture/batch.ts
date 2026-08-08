@@ -1,5 +1,6 @@
 import type { Category, GraphPayload, Memory, Source } from '../core/types';
 import { assignMemory, categoryProfiles, type CategoryProfile } from '../core/assign';
+import { cosine } from '../core/vectorMath';
 import { DUPLICATE_SIMILARITY } from '../core/thresholds';
 import { evaluateReorg, type ReorgCandidate } from '../core/gates';
 import { applyReorg, type ReorgEvent } from '../core/applyReorg';
@@ -103,6 +104,8 @@ export function runBatchPipeline(
   };
 
   const anchorCorpus = () => [...base.memories, ...memories];
+  /** Held memories this batch met again — id → extra times seen. */
+  const reinforced = new Map<string, number>();
 
   for (const item of items) {
     const claims = extractClaims(item.content);
@@ -124,10 +127,17 @@ export function runBatchPipeline(
       const vector = localVector(text, anchorCorpus());
       const decision = assignMemory(vector, profiles);
 
-      // Something already held is not written a second time — decision.score is
-      // the nearest neighbour across corpus and batch alike.
+      // Something already held is not written a second time — it reinforces.
+      // The count is the honest importance signal: the same thought arriving
+      // three times says more than any ranking heuristic.
       if (decision.score >= DUPLICATE_SIMILARITY) {
         skippedCount++;
+        let nearest: { id: string; score: number } | null = null;
+        for (const m of anchorCorpus()) {
+          const score = cosine(vector, m.vector);
+          if (!nearest || score > nearest.score) nearest = { id: m.id, score };
+        }
+        if (nearest) reinforced.set(nearest.id, (reinforced.get(nearest.id) ?? 0) + 1);
         continue;
       }
 
@@ -185,10 +195,15 @@ export function runBatchPipeline(
     forbidden.push(o.category.name);
   }
 
+  const bump = (m: Memory): Memory =>
+    reinforced.has(m.id)
+      ? { ...m, times_seen: (m.times_seen ?? 1) + reinforced.get(m.id)! }
+      : m;
+
   const attached: GraphPayload = {
     ...base,
     sources: [...base.sources, ...sources],
-    memories: [...base.memories, ...memories],
+    memories: [...base.memories.map(bump), ...memories.map(bump)],
     categories: [...base.categories, ...opened.map((o) => o.category)],
   };
 

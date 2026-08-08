@@ -73,6 +73,8 @@ export interface Repository {
   listSources(workspaceId: string): SourceRow[];
 
   insertMemories(workspaceId: string, memories: Memory[]): void;
+  /** A duplicate arrival strengthens what is already held — never rewrites it. */
+  reinforceMemory(id: string): void;
   listMemories(workspaceId: string): Memory[];
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void;
   /**
