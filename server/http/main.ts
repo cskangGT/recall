@@ -8,6 +8,7 @@ import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
 import { selectBilling, StripeBilling } from '../billing/stripe.ts';
 import { readAppleNotes } from '../notes/appleNotes.ts';
+import { readNotionPages } from '../notion/notionPages.ts';
 import { createApiServer } from './server.ts';
 
 /**
@@ -30,6 +31,8 @@ const DB_PATH = process.env.RECALL_DB ?? ':memory:';
 const STATIC_ROOT = process.env.RECALL_STATIC;
 /** Required for a public deployment; absent means every request may write. */
 const INVITE = process.env.RECALL_INVITE;
+/** An internal-integration token turns the Notion source on. */
+const NOTION_TOKEN = process.env.NOTION_TOKEN;
 
 /**
  * An empty workspace, or the fictional 47.
@@ -70,6 +73,7 @@ console.log(`ai provider: ${provider.name} (${reason})`);
 
 const billingConfig = selectBilling();
 const billing = billingConfig ? new StripeBilling(billingConfig) : undefined;
+console.log(NOTION_TOKEN ? 'notion: connected' : 'notion: off (no NOTION_TOKEN)');
 console.log(
   billing
     ? `billing: stripe ${billingConfig!.livemode ? 'LIVE' : 'test'} mode` +
@@ -138,6 +142,7 @@ const server = createApiServer(
     billing,
     // Only a Mac can press the Notes button — a hosted box answers 501.
     readNotes: process.platform === 'darwin' ? readAppleNotes : undefined,
+    readNotionPages: NOTION_TOKEN ? (days) => readNotionPages(NOTION_TOKEN, days) : undefined,
   },
   STATIC_ROOT,
   /*

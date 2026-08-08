@@ -78,6 +78,8 @@ export interface DataSource {
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
   /** Reads the Mac's Notes.app — only a local darwin server can. */
   importAppleNotes?(days?: number): Promise<NotesImportResult>;
+  /** Reads Notion pages — present when the server holds a token. */
+  importNotionPages?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
@@ -162,6 +164,14 @@ export class ApiDataSource implements DataSource {
 
   async importAppleNotes(days = 14): Promise<NotesImportResult> {
     const result = await this.post<NotesImportResult>('/import/apple-notes', {
+      days,
+      locale: currentLocale(),
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async importNotionPages(days = 14): Promise<NotesImportResult> {
+    const result = await this.post<NotesImportResult>('/import/notion', {
       days,
       locale: currentLocale(),
     });

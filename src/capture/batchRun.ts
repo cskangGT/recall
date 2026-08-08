@@ -95,15 +95,28 @@ export async function ingestBatch(
 }
 
 /**
- * The Notes button: ask the local server to read Apple Notes, then land the
- * result in the same reveal a file drop gets. One round trip; the dots pour
- * on the answer because there is no honest per-note progress to show.
+ * A reader-import: ask the server to read a connected source (Apple Notes,
+ * Notion, whatever comes next), then land the result in the same reveal a
+ * file drop gets. One round trip; the dots pour on the answer because there
+ * is no honest per-item progress to show.
  */
 export async function importAppleNotesFlow(): Promise<void> {
+  const source = useWorkspaceStore.getState().source;
+  return runReaderImport(source.importAppleNotes?.bind(source));
+}
+
+export async function importNotionFlow(): Promise<void> {
+  const source = useWorkspaceStore.getState().source;
+  return runReaderImport(source.importNotionPages?.bind(source));
+}
+
+async function runReaderImport(
+  read: (() => Promise<import('../data/dataSource').NotesImportResult>) | undefined,
+): Promise<void> {
   const ws = useWorkspaceStore.getState();
   const ui = useUiStore.getState();
   if (running || !ws.payload) return;
-  if (!ws.source.importAppleNotes) {
+  if (!read) {
     ui.toast(t('toast.notesNeedsLocal'));
     return;
   }
@@ -116,7 +129,7 @@ export async function importAppleNotesFlow(): Promise<void> {
   try {
     const before = ws.payload;
     const knownCategoryIds = new Set(before.categories.map((c) => c.id));
-    const response = await ws.source.importAppleNotes();
+    const response = await read();
 
     if (response.notes.droppedSecretLines > 0) {
       useUiStore

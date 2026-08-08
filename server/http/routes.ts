@@ -64,6 +64,8 @@ export interface Deps {
    * deployment simply lacks it.
    */
   readNotes?: (days: number) => Promise<NotesReadResult>;
+  /** Reads Notion pages via the official API — present when a token is configured. */
+  readNotionPages?: (days: number) => Promise<NotesReadResult>;
 }
 
 const asRecord = (body: unknown): Record<string, unknown> =>
@@ -350,17 +352,24 @@ async function handleWorkspace(
   }
 
   /*
-   * POST /api/workspaces/:id/import/apple-notes — the notes button.
+   * POST /api/workspaces/:id/import/apple-notes
+   * POST /api/workspaces/:id/import/notion
    *
-   * The web app cannot read Notes; this server, running on the user's own
-   * Mac as the user, can. Reading and redaction live in server/notes; the
-   * items then take the exact same batch path a file drop takes, so the two
-   * ways in can never behave differently.
+   * Two doors, one handler. Each source is an injected reader capability —
+   * Apple Notes exists only on a local Mac, Notion only when a token is
+   * configured — and everything a reader returns takes the exact same batch
+   * path a file drop takes, so no two ways in can behave differently.
    */
-  if (req.method === 'POST' && resource === 'import' && resourceId === 'apple-notes' && !action) {
-    if (!deps.readNotes) {
-      return { status: 501, body: { error: 'this server cannot reach Apple Notes' } };
+  if (req.method === 'POST' && resource === 'import' && resourceId && !action) {
+    const reader =
+      resourceId === 'apple-notes' ? deps.readNotes
+      : resourceId === 'notion' ? deps.readNotionPages
+      : undefined;
+    if (resourceId !== 'apple-notes' && resourceId !== 'notion') return notFound();
+    if (!reader) {
+      return { status: 501, body: { error: `this server cannot reach ${resourceId}` } };
     }
+
     const body = asRecord(req.body);
     const days =
       typeof body.days === 'number' && body.days > 0 ? Math.min(body.days, 3650) : 14;
@@ -369,11 +378,11 @@ async function handleWorkspace(
 
     let read: NotesReadResult;
     try {
-      read = await deps.readNotes(days);
+      read = await reader(days);
     } catch (err) {
       return {
         status: 502,
-        body: { error: err instanceof Error ? err.message : 'could not read Notes' },
+        body: { error: err instanceof Error ? err.message : `could not read ${resourceId}` },
       };
     }
 

@@ -294,6 +294,7 @@ const en = {
   'toast.notesSecrets': '{count} line(s) looked like credentials and stayed on your Mac.',
   'toast.notesEmpty': 'No notes from the last two weeks to bring in.',
   'welcome.notes': "This Mac's notes",
+  'welcome.notion': 'Notion pages',
   'welcome.sourceFiles': 'Files or an Instagram export',
 } as const;
 
@@ -494,6 +495,7 @@ const ko: Record<StringKey, string> = {
   'toast.notesSecrets': '자격증명으로 보이는 {count}줄은 Mac 밖으로 내보내지 않았어요.',
   'toast.notesEmpty': '최근 2주 안에 가져올 메모가 없어요.',
   'welcome.notes': '이 Mac의 메모',
+  'welcome.notion': 'Notion 페이지',
   'welcome.sourceFiles': '파일 · Instagram 내보내기',
 };
 

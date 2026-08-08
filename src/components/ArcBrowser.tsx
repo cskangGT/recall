@@ -12,7 +12,7 @@ import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
 import { startUpgrade } from '../billing/upgrade';
 import { importFiles } from '../capture/importFiles';
-import { importAppleNotesFlow } from '../capture/batchRun';
+import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
 import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
@@ -75,6 +75,8 @@ export function ArcBrowser() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fillOpen, setFillOpen] = useState(false);
   const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
+  const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
+  const hasSourceChoices = canImportNotes || canImportNotion;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -431,9 +433,9 @@ export function ArcBrowser() {
       <button
         className="arc__door arc__door--fill"
         data-testid="door-fill"
-        aria-expanded={canImportNotes ? fillOpen : undefined}
+        aria-expanded={hasSourceChoices ? fillOpen : undefined}
         onClick={() => {
-          if (canImportNotes) setFillOpen((v) => !v);
+          if (hasSourceChoices) setFillOpen((v) => !v);
           else fileInputRef.current?.click();
         }}
       >
@@ -443,7 +445,7 @@ export function ArcBrowser() {
     </>
   );
 
-  const fillSources = fillOpen && canImportNotes && (
+  const fillSources = fillOpen && hasSourceChoices && (
     <div className="arc__sources" data-testid="fill-sources">
       <button
         className="arc__source"
@@ -452,13 +454,24 @@ export function ArcBrowser() {
       >
         {t('welcome.sourceFiles')}
       </button>
-      <button
-        className="arc__source"
-        data-testid="source-notes"
-        onClick={() => void importAppleNotesFlow()}
-      >
-        {t('welcome.notes')}
-      </button>
+      {canImportNotes && (
+        <button
+          className="arc__source"
+          data-testid="source-notes"
+          onClick={() => void importAppleNotesFlow()}
+        >
+          {t('welcome.notes')}
+        </button>
+      )}
+      {canImportNotion && (
+        <button
+          className="arc__source"
+          data-testid="source-notion"
+          onClick={() => void importNotionFlow()}
+        >
+          {t('welcome.notion')}
+        </button>
+      )}
     </div>
   );
 
