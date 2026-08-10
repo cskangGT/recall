@@ -26,9 +26,16 @@ import { t } from '../i18n';
 export function Composer({
   firstRun = false,
   onSubmitted,
+  placeholder,
 }: {
   firstRun?: boolean;
   onSubmitted?: () => void;
+  /**
+   * A context-aware suggestion — the placeholder is the one place the app can
+   * recommend a question without taking up any room. ArcBrowser passes one
+   * built from whatever is open; absent, the generic invitation stands.
+   */
+  placeholder?: string;
 }) {
   const payload = useWorkspaceStore((s) => s.payload);
 
@@ -71,7 +78,7 @@ export function Composer({
            several readers do not announce it at all — this input had no
            accessible name whatsoever. */
         aria-label={t('composer.ask')}
-        placeholder={t('composer.placeholder')}
+        placeholder={placeholder ?? t('composer.placeholder')}
         value={text}
         /*
          * Never disabled. Disabling blurs, and losing focus mid-think hands

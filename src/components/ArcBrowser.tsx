@@ -14,6 +14,7 @@ import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../
 import { startUpgrade } from '../billing/upgrade';
 import { importFiles } from '../capture/importFiles';
 import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
+import { runAsk } from '../ask/runAsk';
 import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
@@ -532,6 +533,34 @@ export function ArcBrowser() {
       ? openRow.label
       : t('welcome.prompt');
 
+  /*
+   * The composer's placeholder is the one place a question can be recommended
+   * without taking up any room — so it follows the eye: a selected keyword
+   * beats the open category, the open category beats the generic invitation.
+   * The two category templates alternate by name so the suggestion does not
+   * fossilize into furniture.
+   */
+  const composerHint = (() => {
+    if (showingAnswer || !openRow) return undefined;
+    const kw = lensKeywords[lensKeywords.length - 1];
+    if (kw) return t('composer.ph.keyword', { kw });
+    const sum = [...openRow.label].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+    return sum % 2 === 0
+      ? t('composer.ph.decisions', { name: openRow.label })
+      : t('composer.ph.overview', { name: openRow.label });
+  })();
+
+  const canAsk = Boolean(useWorkspaceStore.getState().source.ask);
+  const summarize = () => {
+    if (!openRow) return;
+    const kw = lensKeywords[lensKeywords.length - 1];
+    void runAsk(
+      kw
+        ? t('ask.summarizeKw', { name: openRow.label, kw })
+        : t('ask.summarize', { name: openRow.label }),
+    );
+  };
+
   return (
     /*
      * `--dragging` while something is in the air, so the arc can show where it
@@ -758,12 +787,30 @@ export function ArcBrowser() {
 
       {/* The conversation never moves. It is docked here on the first frame and
           stays docked; there is no welcome screen for it to travel from. */}
-      <Composer firstRun={!welcomeDismissed} onSubmitted={dismissWelcome} />
+      <Composer
+        firstRun={!welcomeDismissed}
+        onSubmitted={dismissWelcome}
+        placeholder={composerHint}
+      />
 
       {isOpen && (
       <div className="reading" data-testid="reading-list" style={{ top: geometry.listTop }}>
         <div className="reading__head">
           <span>{heading}</span>
+          {/* One click from looking to understanding — but only where a model
+              is connected. The scripted demo answerer cannot summarize an
+              arbitrary list honestly, and a button that produces a refusal is
+              worse than no button (same rule as the reveal's bridge). */}
+          {!showingAnswer && openRow && canAsk && (
+            <button
+              className="reading__summarize"
+              data-testid="reading-summarize"
+              title={t('reading.summarize.title')}
+              onClick={summarize}
+            >
+              {t('reading.summarize')}
+            </button>
+          )}
           {/* "Folder" was left over from the two-pane list this replaced, and
               then survived a stone and a star. There is nothing on this screen
               a person would call a folder; what is above them is a category

@@ -1515,6 +1515,26 @@ button {
   letter-spacing: 0.02em;
 }
 
+/* One click from looking to understanding. Sits beside the category's name,
+   quiet until hovered — it is an offer, not a demand. */
+.reading__summarize {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.reading__summarize:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
 .reading__answer {
   margin: 2px 0 18px;
   padding: 0 10px;
