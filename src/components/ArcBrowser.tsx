@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
 import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
 import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
+import { filterByKeywords, keywordsFor } from '../arc/keywords';
 import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
@@ -276,6 +277,40 @@ export function ArcBrowser() {
   const archivedCount = showingAnswer
     ? 0
     : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
+
+  /*
+   * The keyword lens. Sentences have to be read; keywords can be scanned — so
+   * an open category leads with chips, and each pick narrows the list and
+   * re-derives the chips from what is left. Flat categories drill down just as
+   * well as nested ones this way. Selection resets on every navigation: a lens
+   * carried from one category into another would silently show a subset.
+   */
+  const [lensKeywords, setLensKeywords] = useState<string[]>([]);
+  useEffect(() => setLensKeywords([]), [openCategoryId]);
+
+  // Derived from readable rows only: an archived memory's text is behind the
+  // paywall, and a chip that quotes it would be reading it out loud.
+  const readable = useMemo(
+    () =>
+      showingAnswer
+        ? contents
+        : contents.filter((m) => !isArchivedByPlan(m.created_at, planCutoff)),
+    [contents, showingAnswer, planCutoff],
+  );
+  const lensed = useMemo(
+    () => (payload ? filterByKeywords(readable, lensKeywords, payload) : readable),
+    [readable, lensKeywords, payload],
+  );
+  const lensChips = useMemo(
+    () => (payload && !showingAnswer ? keywordsFor(lensed, lensKeywords, payload) : []),
+    [lensed, lensKeywords, payload, showingAnswer],
+  );
+  /** What the reading list renders. Archived rows step back while a lens is on. */
+  const visibleRows = useMemo(() => {
+    if (showingAnswer) return contents;
+    if (lensKeywords.length > 0) return lensed;
+    return contents;
+  }, [contents, lensed, lensKeywords.length, showingAnswer]);
 
   const goTo = (levelId: string | null, back: boolean) => {
     setPage(0);
@@ -744,14 +779,51 @@ export function ArcBrowser() {
           </p>
         )}
 
-        {contents.map((memory, index) => {
+        {!showingAnswer && (lensKeywords.length > 0 || lensChips.length > 0) && (
+          <div
+            className="reading__keywords"
+            data-testid="keyword-strip"
+            role="group"
+            aria-label={t('keywords.aria')}
+          >
+            {lensKeywords.map((k) => (
+              <button
+                key={k}
+                className="kw kw--selected"
+                data-testid={`kw-selected-${k}`}
+                title={t('keywords.remove')}
+                onClick={() => setLensKeywords((s) => s.filter((x) => x !== k))}
+              >
+                {k}
+                <span className="kw__x" aria-hidden="true">
+                  ×
+                </span>
+              </button>
+            ))}
+            {lensChips.map((c) => (
+              <button
+                key={c.label}
+                className={`kw${c.kind === 'entity' ? ' kw--entity' : ''}`}
+                data-testid={`kw-${c.label}`}
+                title={t('keywords.chip.title')}
+                onClick={() => setLensKeywords((s) => [...s, c.label])}
+              >
+                {c.label}
+                <span className="kw__count">{c.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {visibleRows.map((memory, index) => {
           const source = payload.sources.find((s) => s.id === memory.source_id);
           const home = payload.categories.find((c) => c.id === memory.category_id);
           const archived = !showingAnswer && isArchivedByPlan(memory.created_at, planCutoff);
           // Several memories from one capture sit together in the list; naming
           // the source once per run reads as provenance, once per row as an
           // echo — the screen looked like it was stuttering.
-          const repeatedSource = index > 0 && contents[index - 1]!.source_id === memory.source_id;
+          const repeatedSource =
+            index > 0 && visibleRows[index - 1]!.source_id === memory.source_id;
           if (archived) {
             return (
               <div
