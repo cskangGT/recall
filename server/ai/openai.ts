@@ -1,14 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
-  NormalizeInput, NormalizeResult, RetrievedMemory,
+  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, MergeDraft, NameCluster,
+  NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
 } from './provider.ts';
 import {
-  answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt, buildNormalizePrompt,
-  coerceExtract, coerceNormalize, extractSchema, nameByFallback, nameSchema, normalizeSchema,
-  resolveAnswer, resolveNames,
+  answerSchema, buildAnswerPrompt, buildExtractPrompt, buildMergePrompt, buildNamePrompt,
+  buildNormalizePrompt, coerceExtract, coerceMerge, coerceNormalize, extractSchema, mergeSchema,
+  nameByFallback, nameSchema, normalizeSchema, resolveAnswer, resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
@@ -311,6 +311,13 @@ export class OpenAiProvider implements AiProvider {
     history?: AskTurn[];
   }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
+  }
+
+  async mergeMemories(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft> {
+    return coerceMerge(
+      await this.json(buildMergePrompt(input), 'merge', mergeSchema, 2048),
+      input.texts,
+    );
   }
 }
 

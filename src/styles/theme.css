@@ -1545,6 +1545,90 @@ button {
   text-wrap: pretty;
 }
 
+/* -------------------------------------------------------------- user merge */
+
+/*
+ * The merge card: AI explains why two memories overlap and drafts the one
+ * text that holds everything; the person decides. It sits under the related
+ * row it belongs to, indented like a reply.
+ */
+.merge__offer {
+  margin: 2px 0 8px 12px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--accent-dim);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.merge__offer:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.merge {
+  margin: 4px 0 12px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+}
+
+.merge__eyebrow {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.merge__reason,
+.merge__text,
+.merge__note {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.merge__note {
+  color: var(--text-dim);
+  margin-bottom: 0;
+}
+
+.merge__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.merge__confirm {
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.merge__confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.merge__cancel {
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
 /* ------------------------------------------------------------ keyword lens */
 
 /*

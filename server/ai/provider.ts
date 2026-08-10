@@ -141,6 +141,21 @@ export interface AiProvider {
     /** Recent exchanges, oldest first — absent on a fresh question. */
     history?: AskTurn[];
   }): Promise<AnswerResult>;
+  /**
+   * Optional: says why these memories overlap and writes the one memory that
+   * holds every distinct fact from all of them. The user decides whether the
+   * merge happens; the model only explains and drafts. Providers that cannot
+   * do this honestly (the fixture) simply do not have it, and the route
+   * answers 501.
+   */
+  mergeMemories?(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft>;
+}
+
+export interface MergeDraft {
+  /** One or two sentences: why these say overlapping things. Viewer language. */
+  reason: string;
+  /** The single memory that preserves every distinct fact. Source language. */
+  merged_text: string;
 }
 
 // ---------------------------------------------------------------- naming validation

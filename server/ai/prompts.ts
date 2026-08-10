@@ -1,5 +1,5 @@
 import type {
-  AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, NameCluster, NamedCluster,
+  AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, MergeDraft, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
@@ -431,4 +431,59 @@ export function resolveAnswer(raw: unknown, retrieved: RetrievedMemory[]): {
     return { answer: '', citations: [], refused: true };
   }
   return { answer, citations, refused: false };
+}
+
+// ---------------------------------------------------------------------- merge
+
+export const mergeSchema = {
+  type: 'object',
+  properties: {
+    reason: { type: 'string' },
+    merged_text: { type: 'string' },
+  },
+  required: ['reason', 'merged_text'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The user is deciding whether to merge; the model explains and drafts.
+ *
+ * Two hard rules, both stated as rules because soft phrasings have failed
+ * before in this file: nothing may be lost (the merged text must carry every
+ * distinct fact), and nothing may be added (a merge is a rewrite of what is
+ * there, not a synthesis of what might be). The reason is UI and follows the
+ * viewer's language; the merged text is content and stays in the source's.
+ */
+export function buildMergePrompt(input: { texts: string[]; locale?: 'en' | 'ko' }): string {
+  const lines = [
+    'A person saved these memories separately and suspects they say overlapping',
+    'things. Help them decide whether to keep one instead of several.',
+    '',
+    'Return two fields:',
+    '- `reason`: one or two sentences on what these have in common — why a',
+    '  person might want them as one memory. This is shown before they decide.',
+    input.locale === 'ko'
+      ? '  Write `reason` in Korean (한국어) — it is UI for a Korean-language viewer.'
+      : '',
+    '- `merged_text`: ONE memory that preserves EVERY distinct fact, number,',
+    '  name and nuance from ALL of them. Nothing may be lost. Nothing may be',
+    '  added — no fact that does not appear below. Where two lines say the same',
+    '  thing, say it once; where they differ, keep both differences. Write it',
+    '  in the same language the memories themselves are written in.',
+    '',
+    'The memories:',
+    ...input.texts.map((t, i) => `${i + 1}. ${t}`),
+  ];
+  return lines.filter((l) => l !== '').join('\n');
+}
+
+export function coerceMerge(raw: unknown, fallbackTexts: string[]): MergeDraft {
+  const o = (raw ?? {}) as { reason?: unknown; merged_text?: unknown };
+  const merged = typeof o.merged_text === 'string' ? o.merged_text.trim() : '';
+  return {
+    reason: typeof o.reason === 'string' ? o.reason.trim() : '',
+    // A model that returns nothing must not cost the user their content — the
+    // honest fallback is the originals, joined, which loses nothing either.
+    merged_text: merged.length > 0 ? merged : fallbackTexts.join(' · '),
+  };
 }

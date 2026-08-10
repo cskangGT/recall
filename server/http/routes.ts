@@ -491,6 +491,53 @@ async function handleWorkspace(
   }
 
   /*
+   * POST /api/workspaces/:id/memories/merge-preview — the AI's half of a
+   * user-driven merge: why these overlap, and the one text that would hold
+   * everything. Writes nothing; the user is about to decide.
+   *
+   * POST /api/workspaces/:id/memories/merge — applies a merge the user
+   * confirmed, with the exact text they saw. Entity links union, times_seen
+   * sums, the originals' sources stay; only the redundant rows go.
+   */
+  if (
+    req.method === 'POST' && resource === 'memories' &&
+    (resourceId === 'merge-preview' || resourceId === 'merge') && !action
+  ) {
+    const body = asRecord(req.body);
+    const memoryIds = Array.isArray(body.memoryIds)
+      ? body.memoryIds.filter((v): v is string => typeof v === 'string')
+      : [];
+    if (memoryIds.length < 2) return badRequest('memoryIds must name at least two memories');
+    if (memoryIds.length > 8) return badRequest('at most 8 memories per merge');
+    const known = new Set(deps.repo.listMemories(workspaceId).map((m) => m.id));
+    for (const mid of memoryIds) {
+      if (!known.has(mid)) return notFound(`unknown memory ${mid}`);
+    }
+
+    if (resourceId === 'merge-preview') {
+      if (!deps.ingest.canMerge()) {
+        return { status: 501, body: { error: 'this server cannot draft merges' } };
+      }
+      const locale: 'en' | 'ko' | undefined =
+        body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+      try {
+        return ok(await deps.ingest.previewMerge(workspaceId, memoryIds, locale));
+      } catch (err) {
+        return {
+          status: 502,
+          body: { error: err instanceof Error ? err.message : 'merge preview failed' },
+        };
+      }
+    }
+
+    if (typeof body.mergedText !== 'string' || body.mergedText.trim().length === 0) {
+      return badRequest('mergedText is required — the user approves the exact text');
+    }
+    const merged = deps.ingest.applyMerge(workspaceId, memoryIds, body.mergedText);
+    return ok({ mergedMemoryId: merged.id, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
    * DELETE /api/workspaces/:id/memories/:memoryId — throw one away.
    *
    * The first DELETE this API has had. Nothing at any layer could remove a

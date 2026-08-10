@@ -81,6 +81,16 @@ export interface DataSource {
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
+  /**
+   * The AI's half of a user-driven merge: why these memories overlap and the
+   * one text that would hold everything. Writes nothing — the user decides.
+   */
+  mergePreview?(memoryIds: string[]): Promise<{ reason: string; merged_text: string }>;
+  /** Applies a merge the user confirmed, with the exact text they approved. */
+  mergeMemories?(
+    memoryIds: string[],
+    mergedText: string,
+  ): Promise<{ mergedMemoryId: string; graph: GraphPayload }>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
@@ -184,6 +194,24 @@ export class ApiDataSource implements DataSource {
 
   ask(question: string, history?: AskTurn[]): Promise<AskResult> {
     return this.post<AskResult>('/ask', { question, history });
+  }
+
+  mergePreview(memoryIds: string[]): Promise<{ reason: string; merged_text: string }> {
+    return this.post<{ reason: string; merged_text: string }>('/memories/merge-preview', {
+      memoryIds,
+      locale: currentLocale(),
+    });
+  }
+
+  async mergeMemories(
+    memoryIds: string[],
+    mergedText: string,
+  ): Promise<{ mergedMemoryId: string; graph: GraphPayload }> {
+    const result = await this.post<{ mergedMemoryId: string; graph: GraphPayload }>(
+      '/memories/merge',
+      { memoryIds, mergedText },
+    );
+    return { ...result, graph: validateSeed(result.graph) };
   }
 
   async undo(reorgId: string): Promise<GraphPayload> {

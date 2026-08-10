@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
-import { relatedMemories } from '../core/related';
+import { mergeCandidates, relatedMemories } from '../core/related';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
@@ -204,12 +204,54 @@ function CategoryDetail({
   );
 }
 
+/** A user-driven merge, one step at a time: AI explains, the person decides. */
+type MergeState =
+  | { phase: 'loading'; withId: string }
+  | { phase: 'preview'; withId: string; reason: string; mergedText: string }
+  | { phase: 'applying'; withId: string; reason: string; mergedText: string }
+  | { phase: 'error'; withId: string }
+  | null;
+
 function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPayload }) {
   const related = relatedMemories(payload, memory.id);
+  const candidates = mergeCandidates(payload, memory.id);
   const select = useUiStore((s) => s.select);
   const category = payload.categories.find((c) => c.id === memory.category_id);
   const source = payload.sources.find((s) => s.id === memory.source_id);
   const entities = payload.entities.filter((e) => memory.entity_ids.includes(e.id));
+
+  const [merge, setMerge] = useState<MergeState>(null);
+  useEffect(() => setMerge(null), [memory.id]);
+  const canMerge = Boolean(useWorkspaceStore.getState().source.mergePreview);
+
+  const startMerge = async (otherId: string) => {
+    setMerge({ phase: 'loading', withId: otherId });
+    try {
+      const src = useWorkspaceStore.getState().source;
+      const draft = await src.mergePreview!([memory.id, otherId]);
+      setMerge({
+        phase: 'preview',
+        withId: otherId,
+        reason: draft.reason,
+        mergedText: draft.merged_text,
+      });
+    } catch {
+      setMerge({ phase: 'error', withId: otherId });
+    }
+  };
+
+  const confirmMerge = async (withId: string, reason: string, mergedText: string) => {
+    setMerge({ phase: 'applying', withId, reason, mergedText });
+    try {
+      const store = useWorkspaceStore.getState();
+      const result = await store.source.mergeMemories!([memory.id, withId], mergedText);
+      store.applyPayload(result.graph);
+      select(result.mergedMemoryId);
+      useUiStore.getState().toast(t('toast.merged'));
+    } catch {
+      setMerge({ phase: 'error', withId });
+    }
+  };
 
   return (
     <>
@@ -239,6 +281,77 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
         </div>
       )}
       {source && <SourceCard source={source} />}
+      {/*
+        Alike enough to be the same thought said twice — offer, never act. Its
+        own section rather than a decoration on "related": related excludes
+        same-source siblings, and one page saying the same thing twice is
+        precisely the first merge a person wants. The AI explains why they
+        overlap and drafts the one text that holds everything; the person
+        decides. API mode only — the scripted demo cannot draft this honestly.
+      */}
+      {canMerge && candidates.length > 0 && (
+        <>
+          <div className="inspector__eyebrow">{t('inspector.merge.section')}</div>
+          {candidates.map(({ memory: m }) => (
+            <div key={m.id}>
+              <MemoryRow memory={m} payload={payload} onSelect={select} />
+              {merge?.withId !== m.id && (
+                <button
+                  className="merge__offer"
+                  data-testid={`merge-offer-${m.id}`}
+                  title={t('inspector.merge.title')}
+                  onClick={() => void startMerge(m.id)}
+                >
+                  {t('inspector.merge')}
+                </button>
+              )}
+              {merge?.withId === m.id && (
+                <div className="merge" data-testid="merge-card">
+                  {merge.phase === 'loading' && (
+                    <p className="merge__note">{t('inspector.merge.loading')}</p>
+                  )}
+                  {merge.phase === 'error' && (
+                    <p className="merge__note">{t('inspector.merge.error')}</p>
+                  )}
+                  {(merge.phase === 'preview' || merge.phase === 'applying') && (
+                    <>
+                      <div className="merge__eyebrow">{t('inspector.merge.why')}</div>
+                      <p className="merge__reason" data-testid="merge-reason">
+                        {merge.reason}
+                      </p>
+                      <div className="merge__eyebrow">{t('inspector.merge.result')}</div>
+                      <p className="merge__text" data-testid="merge-text">
+                        {merge.mergedText}
+                      </p>
+                      <div className="merge__actions">
+                        <button
+                          className="merge__confirm"
+                          data-testid="merge-confirm"
+                          disabled={merge.phase === 'applying'}
+                          onClick={() =>
+                            void confirmMerge(merge.withId, merge.reason, merge.mergedText)
+                          }
+                        >
+                          {merge.phase === 'applying'
+                            ? t('inspector.merge.applying')
+                            : t('inspector.merge.confirm')}
+                        </button>
+                        <button
+                          className="merge__cancel"
+                          data-testid="merge-cancel"
+                          onClick={() => setMerge(null)}
+                        >
+                          {t('inspector.merge.cancel')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
       {related.length > 0 && (
         <>
           <div className="inspector__eyebrow">{t('inspector.related')}</div>

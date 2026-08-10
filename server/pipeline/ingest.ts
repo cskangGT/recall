@@ -765,6 +765,101 @@ export class IngestPipeline {
     return row;
   }
 
+  // -------------------------------------------------------------- user merge
+
+  /** Whether the wired model can explain and draft a merge at all. */
+  canMerge(): boolean {
+    return typeof this.ai.mergeMemories === 'function';
+  }
+
+  /**
+   * The AI's half of a user-driven merge: why these overlap, and the one text
+   * that would hold everything. Reads nothing but the memories and writes
+   * nothing at all — the user is about to decide, and a preview that mutated
+   * state would be deciding for them.
+   */
+  async previewMerge(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ reason: string; merged_text: string }> {
+    if (!this.ai.mergeMemories) throw new Error('this model cannot draft merges');
+    const byId = new Map(this.repo.listMemories(workspaceId).map((m) => [m.id, m]));
+    const texts = memoryIds.map((mid) => byId.get(mid)?.text).filter((t): t is string => !!t);
+    if (texts.length < 2) throw new Error('a merge needs at least two memories');
+    return this.ai.mergeMemories({ texts, locale });
+  }
+
+  /**
+   * Applies a merge the user confirmed, with the text they saw.
+   *
+   * Nothing is lost by construction: the merged text carries every fact (the
+   * user approved it), the original sources stay untouched in the source list,
+   * entity links are the union, and times_seen is the sum — three arrivals of
+   * a thought are still three arrivals after it becomes one row. The merged
+   * memory keeps the newest original's source and date, so the free-window
+   * math treats it as the most recent time the thought showed up.
+   */
+  applyMerge(workspaceId: string, memoryIds: string[], mergedText: string): Memory {
+    const all = this.repo.listMemories(workspaceId);
+    const originals = memoryIds
+      .map((mid) => all.find((m) => m.id === mid))
+      .filter((m): m is Memory => m !== undefined);
+    if (originals.length < 2) throw new Error('a merge needs at least two memories');
+    const text = mergedText.trim();
+    if (!text) throw new Error('merged text must not be empty');
+
+    const newest = [...originals].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]!;
+    /*
+     * The merged vector is the normalized mean of the originals', not a fresh
+     * embedding. Synchronous (this runs inside a transaction), free, and honest:
+     * the merged row should sit where its parts sat, and the mean of vectors
+     * this close is within noise of re-embedding their union.
+     */
+    const dims = newest.vector.length;
+    const mean = new Array<number>(dims).fill(0);
+    for (const m of originals) for (let i = 0; i < dims; i++) mean[i]! += m.vector[i]! / originals.length;
+    const norm = Math.sqrt(mean.reduce((s, v) => s + v * v, 0)) || 1;
+    const vector = mean.map((v) => v / norm);
+
+    const merged: Memory = {
+      id: id('mem'),
+      source_id: newest.source_id,
+      text,
+      kind: newest.kind,
+      confidence: Math.max(...originals.map((m) => m.confidence)),
+      category_id: newest.category_id,
+      // The merge itself is a user edit; no reorganization may quietly undo it.
+      category_locked: true,
+      entity_ids: [],
+      vector,
+      x: null,
+      y: null,
+      pinned: false,
+      created_at: newest.created_at,
+    };
+    const timesSeen = originals.reduce((s, m) => s + (m.times_seen ?? 1), 0);
+    const entityIds = [...new Set(originals.flatMap((m) => m.entity_ids))];
+
+    this.repo.transaction(() => {
+      this.repo.insertMemories(workspaceId, [merged]);
+      this.repo.assign({
+        memoryId: merged.id,
+        categoryId: merged.category_id,
+        confidence: merged.confidence,
+        assignedBy: 'user',
+        locked: true,
+      });
+      for (const entityId of entityIds) this.repo.linkMemoryEntity(merged.id, entityId);
+      // times_seen starts at 1; count the other arrivals back in.
+      for (let i = 1; i < timesSeen; i++) this.repo.reinforceMemory(merged.id);
+      for (const m of originals) this.repo.deleteMemory(m.id);
+    });
+
+    this.rebuildEdges(workspaceId);
+    return merged;
+  }
+
   /** Pure restore from the event's snapshot — spec §8.4.5, AC-22. */
   undo(workspaceId: string, event: ReorgEventRow): void {
     this.repo.transaction(() => {
