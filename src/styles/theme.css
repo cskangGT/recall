@@ -652,19 +652,34 @@ button {
  * clip at the left of a chat box is not, and this is the box the cursor is
  * already in.
  */
+/* Saving's own door: a labeled pill, not an unexplained glyph. The word is
+   what separates "add to my memory" from the question box beside it. */
 .composer__add {
   flex: none;
-  width: 32px;
   height: 32px;
   margin-left: -6px;
-  border-radius: var(--radius-sm);
-  display: grid;
-  place-items: center;
+  padding: 0 12px 0 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-dim);
-  font-size: 22px;
-  font-weight: 300;
+  font-size: var(--text-sm);
   line-height: 1;
-  transition: color 120ms ease, background 120ms ease;
+  white-space: nowrap;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.composer__add > span[aria-hidden] {
+  font-size: 18px;
+  font-weight: 300;
+}
+
+.composer__add:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+  background: rgba(240, 232, 250, 0.14);
 }
 
 .composer__add:hover {

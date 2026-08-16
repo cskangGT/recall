@@ -56,6 +56,12 @@ export function Composer({
 
   return (
     <div className="composer composer--docked" data-testid="composer">
+      {/*
+        Saving, given its own door. The input used to promise both jobs
+        ("ask anything, or drop a screenshot") while Enter only ever asked —
+        a promise the keyboard broke. Now the input is the question and this
+        labeled button is the saving: two verbs, two surfaces, one row.
+      */}
       <button
         className="composer__add"
         data-testid="composer-add"
@@ -63,7 +69,8 @@ export function Composer({
         aria-label={t('composer.add')}
         onClick={() => useUiStore.getState().setCaptureOpen(true)}
       >
-        +
+        <span aria-hidden="true">+</span>
+        <span className="composer__add-label">{t('composer.addLabel')}</span>
       </button>
       {/*
         Deliberately not autofocused. The greeting's "press Enter to look
