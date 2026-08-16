@@ -70,3 +70,30 @@ test('escape ends the conversation with the answer', async ({ page }) => {
   await page.keyboard.press('Meta+/');
   await expect(page.getByTestId('ask-followup')).toHaveCount(0);
 });
+
+test('the conversation stacks in the browse answer view', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  // First question: its own bubble above the answer, no past yet.
+  await page.getByTestId('composer-input').fill('What did we decide about our eval stack?');
+  await page.getByTestId('composer-input').press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+  await expect(page.getByTestId('thread-question')).toContainText('eval stack');
+  await expect(page.getByTestId('ask-thread')).toHaveCount(0);
+
+  // Second question: the first turn dims into the thread above the new answer.
+  await page.getByTestId('composer-input').fill('And which tool won?');
+  await page.getByTestId('composer-input').press('Enter');
+  await expect(page.getByTestId('thread-question')).toContainText('which tool won');
+  await expect(page.getByTestId('ask-thread')).toContainText('eval stack');
+  await expect(page.getByTestId('ask-thread')).toBeVisible();
+
+  // Escape ends the conversation; nothing of the thread survives it. Twice,
+  // because focus is still in the composer: the first Escape only hands the
+  // keyboard back (the composer's own ladder), the second reaches the store.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('ask-thread')).toHaveCount(0);
+  await expect(page.getByTestId('browser-answer')).toHaveCount(0);
+});

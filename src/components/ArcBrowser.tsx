@@ -65,6 +65,7 @@ export function ArcBrowser() {
   const setArcLevel = useUiStore((s) => s.setArcLevel);
   const answer = useUiStore((s) => s.answer);
   const answerDraft = useUiStore((s) => s.answerDraft);
+  const askThread = useUiStore((s) => s.askThread);
   const lastCapture = useUiStore((s) => s.lastCapture);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
@@ -112,6 +113,17 @@ export function ArcBrowser() {
 
   const showingAnswer =
     openCategoryId === ANSWER_FOLDER_ID && (answer !== null || answerDraft !== null);
+
+  /*
+   * The conversation, visible. The thread always worked — three turns ride
+   * along so "which of those?" has a *those* — but the screen showed only the
+   * latest answer, so it never *felt* like a conversation. Prior turns stack
+   * above the current answer, dimmed; an answered question is the thread's
+   * last entry, so it is sliced off to avoid showing the present twice.
+   */
+  const priorTurns =
+    !showingAnswer ? [] : answer && !answer.refused ? askThread.slice(0, -1) : askThread;
+  const currentQuestion = answer?.question ?? answerDraft?.question ?? null;
 
   /** Citations that resolve to a memory we can show a row for. */
   const answerMemories = useMemo(() => {
@@ -831,6 +843,23 @@ export function ArcBrowser() {
           </span>
         </div>
 
+        {showingAnswer && priorTurns.length > 0 && (
+          <div className="thread" data-testid="ask-thread" aria-label={t('thread.aria')}>
+            {priorTurns.map((turn, i) => (
+              <div key={i} className="thread__turn">
+                <div className="thread__q">{turn.question}</div>
+                <p className="thread__a">
+                  {turn.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {showingAnswer && currentQuestion && (
+          <div className="thread__q thread__q--current" data-testid="thread-question">
+            {currentQuestion}
+          </div>
+        )}
         {showingAnswer && answer && (
           <p className="reading__answer" data-testid="browser-answer">
             {answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}

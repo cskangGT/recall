@@ -112,6 +112,7 @@ const en = {
   'welcome.emptyAside':
     `Paste a note, a link, or a screenshot below and ${PRODUCT} will read it and find it a place. The map builds itself from there.`,
   'answer.heading': `What ${PRODUCT} pulled`,
+  'thread.aria': 'The conversation so far',
 
   // ---------------------------------------------------------------- composer
   'composer.placeholder': 'Ask your memory anything',
@@ -354,6 +355,7 @@ const ko: Record<StringKey, string> = {
   'welcome.emptyTitle': '아직 아무것도 없어요.',
   'welcome.emptyAside': `아래에 메모, 링크, 스크린샷을 붙여넣으면 ${PRODUCT}가 읽고 자리를 찾아줘요. 지도는 거기서부터 자라나요.`,
   'answer.heading': `${PRODUCT}가 꺼내온 것`,
+  'thread.aria': '지금까지의 대화',
 
   'composer.placeholder': '내 기억에게 무엇이든 물어보세요',
   'composer.add': '기억에 추가하기',

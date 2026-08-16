@@ -1580,6 +1580,45 @@ button {
   text-wrap: pretty;
 }
 
+/* ---------------------------------------------------------- ask thread
+   The conversation, visible: your questions sit right like speech, prior
+   turns dim into the past, and the newest answer keeps full brightness. */
+.thread {
+  margin: 2px 0 4px;
+  opacity: 0.55;
+}
+
+.thread__turn {
+  margin-bottom: 16px;
+}
+
+.thread__q {
+  margin: 0 10px 8px auto;
+  max-width: 85%;
+  width: fit-content;
+  padding: 5px 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.thread__q--current {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent-dim) 40%, var(--edge));
+}
+
+.thread__a {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
 /* The streaming caret: the answer is arriving, and the page says so. */
 .reading__answer--streaming::after {
   content: '▍';
