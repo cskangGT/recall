@@ -138,6 +138,9 @@ const en = {
   'ask.mode.ask': 'Ask',
   'ask.placeholder': "Ask across everything you've saved",
   'ask.placeholderFollowUp': 'Follow up — or start fresh above',
+  // Must stay word-for-word identical to scriptedAsk's REFUSAL — the demo
+  // asserts the refusal verbatim (AC-35), and en is the language it runs in.
+  'ask.refusalText': "I don't have anything saved about that yet.",
   'ask.noMatches': 'No matches.',
   'ask.followingUp': 'Following up on “{question}”',
   'ask.startFresh': 'Start fresh',
@@ -378,6 +381,8 @@ const ko: Record<StringKey, string> = {
   'ask.mode.ask': '질문',
   'ask.placeholder': '저장해둔 모든 것에 대해 물어보세요',
   'ask.placeholderFollowUp': '이어서 물어보거나, 위에서 새로 시작하세요',
+  // 기억 자신의 목소리로 — 보고체가 아니라 떠올리려다 비어 있는 말투.
+  'ask.refusalText': '아직 그것에 대해 기억해둔 게 없어.',
   'ask.noMatches': '일치하는 것이 없어요.',
   'ask.followingUp': '“{question}”에 이어서',
   'ask.startFresh': '새로 시작',

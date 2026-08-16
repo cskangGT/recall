@@ -410,7 +410,11 @@ function AnswerDetail() {
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload)!;
 
-  const parts = answer.answer.split(/(\[\d+\])/g).filter(Boolean);
+  // A refusal renders in the viewer's language; it cites nothing, so the
+  // [n] splitting has nothing to lose from the substitution.
+  const parts = (answer.refused ? t('ask.refusalText') : answer.answer)
+    .split(/(\[\d+\])/g)
+    .filter(Boolean);
 
   return (
     <>

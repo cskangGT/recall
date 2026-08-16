@@ -84,3 +84,18 @@ describe('Korean through the local pipeline', () => {
     expect(second.addedMemoryIds).toHaveLength(0);
   });
 });
+
+describe('the refusal speaks the viewer language', () => {
+  it('keeps the English refusal word-for-word with the scripted one (AC-35 verbatim)', async () => {
+    const { REFUSAL } = await import('../../src/ask/scriptedAsk');
+    setLocaleForTest('en');
+    expect(t('ask.refusalText')).toBe(REFUSAL);
+  });
+
+  it('gives Korean a refusal in the memory voice, not a report', () => {
+    setLocaleForTest('ko');
+    expect(t('ask.refusalText')).toContain('기억');
+    expect(t('ask.refusalText')).not.toMatch(/했습니다|입니다/);
+    setLocaleForTest('en');
+  });
+});

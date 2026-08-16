@@ -862,7 +862,12 @@ export function ArcBrowser() {
         )}
         {showingAnswer && answer && (
           <p className="reading__answer" data-testid="browser-answer">
-            {answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
+            {/* A refusal renders in the viewer's language — the server's
+                constant is English, and a Korean screen must not switch
+                voices at exactly the moment it says it remembers nothing. */}
+            {(answer.refused ? t('ask.refusalText') : answer.answer)
+              .replace(/\[\d+\]/g, '')
+              .replace(/\s+([.,])/g, '$1')}
           </p>
         )}
         {/* The draft: words as they arrive, with a breathing caret. The final
