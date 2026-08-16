@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { search, tokenize, highlight, groupByCategory, MAX_RESULTS } from '../../src/search/search';
+import {
+  search, tokenize, highlight, groupByCategory, matchedLabelNodes, MAX_RESULTS,
+} from '../../src/search/search';
 import { isQuestion } from '../../src/ask/scriptedAsk';
 import { validateSeed } from '../../src/data/validateSeed';
 import workspaceJson from '../../seed/workspace.json';
@@ -135,5 +137,73 @@ describe('search and ask split the bar between them', () => {
     expect(isQuestion('What did we decide about our eval stack?')).toBe(true);
     expect(isQuestion('langchain')).toBe(false);
     expect(isQuestion('pricing')).toBe(false);
+  });
+});
+
+/**
+ * The map draws three kinds of words — memory text, category names, entity
+ * labels — and search used to read only the first (plus source titles). The
+ * user's exact report: staring at the label "기억 문장" on the map, typing
+ * 기억, getting nothing. What the map shows, search must find.
+ */
+describe('search covers what the map shows', () => {
+  const tiny = {
+    workspace: { id: 'w', name: 'w', auto_reorganize: true },
+    sources: [
+      {
+        id: 's1', type: 'text', title: '회의록', raw_content: '', scene_description: null,
+        url: null, image_path: null, created_at: '2026-08-01T00:00:00.000Z', status: 'complete',
+      },
+    ],
+    memories: [
+      {
+        id: 'm1', source_id: 's1', text: '다음 분기 목표를 정리했다.', kind: 'fact',
+        confidence: 0.8, category_id: 'c1', category_locked: false, entity_ids: ['e1'],
+        vector: [1, 0], x: null, y: null, pinned: false, created_at: '2026-08-01T00:00:00.000Z',
+      },
+      {
+        id: 'm2', source_id: 's1', text: '빵 반죽 메모.', kind: 'fact',
+        confidence: 0.8, category_id: 'c2', category_locked: false, entity_ids: [],
+        vector: [0, 1], x: null, y: null, pinned: false, created_at: '2026-08-01T00:00:00.000Z',
+      },
+    ],
+    categories: [
+      {
+        id: 'c1', parent_id: null, name: '기억 문장', rationale: null, name_locked: false,
+        user_created: false, x: null, y: null, pinned: false, created_by: 'ai',
+      },
+      {
+        id: 'c2', parent_id: null, name: '베이킹', rationale: null, name_locked: false,
+        user_created: false, x: null, y: null, pinned: false, created_by: 'ai',
+      },
+    ],
+    entities: [
+      { id: 'e1', name: 'Braintrust', kind: 'tool', x: null, y: null, pinned: false },
+    ],
+    edges: [],
+  } as never;
+
+  it('finds a memory by its category name — the label the user is looking at', () => {
+    const results = search(tiny, '기억');
+    expect(results.map((r) => r.memory.id)).toEqual(['m1']);
+  });
+
+  it('finds a memory by a linked entity name the text never spells out', () => {
+    const results = search(tiny, 'braintrust');
+    expect(results.map((r) => r.memory.id)).toEqual(['m1']);
+  });
+
+  it('still ranks a text hit above a label-only hit', () => {
+    // m2's own text says 반죽; m1 would only match via its category or entity.
+    const results = search(tiny, '반죽');
+    expect(results[0]!.memory.id).toBe('m2');
+  });
+
+  it('names the matching label nodes so the map can light them', () => {
+    expect(matchedLabelNodes(tiny, '기억 문장')).toEqual(['c1']);
+    expect(matchedLabelNodes(tiny, '기억')).toEqual(['c1']);
+    expect(matchedLabelNodes(tiny, 'braintrust')).toEqual(['e1']);
+    expect(matchedLabelNodes(tiny, '')).toEqual([]);
+    expect(matchedLabelNodes(tiny, '없는말')).toEqual([]);
   });
 });
