@@ -129,6 +129,32 @@ export function createApiServer(
           },
           deps,
         );
+        if (result.events) {
+          /*
+           * Server-sent events. Headers first, then one frame per event; an
+           * error mid-stream becomes an `error` frame rather than a broken
+           * pipe, because the status line already said 200 and the client's
+           * only way to hear about it is in-band.
+           */
+          res.writeHead(result.status, {
+            'content-type': 'text/event-stream; charset=utf-8',
+            'cache-control': 'no-store',
+            connection: 'keep-alive',
+          });
+          try {
+            for await (const frame of result.events) {
+              res.write(`event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`);
+            }
+          } catch (err) {
+            res.write(
+              `event: error\ndata: ${JSON.stringify({
+                error: err instanceof Error ? err.message : 'stream failed',
+              })}\n\n`,
+            );
+          }
+          res.end();
+          return;
+        }
         send(result.status, result.body);
       } catch (err) {
         // A handler throwing is a bug, not a client error — say so plainly

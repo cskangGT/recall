@@ -103,6 +103,13 @@ interface UiState {
    * other buttons to see if anything is happening.
    */
   asking: boolean;
+  /**
+   * The answer as it streams in, before the final result lands. Rendered on
+   * the same surface `answer` will occupy; `setAnswer` supersedes it, so the
+   * validated result — including a refusal that overrides text the model
+   * already streamed — always owns what persists.
+   */
+  answerDraft: { question: string; text: string } | null;
   /** The account of the last capture — what was read, what was new, where it went. */
   lastCapture: CaptureStory | null;
   /** True while a file is being dragged over the window. */
@@ -130,6 +137,7 @@ interface UiState {
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
   setAsking: (asking: boolean) => void;
+  setAnswerDraft: (draft: { question: string; text: string } | null) => void;
   /** Ends the conversation without touching the answer on screen. */
   clearAskThread: () => void;
   setLastCapture: (s: CaptureStory | null) => void;
@@ -162,6 +170,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   answer: null,
   askThread: [],
   asking: false,
+  answerDraft: null,
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
@@ -216,6 +225,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAnswer: (answer) =>
     set((s) => ({
       answer,
+      // The validated result supersedes whatever streamed in ahead of it.
+      answerDraft: null,
       // An answered question extends the conversation; a refusal or a
       // dismissal does not — following up on "I don't have anything" is
       // following up on nothing.
@@ -234,6 +245,14 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
   clearAskThread: () => set({ askThread: [] }),
   setAsking: (asking) => set({ asking }),
+  // The draft opens the answer surface the way the answer itself would, so
+  // the first streamed words land where the reader will keep reading.
+  setAnswerDraft: (answerDraft) =>
+    set((s) => ({
+      answerDraft,
+      openCategoryId:
+        answerDraft !== null && s.view === 'browse' ? ANSWER_FOLDER_ID : s.openCategoryId,
+    })),
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
@@ -256,10 +275,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     // An answer and its highlight are one surface, so they clear together. The
     // answer has to be checked independently: a refusal cites nothing and
     // therefore highlights nothing, and it must still be dismissable.
-    if (s.highlightedIds.length > 0 || s.answer !== null) {
+    if (s.highlightedIds.length > 0 || s.answer !== null || s.answerDraft !== null) {
       set({
         highlightedIds: [],
         answer: null,
+        answerDraft: null,
         // The conversation dies with the answer surface it happened on.
         askThread: [],
         // The answer folder cannot outlive the answer it holds.

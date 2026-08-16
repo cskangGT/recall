@@ -64,6 +64,7 @@ export function ArcBrowser() {
   const arcLevelId = useUiStore((s) => s.arcLevelId);
   const setArcLevel = useUiStore((s) => s.setArcLevel);
   const answer = useUiStore((s) => s.answer);
+  const answerDraft = useUiStore((s) => s.answerDraft);
   const lastCapture = useUiStore((s) => s.lastCapture);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
@@ -109,7 +110,8 @@ export function ArcBrowser() {
    */
   const hasSubfolders = (id: string) => categoryRows.some((r) => r.parentId === id);
 
-  const showingAnswer = openCategoryId === ANSWER_FOLDER_ID && answer !== null;
+  const showingAnswer =
+    openCategoryId === ANSWER_FOLDER_ID && (answer !== null || answerDraft !== null);
 
   /** Citations that resolve to a memory we can show a row for. */
   const answerMemories = useMemo(() => {
@@ -832,6 +834,16 @@ export function ArcBrowser() {
         {showingAnswer && answer && (
           <p className="reading__answer" data-testid="browser-answer">
             {answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
+          </p>
+        )}
+        {/* The draft: words as they arrive, with a breathing caret. The final
+            answer supersedes it in the same spot, citations and all. */}
+        {showingAnswer && !answer && answerDraft && (
+          <p
+            className="reading__answer reading__answer--streaming"
+            data-testid="browser-answer-draft"
+          >
+            {answerDraft.text.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
           </p>
         )}
 

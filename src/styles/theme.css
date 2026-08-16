@@ -1565,6 +1565,24 @@ button {
   text-wrap: pretty;
 }
 
+/* The streaming caret: the answer is arriving, and the page says so. */
+.reading__answer--streaming::after {
+  content: '▍';
+  color: var(--accent);
+  animation: caret-breathe 1s ease-in-out infinite;
+}
+
+@keyframes caret-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading__answer--streaming::after {
+    animation: none;
+  }
+}
+
 /* -------------------------------------------------------------- user merge */
 
 /*

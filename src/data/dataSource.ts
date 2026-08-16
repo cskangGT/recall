@@ -82,6 +82,16 @@ export interface DataSource {
   importNotionPages?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
   /**
+   * `ask`, with the answer text arriving as it is generated. `onDelta` gets
+   * each new run of text; the resolved result is exactly what `ask` would
+   * have returned, and callers treat the deltas as a draft it supersedes.
+   */
+  askStream?(
+    question: string,
+    onDelta: (text: string) => void,
+    history?: AskTurn[],
+  ): Promise<AskResult>;
+  /**
    * The AI's half of a user-driven merge: why these memories overlap and the
    * one text that would hold everything. Writes nothing — the user decides.
    */
@@ -194,6 +204,47 @@ export class ApiDataSource implements DataSource {
 
   ask(question: string, history?: AskTurn[]): Promise<AskResult> {
     return this.post<AskResult>('/ask', { question, history });
+  }
+
+  async askStream(
+    question: string,
+    onDelta: (text: string) => void,
+    history?: AskTurn[],
+  ): Promise<AskResult> {
+    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}/ask/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question, history }),
+    });
+    if (!response.ok || !response.body) {
+      throw new HttpError(response.status, `stream failed (${response.status})`);
+    }
+
+    // SSE frames: `event: X\ndata: {...}\n\n`, possibly split across chunks —
+    // only complete double-newline-terminated frames are consumed.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: AskResult | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const event = /^event: (.+)$/m.exec(frame)?.[1];
+        const data = /^data: (.+)$/m.exec(frame)?.[1];
+        if (!event || !data) continue;
+        if (event === 'delta') onDelta((JSON.parse(data) as { text: string }).text);
+        else if (event === 'done') result = JSON.parse(data) as AskResult;
+        else if (event === 'error') {
+          throw new HttpError(502, (JSON.parse(data) as { error: string }).error);
+        }
+      }
+    }
+    if (!result) throw new HttpError(502, 'stream ended without a result');
+    return result;
   }
 
   mergePreview(memoryIds: string[]): Promise<{ reason: string; merged_text: string }> {

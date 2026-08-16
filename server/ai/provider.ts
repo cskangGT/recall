@@ -142,6 +142,21 @@ export interface AiProvider {
     history?: AskTurn[];
   }): Promise<AnswerResult>;
   /**
+   * Optional: `answer`, with the text arriving as it is generated. `onDelta`
+   * receives each new run of answer text (never the whole so-far); the
+   * returned result is identical to what `answer` would have produced, and
+   * every downstream check — citation validation, the refusal contract — runs
+   * on that, so streaming changes when the words arrive and nothing else.
+   */
+  answerStream?(
+    input: {
+      question: string;
+      retrieved: RetrievedMemory[];
+      history?: AskTurn[];
+    },
+    onDelta: (text: string) => void,
+  ): Promise<AnswerResult>;
+  /**
    * Optional: says why these memories overlap and writes the one memory that
    * holds every distinct fact from all of them. The user decides whether the
    * merge happens; the model only explains and drafts. Providers that cannot

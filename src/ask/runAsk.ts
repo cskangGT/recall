@@ -29,9 +29,39 @@ export async function runAsk(question: string): Promise<boolean> {
     // as it was when the question was asked.
     const history = useUiStore.getState().askThread;
     const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(q, history).catch(() => answerQuestion(q, payload, history))
-      : answerQuestion(q, payload, history);
+
+    /*
+     * Streamed when the source can: the words appear as they are generated,
+     * on the surface the answer will occupy, and the validated result then
+     * supersedes the draft (setAnswer clears it) — so a generation the
+     * pipeline refuses never persists text it already showed. Any stream
+     * failure falls back to the plain ask, which falls back to the script.
+     */
+    let result;
+    if (source.askStream) {
+      useUiStore.getState().setAnswerDraft({ question: q, text: '' });
+      result = await source
+        .askStream(
+          q,
+          (delta) => {
+            const draft = useUiStore.getState().answerDraft;
+            useUiStore
+              .getState()
+              .setAnswerDraft({ question: q, text: (draft?.text ?? '') + delta });
+          },
+          history,
+        )
+        .catch(async () => {
+          useUiStore.getState().setAnswerDraft(null);
+          return source.ask
+            ? source.ask(q, history).catch(() => answerQuestion(q, payload, history))
+            : answerQuestion(q, payload, history);
+        });
+    } else {
+      result = source.ask
+        ? await source.ask(q, history).catch(() => answerQuestion(q, payload, history))
+        : answerQuestion(q, payload, history);
+    }
 
     useUiStore.getState().setAnswer({ ...result, question: q });
     for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
@@ -42,5 +72,8 @@ export async function runAsk(question: string): Promise<boolean> {
     return true;
   } finally {
     useUiStore.getState().setAsking(false);
+    // Belt and braces: on the success path setAnswer already superseded the
+    // draft; on any throw this keeps a half-answer from lingering on screen.
+    useUiStore.getState().setAnswerDraft(null);
   }
 }

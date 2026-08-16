@@ -487,3 +487,46 @@ export function coerceMerge(raw: unknown, fallbackTexts: string[]): MergeDraft {
     merged_text: merged.length > 0 ? merged : fallbackTexts.join(' · '),
   };
 }
+
+// ------------------------------------------------------------------ streaming
+
+/**
+ * The answer field of a partially-streamed JSON response, unescaped as far as
+ * it goes.
+ *
+ * The chat API streams the schema'd response as JSON *text*, so mid-flight the
+ * buffer looks like `{"answer":"The decision was to\n`. `answer` is the
+ * schema's first property, which makes this a scan rather than a parse: find
+ * the field, walk the string, resolve escapes, stop at the closing quote or —
+ * mid-stream — at the end of what has arrived. A trailing half-escape (a lone
+ * backslash, a cut-off \uXXXX) is held back rather than guessed at.
+ */
+export function answerSoFar(partialJson: string): string {
+  const start = partialJson.indexOf('"answer"');
+  if (start === -1) return '';
+  const open = partialJson.indexOf('"', partialJson.indexOf(':', start + 8) + 1);
+  if (open === -1) return '';
+
+  let out = '';
+  for (let i = open + 1; i < partialJson.length; i++) {
+    const ch = partialJson[i]!;
+    if (ch === '"') return out; // closed — the field is complete
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    const next = partialJson[i + 1];
+    if (next === undefined) return out; // half an escape — hold it back
+    i++;
+    if (next === 'n') out += '\n';
+    else if (next === 't') out += '\t';
+    else if (next === 'r') out += '\r';
+    else if (next === 'u') {
+      const hex = partialJson.slice(i + 1, i + 5);
+      if (hex.length < 4) return out; // cut-off \uXXXX — hold it back
+      out += String.fromCharCode(parseInt(hex, 16));
+      i += 4;
+    } else out += next; // \" \\ \/ and anything else escaped literally
+  }
+  return out;
+}

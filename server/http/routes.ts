@@ -35,6 +35,13 @@ export interface ApiRequest {
 export interface ApiResponse {
   status: number;
   body: unknown;
+  /**
+   * Server-sent events. When present the adapter streams these frames instead
+   * of writing `body` — the router stays a pure function (a generator is a
+   * value; iterating it is the adapter's side effect), so a streaming route is
+   * tested by iterating, exactly like any other route is tested by asserting.
+   */
+  events?: AsyncIterable<{ event: string; data: unknown }>;
 }
 
 const ok = (body: unknown): ApiResponse => ({ status: 200, body });
@@ -340,6 +347,30 @@ async function handleWorkspace(
       )
       .slice(-3);
     return ok(await deps.ask.ask(workspaceId, body.question, history));
+  }
+
+  /*
+   * POST /api/workspaces/:id/ask/stream — the same ask, with the answer text
+   * arriving as it is generated: `delta` frames of new text, then one `done`
+   * frame carrying the exact AskResult POST /ask would have returned. Every
+   * guarantee (retrieval floor, citation validation, refusal) runs in the
+   * pipeline's generator; a draft that fails validation is superseded by the
+   * refusal in `done`.
+   */
+  if (req.method === 'POST' && resource === 'ask' && resourceId === 'stream' && !action) {
+    const body = asRecord(req.body);
+    if (typeof body.question !== 'string' || body.question.trim().length === 0) {
+      return badRequest('question is required');
+    }
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter(
+        (t): t is { question: string; answer: string } =>
+          typeof t === 'object' && t !== null &&
+          typeof (t as Record<string, unknown>).question === 'string' &&
+          typeof (t as Record<string, unknown>).answer === 'string',
+      )
+      .slice(-3);
+    return { status: 200, body: null, events: deps.ask.askStream(workspaceId, body.question, history) };
   }
 
   // POST /api/workspaces/:id/reorgs/:reorgId/undo
