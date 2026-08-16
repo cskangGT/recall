@@ -38,19 +38,19 @@ export function Composer({
   placeholder?: string;
 }) {
   const payload = useWorkspaceStore((s) => s.payload);
+  // Shared with every other surface that asks (the summarize button, the
+  // reveal's suggested questions) — a question out through any of them shows
+  // as thinking here too, because this is where the answer will land.
+  const thinking = useUiStore((s) => s.asking);
 
   const [text, setText] = useState('');
-  const [thinking, setThinking] = useState(false);
 
   const submit = async () => {
     if (!text.trim() || !payload) {
       onSubmitted?.();
       return;
     }
-    setThinking(true);
-    await runAsk(text);
-    setText('');
-    setThinking(false);
+    if (await runAsk(text)) setText('');
     onSubmitted?.();
   };
 

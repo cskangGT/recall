@@ -1535,6 +1535,26 @@ button {
   color: var(--text);
 }
 
+/* Working, and saying so — the amber edge breathes while the model reads. */
+.reading__summarize--busy {
+  color: var(--text);
+  border-color: var(--accent-dim);
+  cursor: default;
+  animation: summarize-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes summarize-breathe {
+  0%, 100% { border-color: var(--accent-dim); }
+  50% { border-color: var(--accent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading__summarize--busy {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
 .reading__answer {
   margin: 2px 0 18px;
   padding: 0 10px;

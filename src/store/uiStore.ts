@@ -95,6 +95,14 @@ interface UiState {
    * dismissing the answer surface ends the conversation.
    */
   askThread: { question: string; answer: string }[];
+  /**
+   * True while a question is out with the model. One shared flag rather than
+   * per-surface state: the composer, the summarize button, and the reveal's
+   * suggested questions all ask through `runAsk`, and every one of them must
+   * show the wait — an unanswered click is what sends a person off pressing
+   * other buttons to see if anything is happening.
+   */
+  asking: boolean;
   /** The account of the last capture — what was read, what was new, where it went. */
   lastCapture: CaptureStory | null;
   /** True while a file is being dragged over the window. */
@@ -121,6 +129,7 @@ interface UiState {
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  setAsking: (asking: boolean) => void;
   /** Ends the conversation without touching the answer on screen. */
   clearAskThread: () => void;
   setLastCapture: (s: CaptureStory | null) => void;
@@ -152,6 +161,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   reorgHistory: [],
   answer: null,
   askThread: [],
+  asking: false,
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
@@ -223,6 +233,7 @@ export const useUiStore = create<UiState>((set, get) => ({
             : s.openCategoryId,
     })),
   clearAskThread: () => set({ askThread: [] }),
+  setAsking: (asking) => set({ asking }),
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),

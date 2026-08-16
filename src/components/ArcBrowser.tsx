@@ -68,6 +68,7 @@ export function ArcBrowser() {
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
+  const asking = useUiStore((s) => s.asking);
   const interestEvents = useInterestStore((s) => s.events);
   const recordInterest = useInterestStore((s) => s.record);
 
@@ -802,13 +803,21 @@ export function ArcBrowser() {
               arbitrary list honestly, and a button that produces a refusal is
               worse than no button (same rule as the reveal's bridge). */}
           {!showingAnswer && openRow && canAsk && (
+            /*
+             * The wait is shown where the click happened. A summary takes
+             * seconds, and a button that goes silent for seconds sends people
+             * off pressing everything else to see if anything is happening —
+             * so it says it is working, and refuses a second question while
+             * one is out (runAsk enforces the same rule for every surface).
+             */
             <button
-              className="reading__summarize"
+              className={`reading__summarize${asking ? ' reading__summarize--busy' : ''}`}
               data-testid="reading-summarize"
               title={t('reading.summarize.title')}
+              disabled={asking}
               onClick={summarize}
             >
-              {t('reading.summarize')}
+              {asking ? t('reading.summarizing') : t('reading.summarize')}
             </button>
           )}
           {/* "Folder" was left over from the two-pane list this replaced, and
