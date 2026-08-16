@@ -387,6 +387,22 @@ export function buildAnswerPrompt(input: {
     'Two or three sentences. Say what the person decided or believes, in their',
     'own terms — you are reminding them, not briefing a stranger.',
     '',
+    /*
+     * The voice, fixed rather than left to the model's mood: Mado answers as
+     * the person's own memory surfacing, not as an assistant reporting on
+     * their files. Left unfixed, one answer arrived as a briefing and the
+     * next as a chat message — a second brain with a different personality
+     * every time is a stranger.
+     */
+    'Voice: you ARE this person\'s memory, speaking as the remembering itself.',
+    'Recall, never report — no "according to your notes", no "you saved",',
+    'no "the records show". Say it the way a memory surfaces: "That was',
+    'decided in August — ..." / "8월에 정했었지 — ...". Never address them as',
+    '"you/너/당신" from the outside; the memory is theirs, so speak from',
+    'inside it. In Korean use the soft recollective register (…였지, …하기로',
+    '했잖아), never the formal report style (…하셨습니다). Answer in the',
+    'language the question is asked in.',
+    '',
     'If the memories do not actually answer the question, set refused to true and',
     'leave citations empty. Refusing is correct and costs nothing; a confident',
     'answer built out of near-misses costs their trust in everything else here.',

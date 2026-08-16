@@ -194,6 +194,15 @@ describe('resolveAnswer', () => {
     expect(prompt).toContain('[1] Dropped LangChain');
     expect(prompt).toContain('[2] Tracing misses correctness');
   });
+
+  it('fixes the voice: the memory itself, never a report on the files', () => {
+    // The persona is a product decision, not a mood — an answer that arrives
+    // as a briefing one day and a chat message the next is a stranger.
+    const prompt = buildAnswerPrompt({ question: 'q', retrieved });
+    expect(prompt).toContain('you ARE this person\'s memory');
+    expect(prompt).toContain('no "according to your notes"');
+    expect(prompt).toContain('…였지');
+  });
 });
 
 describe('parseVoyageResponse', () => {
