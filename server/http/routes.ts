@@ -440,9 +440,13 @@ async function handleWorkspace(
 
     const items = read.notes.slice(0, 100).map((n) => ({
       workspaceId,
+      // Still 'text': the content was already read by the reader, and a
+      // 'link' type would invite the pipeline to fetch it. The url is the
+      // way back to the original — provenance, not something to scrape.
       type: 'text' as const,
       title: n.title || n.content.slice(0, 60),
       content: n.content,
+      url: n.url,
       locale,
     }));
 

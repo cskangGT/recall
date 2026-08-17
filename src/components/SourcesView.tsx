@@ -37,6 +37,12 @@ export interface SourceRow {
   error: string | null;
   /** A capture that produced nothing is the case the toast points here for. */
   empty: boolean;
+  /**
+   * The full original text lives in this ledger — a DB fact (raw_content is
+   * always stored), surfaced so clearing the original at its source never
+   * feels like a gamble. The migration story: Mado is where things end up.
+   */
+  safe: boolean;
 }
 
 /**
@@ -71,6 +77,14 @@ export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'a
         empty: !failed && memoryCount === 0,
         failed,
         error: s.error_message ?? null,
+        // Not "status === complete": the seed's sources carry no status at
+        // all, and a source that produced no memories still holds its text.
+        // Unsafe is only what genuinely is: failed, or still being read.
+        safe:
+          !failed &&
+          s.status !== 'pending' &&
+          s.status !== 'processing' &&
+          s.raw_content.trim().length > 0,
       };
     })
     .sort(
@@ -141,7 +155,14 @@ export function SourcesView() {
 
       {rows.length === 0 && <p className="sources__empty">{t('sources.empty')}</p>}
 
-      {rows.map(({ source, memoryCount, empty, failed, error }) => (
+      {/* The migration story in one line: what's here is held, whole. */}
+      {rows.some((r) => r.safe) && (
+        <p className="sources__held-summary" data-testid="sources-held-summary">
+          {t('sources.safeSummary', { n: rows.filter((r) => r.safe).length })}
+        </p>
+      )}
+
+      {rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
         <div
           key={source.id}
           data-testid={`source-row-${source.id}`}
@@ -181,6 +202,22 @@ export function SourcesView() {
               {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
               {empty ? t('sources.meta.empty') : ''}
               {failed ? `${t('sources.meta.failed')}${error ? ` — ${error}` : ''}` : ''}
+              {safe && (
+                <span className="source-row__safe" data-testid={`safe-${source.id}`} title={t('sources.safe')}>
+                  {' '}✓ {t('sources.held')}
+                </span>
+              )}
+              {source.url && (
+                <a
+                  className="source-row__origin"
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {' '}{t('sources.openOrigin')}
+                </a>
+              )}
             </span>
           </span>
           {failed ? (

@@ -17,10 +17,34 @@ const relativeDate = (iso: string): string => {
 };
 
 function SourceCard({ source }: { source: Source }) {
+  // The full text lives here — a DB fact, said out loud so clearing the
+  // original at its source never feels like a gamble. Only a failure or an
+  // in-flight read withholds the claim (the seed's sources carry no status).
+  const safe =
+    source.status !== 'failed' &&
+    source.status !== 'pending' &&
+    source.status !== 'processing' &&
+    source.raw_content.trim().length > 0;
   return (
     <div className="source-card" data-testid="source-card">
       <div className="source-card__type">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
+        {safe && (
+          <span className="source-card__safe" data-testid="source-safe" title={t('sources.safe')}>
+            ✓ {t('sources.held')}
+          </span>
+        )}
+        {source.url && (
+          <a
+            className="source-card__origin"
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('sources.openOrigin')}
+          </a>
+        )}
       </div>
       <div className="source-card__title">{source.title}</div>
       <div className="source-card__body">
@@ -244,10 +268,14 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
     setMerge({ phase: 'applying', withId, reason, mergedText });
     try {
       const store = useWorkspaceStore.getState();
+      const other = payload.memories.find((m) => m.id === withId);
+      const originals = new Set([memory.source_id, other?.source_id].filter(Boolean)).size;
       const result = await store.source.mergeMemories!([memory.id, withId], mergedText);
       store.applyPayload(result.graph);
       select(result.mergedMemoryId);
-      useUiStore.getState().toast(t('toast.merged'));
+      // The migration story, told at the moment it matters: the merge changed
+      // Mado's copy only — the originals it drew from are still held whole.
+      useUiStore.getState().toast(t('toast.merged', { n: originals }));
     } catch {
       setMerge({ phase: 'error', withId });
     }

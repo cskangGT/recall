@@ -1637,6 +1637,44 @@ button {
   }
 }
 
+/* ------------------------------------------------------- migration story
+   "Held — safe to clear at the source." A quiet green tick, not a banner:
+   the fact is reassuring precisely because it is stated matter-of-factly. */
+.source-row__safe,
+.source-card__safe {
+  color: #6fae7f;
+  font-size: var(--text-xs);
+  letter-spacing: 0.01em;
+}
+
+.source-card__safe {
+  margin-left: 8px;
+}
+
+.source-row__origin,
+.source-card__origin {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.source-row__origin:hover,
+.source-card__origin:hover {
+  color: var(--accent);
+}
+
+.source-card__origin {
+  margin-left: 8px;
+}
+
+.sources__held-summary {
+  margin: 0 0 10px;
+  padding: 0 10px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
 /* -------------------------------------------------------------- user merge */
 
 /*

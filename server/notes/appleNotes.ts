@@ -21,6 +21,12 @@ export interface AppleNote {
   title: string;
   content: string;
   modified: Date;
+  /**
+   * Where the original lives, when the source system has an address — Notion
+   * pages do, Apple Notes do not. Carried so "safe to clear at the source"
+   * can offer the walk back to the thing being cleared.
+   */
+  url?: string;
 }
 
 export interface NotesReadResult {
