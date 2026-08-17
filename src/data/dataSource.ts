@@ -133,18 +133,87 @@ class HttpError extends Error {
   }
 }
 
+const INVITE_KEY = 'mado.invite';
+
+/**
+ * The invite token, resolved once per load: a `?invite=` in the link wins and
+ * is remembered, so a tester clicks one link once and every later visit still
+ * writes. Pure over its inputs for the tests; the wrapper below feeds it the
+ * real location and storage.
+ */
+export function resolveInvite(
+  search: string,
+  stored: string | null,
+  remember: (token: string) => void = () => {},
+): string | null {
+  const fromLink = new URLSearchParams(search).get('invite');
+  if (fromLink && fromLink.trim().length > 0) {
+    remember(fromLink);
+    return fromLink;
+  }
+  return stored;
+}
+
+function currentInvite(): string | null {
+  if (typeof window === 'undefined') return null;
+  return resolveInvite(
+    window.location.search,
+    localStorage.getItem(INVITE_KEY),
+    (token) => localStorage.setItem(INVITE_KEY, token),
+  );
+}
+
 export class ApiDataSource implements DataSource {
   readonly mode = 'api' as const;
 
+  /**
+   * `workspaceId` fixed (dev's `?api=1` keeps everyone on ws_demo, where the
+   * local server's corpus lives) or absent — the hosted case, where each
+   * visitor gets their own workspace: minted once via POST /workspaces,
+   * remembered in localStorage, and shared by every later visit. Without
+   * this, the first tester who deleted something would delete it for all.
+   */
+  private wsPromise: Promise<string> | null = null;
+
   constructor(
-    private readonly workspaceId = 'ws_demo',
+    private readonly workspaceId?: string,
     private readonly base = '/api',
   ) {}
 
+  private ensureWorkspace(): Promise<string> {
+    if (this.workspaceId) return Promise.resolve(this.workspaceId);
+    this.wsPromise ??= (async () => {
+      const stored = localStorage.getItem('mado.workspace');
+      if (stored) return stored;
+      const invite = currentInvite();
+      const response = await fetch(`${this.base}/workspaces`, {
+        method: 'POST',
+        headers: invite ? { 'x-recall-invite': invite } : undefined,
+      });
+      const body = (await response.json()) as { workspaceId?: string; error?: string };
+      if (!response.ok || !body.workspaceId) {
+        // Do not cache a failure — the next request should try again.
+        this.wsPromise = null;
+        throw new HttpError(response.status, body.error ?? 'could not create a workspace');
+      }
+      localStorage.setItem('mado.workspace', body.workspaceId);
+      return body.workspaceId;
+    })();
+    return this.wsPromise;
+  }
+
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}${path}`, {
+    // The invite rides on every request as a header — never a query parameter,
+    // which would leak it into access logs and shared links (routes.ts says
+    // the same from the server's side).
+    const invite = currentInvite();
+    const workspace = await this.ensureWorkspace();
+    const response = await fetch(`${this.base}/workspaces/${workspace}${path}`, {
       ...init,
-      headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+      headers: {
+        ...(init?.body ? { 'content-type': 'application/json' } : {}),
+        ...(invite ? { 'x-recall-invite': invite } : {}),
+      },
     });
     const body = (await response.json()) as T & { error?: string };
     if (!response.ok) {
@@ -211,9 +280,14 @@ export class ApiDataSource implements DataSource {
     onDelta: (text: string) => void,
     history?: AskTurn[],
   ): Promise<AskResult> {
-    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}/ask/stream`, {
+    const invite = currentInvite();
+    const workspace = await this.ensureWorkspace();
+    const response = await fetch(`${this.base}/workspaces/${workspace}/ask/stream`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(invite ? { 'x-recall-invite': invite } : {}),
+      },
       body: JSON.stringify({ question, history }),
     });
     if (!response.ok || !response.body) {
@@ -353,7 +427,9 @@ export function isOffline(search = typeof window === 'undefined' ? '' : window.l
 export function selectDataSource(search = typeof window === 'undefined' ? '' : window.location.search): DataSource {
   if (isOffline(search)) return SeedDataSource;
   const params = new URLSearchParams(search);
-  if (params.get('api') === '1') return new ApiDataSource();
+  // `?api=1` is the developer's door and keeps everyone on the local server's
+  // one corpus; a build shipped with a server gives each visitor their own.
+  if (params.get('api') === '1') return new ApiDataSource('ws_demo');
   const builtForApi = (import.meta.env ?? {}).VITE_API_DEFAULT === '1';
   return builtForApi ? new ApiDataSource() : SeedDataSource;
 }
