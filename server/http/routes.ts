@@ -30,6 +30,8 @@ export interface ApiRequest {
   invite?: string;
   /** The browser's `Origin` header, if the caller was a browser. See `originAllowed`. */
   origin?: string;
+  /** The request's own `Host` header — what `originAllowed` compares against. */
+  host?: string;
 }
 
 export interface ApiResponse {
@@ -132,6 +134,21 @@ function originAllowed(req: ApiRequest): boolean {
   // The served client and the Vite dev proxy — which forwards the browser's own
   // `Origin: http://localhost:5173` even with `changeOrigin: true`.
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.origin)) return true;
+
+  /*
+   * Same-origin, by comparison rather than by list. A hosted deployment's own
+   * client sends `Origin: http://<its address>` on every POST — a browser
+   * attaches it to all non-GETs, same-origin or not — and the localhost list
+   * above refused the server's own pages. The page a stranger's site serves
+   * still loses: their Origin names their host, not this one.
+   */
+  if (req.host) {
+    try {
+      if (new URL(req.origin).host === req.host) return true;
+    } catch {
+      // An unparseable Origin ("null", garbage) falls through to refusal.
+    }
+  }
 
   /*
    * Any extension, not a pinned id. An extension that can reach 127.0.0.1 holds
