@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SqliteRepository } from '../db/sqlite.ts';
-import { importSeed, namespaceSeed } from '../seed/import.ts';
-import seedJson from '../../seed/workspace.json' with { type: 'json' };
-import type { GraphPayload } from '../../src/core/types.ts';
+import { importSeed, namespaceSeed, seedFor } from '../seed/import.ts';
 import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
@@ -127,11 +125,13 @@ const server = createApiServer(
      * multi-tenant, so this is a seed import under a new id — no migration,
      * and no way for one visitor's deletions to reach another's screen.
      */
-    createWorkspace: () => {
+    createWorkspace: (locale?: 'en' | 'ko') => {
       const id = `ws_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
       // Namespaced, because the seed's primary keys are fixed and a second
-      // import of them collides — see `namespaceSeed`.
-      importSeed(repo, id, namespaceSeed(seedJson as unknown as GraphPayload, id));
+      // import of them collides — see `namespaceSeed`. The seed follows the
+      // visitor's language: a Korean tester's first map reads like their own
+      // life, not a founder's in English.
+      importSeed(repo, id, namespaceSeed(seedFor(locale), id));
       // A visitor's workspace is the hosted consumer product: free remembers
       // two weeks, and billing is the way up. A self-hosted instance never
       // takes this path and stays 'pro' — it owns its keys and pays nobody.

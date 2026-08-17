@@ -57,8 +57,9 @@ export interface Deps {
   ask: AskPipeline;
   /** Restores a workspace to the seed corpus. */
   reset: (workspaceId: string) => void;
-  /** Mints a fresh workspace seeded from the demo corpus, returning its id. */
-  createWorkspace?: () => string;
+  /** Mints a fresh workspace seeded from the demo corpus, returning its id.
+   *  The locale picks which corpus — a Korean visitor starts in Korean. */
+  createWorkspace?: (locale?: 'en' | 'ko') => string;
   /**
    * The token a request must carry to change anything, or undefined to let
    * every request through — which is what local development and the test suite
@@ -200,7 +201,10 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
    */
   if (req.method === 'POST' && segments[1] === 'workspaces' && !segments[2]) {
     if (!deps.createWorkspace) return notFound();
-    return ok({ workspaceId: deps.createWorkspace() });
+    const body = asRecord(req.body);
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    return ok({ workspaceId: deps.createWorkspace(locale) });
   }
 
   // /api/workspaces/:id/...

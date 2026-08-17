@@ -1,6 +1,21 @@
 import type { Repository } from '../db/repository.ts';
 import type { GraphPayload, Memory } from '../../src/core/types.ts';
 import workspaceJson from '../../seed/workspace.json' with { type: 'json' };
+import workspaceKoJson from '../../seed/workspace.ko.json' with { type: 'json' };
+
+/**
+ * The demo corpus in the visitor's language.
+ *
+ * The Korean seed is not a translation: twelve Korean sources — a side
+ * project's retro, a cafe-opening scout, running logs, a Jeju itinerary —
+ * were run through the real pipeline (OpenAI extraction, embedding,
+ * clustering) and the resulting workspace frozen, exactly how the English
+ * seed's structure was earned. A Korean tester's first ten seconds are a map
+ * that reads like their own life, not a founder's in another language.
+ */
+export function seedFor(locale?: 'en' | 'ko'): GraphPayload {
+  return (locale === 'ko' ? workspaceKoJson : workspaceJson) as unknown as GraphPayload;
+}
 
 /**
  * Loads seed/workspace.json into a repository.

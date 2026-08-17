@@ -186,9 +186,16 @@ export class ApiDataSource implements DataSource {
       const stored = localStorage.getItem('mado.workspace');
       if (stored) return stored;
       const invite = currentInvite();
+      // The locale rides along so the starter corpus arrives in the visitor's
+      // language — the Korean seed is a different authored workspace, not a
+      // translation.
       const response = await fetch(`${this.base}/workspaces`, {
         method: 'POST',
-        headers: invite ? { 'x-recall-invite': invite } : undefined,
+        headers: {
+          'content-type': 'application/json',
+          ...(invite ? { 'x-recall-invite': invite } : {}),
+        },
+        body: JSON.stringify({ locale: currentLocale() }),
       });
       const body = (await response.json()) as { workspaceId?: string; error?: string };
       if (!response.ok || !body.workspaceId) {
