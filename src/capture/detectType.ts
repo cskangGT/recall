@@ -1,4 +1,5 @@
 import type { SourceType } from '../core/types';
+import { t } from '../i18n';
 
 const URL_RE = /https?:\/\/[^\s]+/g;
 
@@ -23,7 +24,7 @@ export function detectCaptureType(input: {
 }
 
 export const TYPE_LABEL: Record<SourceType, string> = {
-  text: 'Text',
-  link: 'Link',
-  screenshot: 'Screenshot',
+  text: t('type.text'),
+  link: t('type.link'),
+  screenshot: t('type.screenshot'),
 };

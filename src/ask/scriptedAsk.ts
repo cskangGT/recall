@@ -28,9 +28,22 @@ export function isQuestion(input: string): boolean {
   return t.endsWith('?') || QUESTION_WORDS.test(t) || t.split(/\s+/).length > 6;
 }
 
-export function answerQuestion(question: string, payload: GraphPayload): ScriptedAnswer {
+export function answerQuestion(
+  question: string,
+  payload: GraphPayload,
+  history: { question: string; answer: string }[] = [],
+): ScriptedAnswer {
   const q = question.toLowerCase();
-  const entry = answers.find((a) => a.match.every((kw) => q.includes(kw)));
+  // A follow-up rarely repeats its referent's keywords — "which tool won?"
+  // says nothing about evals. The question alone is matched first; failing
+  // that, the conversation is, which is the scripted stand-in for what a real
+  // model does with the history block. No entry either way still refuses.
+  const withHistory = [...history.map((t) => t.question), question].join(' ').toLowerCase();
+  const entry =
+    answers.find((a) => a.match.every((kw) => q.includes(kw))) ??
+    (history.length > 0
+      ? answers.find((a) => a.match.every((kw) => withHistory.includes(kw)))
+      : undefined);
 
   // Never answer from world knowledge.
   if (!entry) {

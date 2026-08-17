@@ -5,7 +5,9 @@ import {
   ENTITY_ZOOM_CUTOFF,
   CHILD_LABEL_ZOOM_CUTOFF,
   ENTITY_LABEL_ZOOM_CUTOFF,
+  ENTITY_DIM_ZOOM,
   colorFor,
+  screenRadius,
 } from './nodeStyles';
 import { worldToScreen, type Camera, type Viewport } from './camera';
 
@@ -83,6 +85,11 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
 
   const alphaFor = (id: string): number => (!highlighting || highlighted.has(id) ? 1 : s.dimOpacity);
 
+  // Entities are context, not content. Zoomed out they recede to a whisper so
+  // the big picture stays amber-on-dark; zoomed in they come back.
+  const entityFade =
+    camera.zoom >= ENTITY_DIM_ZOOM ? 1 : 0.25 + 0.75 * (camera.zoom / ENTITY_DIM_ZOOM) ** 2;
+
   // Edges first so labels are never occluded.
   //
   // Drawn as a gradient along their own length rather than a flat grey line.
@@ -107,7 +114,8 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
       gradient.addColorStop(1, withAlpha(base, alpha * 0.15));
       ctx.strokeStyle = gradient;
     } else {
-      ctx.strokeStyle = withAlpha(base, alpha * (e.kind === 'mentions' ? 0.7 : 1));
+      const mentionAlpha = e.kind === 'mentions' ? 0.7 * entityFade : 1;
+      ctx.strokeStyle = withAlpha(base, alpha * mentionAlpha);
     }
 
     ctx.lineWidth = e.kind === 'relates_to' ? 1.5 : 1;
@@ -128,7 +136,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     if (!visible(n) || desaturated.has(n.id)) continue;
     const { sx, sy } = worldToScreen(n, camera, viewport);
     const scale = s.scaleOverrides?.get(n.id) ?? 1;
-    const r = n.radius * camera.zoom * scale;
+    const r = screenRadius(n.kind, n.radius, camera.zoom) * scale;
     if (r <= 0) continue;
 
     const reach = r * (s.hoveredId === n.id ? 4.2 : 3.2);
@@ -148,9 +156,10 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     const { sx, sy } = worldToScreen(n, camera, viewport);
     const hovered = s.hoveredId === n.id;
     const scale = (s.scaleOverrides?.get(n.id) ?? 1) * (hovered ? 1.15 : 1);
-    const r = n.radius * camera.zoom * scale;
+    const r = screenRadius(n.kind, n.radius, camera.zoom) * scale;
     if (r <= 0) continue;
 
+    const nodeAlpha = alphaFor(n.id) * (n.kind === 'entity' && !hovered ? entityFade : 1);
     const base = colorFor(n.kind);
     if (desaturated.has(n.id)) {
       ctx.fillStyle = desaturate(base);
@@ -159,11 +168,11 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
       // sticker. Below ~4px the gradient is invisible and costs a paint, so
       // memory dots stay flat.
       const lit = ctx.createRadialGradient(sx - r * 0.35, sy - r * 0.4, r * 0.1, sx, sy, r);
-      lit.addColorStop(0, withAlpha(lighten(base, 0.3), alphaFor(n.id)));
-      lit.addColorStop(1, withAlpha(base, alphaFor(n.id)));
+      lit.addColorStop(0, withAlpha(lighten(base, 0.3), nodeAlpha));
+      lit.addColorStop(1, withAlpha(base, nodeAlpha));
       ctx.fillStyle = lit;
     } else {
-      ctx.fillStyle = withAlpha(base, alphaFor(n.id));
+      ctx.fillStyle = withAlpha(base, nodeAlpha);
     }
 
     ctx.beginPath();
@@ -201,7 +210,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
   // Drawn after the nodes so it passes in front of the category taking it.
   for (const d of s.dissolving ?? []) {
     const { sx, sy } = worldToScreen(d, camera, viewport);
-    const r = d.radius * camera.zoom;
+    const r = screenRadius('parent_category', d.radius, camera.zoom);
     if (r <= 0.5) continue;
     ctx.fillStyle = withAlpha(COLORS.parentCategory, 0.55 * d.alpha);
     ctx.beginPath();
@@ -256,11 +265,17 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     const scale = s.scaleOverrides?.get(n.id) ?? 1;
     if (scale <= 0.01) continue;
 
-    ctx.font =
-      n.kind === 'parent_category'
-        ? '600 13px Inter, system-ui, -apple-system, sans-serif'
-        : '11px Inter, system-ui, -apple-system, sans-serif';
-    const y = sy + n.radius * camera.zoom * scale + 14;
+    // Parent names are the big picture — they read at a glance or the map has
+    // failed. The count rides along so size never has to carry it alone.
+    const isParent = n.kind === 'parent_category';
+    ctx.font = isParent
+      ? '600 15px Inter, system-ui, -apple-system, sans-serif'
+      : '11px Inter, system-ui, -apple-system, sans-serif';
+    const text =
+      n.kind === 'parent_category' || n.kind === 'child_category'
+        ? `${n.label}${n.count ? ` · ${n.count}` : ''}`
+        : n.label;
+    const y = sy + screenRadius(n.kind, n.radius, camera.zoom) * scale + (isParent ? 16 : 13);
 
     /*
      * A halo, drawn before the glyphs.
@@ -277,15 +292,16 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
      */
     ctx.save();
     ctx.lineJoin = 'round';
-    ctx.lineWidth = n.kind === 'parent_category' ? 4 : 3;
+    ctx.lineWidth = isParent ? 5 : 3;
     ctx.strokeStyle = withAlpha('#07070a', alphaFor(n.id) * 0.92);
-    ctx.strokeText(n.label, sx, y);
+    ctx.strokeText(text, sx, y);
     ctx.restore();
 
+    // Parents always at full brightness — they are the map's headings.
     ctx.fillStyle = withAlpha(
-      s.hoveredId === n.id || s.selectedId === n.id ? COLORS.label : COLORS.labelDim,
-      alphaFor(n.id),
+      isParent || s.hoveredId === n.id || s.selectedId === n.id ? COLORS.label : COLORS.labelDim,
+      alphaFor(n.id) * (n.kind === 'entity' ? entityFade : 1),
     );
-    ctx.fillText(n.label, sx, y);
+    ctx.fillText(text, sx, y);
   }
 }

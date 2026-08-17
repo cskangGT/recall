@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import { search } from '../search/search';
+import { matchedLabelNodes, search } from '../search/search';
 import type { SourceType } from '../core/types';
 
 /**
@@ -57,6 +58,13 @@ export function MapSearch() {
 
   const searching = query.trim().length > 0 || filter !== 'all';
 
+  // The word the user typed may BE a label on the map — a category name or an
+  // entity. Those nodes light up too, so the thing they are looking at answers.
+  const labelIds = useMemo(
+    () => (payload && query.trim().length > 0 ? matchedLabelNodes(payload, query) : []),
+    [payload, query],
+  );
+
   /*
    * The highlight is shared with the answer, so this bar only touches it while
    * it is actually saying something.
@@ -71,12 +79,12 @@ export function MapSearch() {
   useEffect(() => {
     if (searching) {
       owns.current = true;
-      setHighlight(results.map((r) => r.memory.id));
+      setHighlight([...results.map((r) => r.memory.id), ...labelIds]);
     } else if (owns.current) {
       owns.current = false;
       setHighlight([]);
     }
-  }, [searching, results, setHighlight]);
+  }, [searching, results, labelIds, setHighlight]);
 
   useEffect(
     () => () => {
@@ -96,8 +104,8 @@ export function MapSearch() {
         </span>
         <input
           data-testid="map-search-input"
-          aria-label="Search your memories"
-          placeholder="Find something on the map…"
+          aria-label={t('map.search.label')}
+          placeholder={t('map.search.placeholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

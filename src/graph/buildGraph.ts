@@ -26,15 +26,17 @@ export function buildGraph(payload: GraphPayload): { nodes: GraphNode[]; edges: 
 
   for (const c of payload.categories) {
     const kind: NodeKind = c.parent_id === null ? 'parent_category' : 'child_category';
+    const count = descendantCount(c.id);
     nodes.push({
       id: c.id,
       kind,
       label: c.name,
       x: c.x ?? 0,
       y: c.y ?? 0,
-      radius: radiusFor(kind, descendantCount(c.id)),
+      radius: radiusFor(kind, count),
       pinned: c.pinned,
       parentId: c.parent_id,
+      count,
     });
     if (c.parent_id !== null) {
       edges.push({
@@ -53,7 +55,9 @@ export function buildGraph(payload: GraphPayload): { nodes: GraphNode[]; edges: 
       label: m.text,
       x: m.x ?? 0,
       y: m.y ?? 0,
-      radius: radiusFor('memory', 0),
+      // A thought that keeps arriving grows — times_seen is the importance
+      // signal the charter promises to make visible.
+      radius: radiusFor('memory', 0) + Math.min(4, ((m.times_seen ?? 1) - 1) * 1.4),
       pinned: m.pinned,
       parentId: m.category_id,
     });

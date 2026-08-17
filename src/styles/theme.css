@@ -652,19 +652,34 @@ button {
  * clip at the left of a chat box is not, and this is the box the cursor is
  * already in.
  */
+/* Saving's own door: a labeled pill, not an unexplained glyph. The word is
+   what separates "add to my memory" from the question box beside it. */
 .composer__add {
   flex: none;
-  width: 32px;
   height: 32px;
   margin-left: -6px;
-  border-radius: var(--radius-sm);
-  display: grid;
-  place-items: center;
+  padding: 0 12px 0 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-dim);
-  font-size: 22px;
-  font-weight: 300;
+  font-size: var(--text-sm);
   line-height: 1;
-  transition: color 120ms ease, background 120ms ease;
+  white-space: nowrap;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.composer__add > span[aria-hidden] {
+  font-size: 18px;
+  font-weight: 300;
+}
+
+.composer__add:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+  background: rgba(240, 232, 250, 0.14);
 }
 
 .composer__add:hover {
@@ -1515,6 +1530,46 @@ button {
   letter-spacing: 0.02em;
 }
 
+/* One click from looking to understanding. Sits beside the category's name,
+   quiet until hovered — it is an offer, not a demand. */
+.reading__summarize {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.reading__summarize:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+/* Working, and saying so — the amber edge breathes while the model reads. */
+.reading__summarize--busy {
+  color: var(--text);
+  border-color: var(--accent-dim);
+  cursor: default;
+  animation: summarize-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes summarize-breathe {
+  0%, 100% { border-color: var(--accent-dim); }
+  50% { border-color: var(--accent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading__summarize--busy {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
 .reading__answer {
   margin: 2px 0 18px;
   padding: 0 10px;
@@ -1523,6 +1578,207 @@ button {
   line-height: 1.6;
   letter-spacing: -0.005em;
   text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------- ask thread
+   The conversation, visible: your questions sit right like speech, prior
+   turns dim into the past, and the newest answer keeps full brightness. */
+.thread {
+  margin: 2px 0 4px;
+  opacity: 0.55;
+}
+
+.thread__turn {
+  margin-bottom: 16px;
+}
+
+.thread__q {
+  margin: 0 10px 8px auto;
+  max-width: 85%;
+  width: fit-content;
+  padding: 5px 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.thread__q--current {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent-dim) 40%, var(--edge));
+}
+
+.thread__a {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* The streaming caret: the answer is arriving, and the page says so. */
+.reading__answer--streaming::after {
+  content: '▍';
+  color: var(--accent);
+  animation: caret-breathe 1s ease-in-out infinite;
+}
+
+@keyframes caret-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading__answer--streaming::after {
+    animation: none;
+  }
+}
+
+/* -------------------------------------------------------------- user merge */
+
+/*
+ * The merge card: AI explains why two memories overlap and drafts the one
+ * text that holds everything; the person decides. It sits under the related
+ * row it belongs to, indented like a reply.
+ */
+.merge__offer {
+  margin: 2px 0 8px 12px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--accent-dim);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.merge__offer:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.merge {
+  margin: 4px 0 12px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+}
+
+.merge__eyebrow {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.merge__reason,
+.merge__text,
+.merge__note {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.merge__note {
+  color: var(--text-dim);
+  margin-bottom: 0;
+}
+
+.merge__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.merge__confirm {
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.merge__confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.merge__cancel {
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------ keyword lens */
+
+/*
+ * Chips before sentences. The strip sits between the category's name and its
+ * reading list: scan the handles, pick one, and the list narrows while the
+ * strip re-derives itself from what is left — drill-down without needing the
+ * taxonomy to have levels.
+ */
+.reading__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 10px 12px;
+}
+
+.kw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.kw:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+/* Entities are curated names, not just frequent words — a warmer edge. */
+.kw--entity {
+  border-color: color-mix(in srgb, var(--accent-dim) 45%, var(--edge));
+}
+
+.kw--selected {
+  border-color: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-raised));
+  color: var(--text);
+}
+
+.kw__count {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.kw__x {
+  color: var(--text-faint);
+}
+
+.kw--selected:hover .kw__x {
+  color: var(--text);
 }
 
 /* -------------------------------------------------------------- list items */
@@ -2339,4 +2595,416 @@ button {
   border-radius: var(--radius-sm);
   background: var(--accent);
   animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------ reveal
+ * The bulk-drop reveal: dots pour in while items are read, gather while the
+ * pipeline runs, and resolve into the declaration. One overlay, three beats,
+ * paced by batchRun.ts — the CSS only knows how each beat looks.
+ */
+
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 7, 9, 0.82);
+  backdrop-filter: blur(6px);
+  animation: rise 0.3s ease;
+}
+
+.reveal__sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.reveal__dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.5s ease, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal__dot--lit {
+  opacity: 0.85;
+  transform: scale(1);
+}
+
+/* The gather: every lit dot drifts toward the centre of the sky. */
+.reveal--organizing .reveal__dot--lit {
+  transform: translate(var(--dx), var(--dy)) scale(0.7);
+  opacity: 0.55;
+  transition-duration: 1.6s;
+}
+
+/* The declaration takes the stage; the dots settle behind it as texture. */
+.reveal--declare .reveal__dot--lit {
+  transform: translate(var(--dx), var(--dy)) scale(0.5);
+  opacity: 0.12;
+}
+
+.reveal__status {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.reveal__count {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal__of {
+  font-size: var(--text-lg);
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.reveal__stage {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+}
+
+.reveal__declare {
+  position: relative;
+  max-width: 560px;
+  padding: 0 32px;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+  animation: rise 0.45s ease;
+}
+
+.reveal__declare h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.35;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.reveal__declare h2 strong {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.reveal__skipped {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-faint);
+}
+
+.reveal__chips {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.reveal__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.reveal__chip--new {
+  border-color: var(--accent-dim);
+}
+
+.reveal__chip-count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal__chip-badge {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reveal__dismiss {
+  margin-top: 10px;
+  padding: 9px 22px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reveal__dismiss:hover {
+  background: var(--accent-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal__declare {
+    animation: none;
+  }
+  .reveal__dot {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ plan
+ * The free window. Archived rows stay present — "a capture is never lost"
+ * includes visually — but unreadable, and the paywall line under the list is
+ * the only place the product ever asks for money.
+ */
+
+.item--archived {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.item__text--archived {
+  filter: blur(4px);
+  user-select: none;
+}
+
+.reading__paywall {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  font-size: var(--text-base);
+  color: var(--text-dim);
+}
+
+.reading__upgrade {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reading__upgrade:hover {
+  background: var(--accent-dim);
+}
+
+/* ------------------------------------------------------------------ follow-up
+ * The conversation line in the ask bar: what the next question would follow,
+ * and the way out of it. One line, quiet — the thread is context, not content.
+ */
+
+.bar__followup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.bar__followup-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar__followup-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.bar__followup-clear:hover {
+  color: var(--accent-dim);
+}
+
+/* ------------------------------------------------------------------ doors
+ * The welcome's two doors: fill your memory, or look around first. The first
+ * is the accented one — it is the door the product wants walked through.
+ */
+
+.arc__doors {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.arc__door {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 260px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.arc__door:hover {
+  border-color: var(--accent-dim);
+}
+
+.arc__door--fill {
+  border-color: var(--accent-dim);
+}
+
+.arc__door-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.arc__door--fill .arc__door-name {
+  color: var(--accent);
+}
+
+.arc__door-hint {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+/* Reveal → first question bridge */
+.reveal__ask {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reveal__ask-prompt {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.reveal__ask-q {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.reveal__ask-q:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ korean
+ * Korean typography: never break inside a word. The lang attribute is set by
+ * src/i18n at load, so this follows the resolved locale, not the browser's.
+ * overflow-wrap stays as the pressure valve for genuinely unbreakable runs.
+ */
+
+:lang(ko) body,
+body:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Reveal: the rescued-period stamp and the top-three interests. */
+.reveal__period {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--accent);
+}
+
+.reveal__chip {
+  animation: rise 0.45s ease backwards;
+}
+
+.reveal__chip--top {
+  font-size: var(--text-lg);
+  padding: 9px 16px;
+  border-color: var(--accent-dim);
+}
+
+.reveal__chip--top .reveal__chip-name {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal__chip {
+    animation: none;
+  }
+}
+
+/* The fill door's disclosed sources — one quiet row, appearing in place. */
+.arc__sources {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+  animation: rise 0.25s ease;
+}
+
+.arc__source {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.arc__source:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* Reinforcement: the ×N that says a thought keeps coming back. */
+.item__times {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--times {
+  color: var(--accent);
+  border-color: var(--accent-dim);
 }

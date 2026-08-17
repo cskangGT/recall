@@ -1,16 +1,40 @@
 import { create } from 'zustand';
+import { t } from '../i18n';
 import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 import type { CaptureStory } from '../capture/story';
+import type { BatchCategorySummary } from '../capture/batch';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
 
+/**
+ * The reveal a bulk drop plays: dots pour in while items are read, gather
+ * while the pipeline runs, and resolve into the declaration — what was
+ * organized, into which interests. `declare` waits for a click; the first
+ * sight of your corpus sorted is not a state to time out of.
+ */
+export interface BatchRevealState {
+  phase: 'reading' | 'organizing' | 'declare';
+  /** Items in the batch. */
+  total: number;
+  /** Items read so far — drives the pour of dots. */
+  read: number;
+  summary: {
+    memories: number;
+    skipped: number;
+    sources: number;
+    categories: BatchCategorySummary[];
+    /** The stretch of time this batch rescued, when the import knows it. */
+    period?: { from: string; to: string } | null;
+  } | null;
+}
+
 export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
-  reading: 'Reading…',
-  extracting: 'Extracting memories…',
-  connecting: 'Finding connections…',
-  reorganizing: 'Reorganizing…',
+  reading: t('stage.reading'),
+  extracting: t('stage.extracting'),
+  connecting: t('stage.connecting'),
+  reorganizing: t('stage.reorganizing'),
 };
 
 export interface Toast {
@@ -63,10 +87,35 @@ interface UiState {
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
   answer: (ScriptedAnswer & { question: string }) | null;
+  /**
+   * The conversation so far — answered questions, oldest first, capped at
+   * three. Sent with the next question so a follow-up ("which of those?") has
+   * a *those*. Each answer is still built from the corpus alone; the thread
+   * disambiguates the question, it is never evidence. Dies with the answer:
+   * dismissing the answer surface ends the conversation.
+   */
+  askThread: { question: string; answer: string }[];
+  /**
+   * True while a question is out with the model. One shared flag rather than
+   * per-surface state: the composer, the summarize button, and the reveal's
+   * suggested questions all ask through `runAsk`, and every one of them must
+   * show the wait — an unanswered click is what sends a person off pressing
+   * other buttons to see if anything is happening.
+   */
+  asking: boolean;
+  /**
+   * The answer as it streams in, before the final result lands. Rendered on
+   * the same surface `answer` will occupy; `setAnswer` supersedes it, so the
+   * validated result — including a refusal that overrides text the model
+   * already streamed — always owns what persists.
+   */
+  answerDraft: { question: string; text: string } | null;
   /** The account of the last capture — what was read, what was new, where it went. */
   lastCapture: CaptureStory | null;
   /** True while a file is being dragged over the window. */
   dropActive: boolean;
+  /** Non-null while a bulk drop is being read, organized, or declared. */
+  batchReveal: BatchRevealState | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -87,8 +136,13 @@ interface UiState {
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
   setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  setAsking: (asking: boolean) => void;
+  setAnswerDraft: (draft: { question: string; text: string } | null) => void;
+  /** Ends the conversation without touching the answer on screen. */
+  clearAskThread: () => void;
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
+  setBatchReveal: (state: BatchRevealState | null) => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -114,8 +168,12 @@ export const useUiStore = create<UiState>((set, get) => ({
   captureStage: 'idle',
   reorgHistory: [],
   answer: null,
+  askThread: [],
+  asking: false,
+  answerDraft: null,
   lastCapture: null,
   dropActive: false,
+  batchReveal: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -167,6 +225,17 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAnswer: (answer) =>
     set((s) => ({
       answer,
+      // The validated result supersedes whatever streamed in ahead of it.
+      answerDraft: null,
+      // An answered question extends the conversation; a refusal or a
+      // dismissal does not — following up on "I don't have anything" is
+      // following up on nothing.
+      askThread:
+        answer === null
+          ? []
+          : answer.refused
+            ? s.askThread
+            : [...s.askThread, { question: answer.question, answer: answer.answer }].slice(-3),
       openCategoryId:
         answer !== null && s.view === 'browse'
           ? ANSWER_FOLDER_ID
@@ -174,13 +243,31 @@ export const useUiStore = create<UiState>((set, get) => ({
             ? null
             : s.openCategoryId,
     })),
+  clearAskThread: () => set({ askThread: [] }),
+  setAsking: (asking) => set({ asking }),
+  // The draft opens the answer surface the way the answer itself would, so
+  // the first streamed words land where the reader will keep reading.
+  setAnswerDraft: (answerDraft) =>
+    set((s) => ({
+      answerDraft,
+      openCategoryId:
+        answerDraft !== null && s.view === 'browse' ? ANSWER_FOLDER_ID : s.openCategoryId,
+    })),
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
+  setBatchReveal: (batchReveal) => set({ batchReveal }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   escape: () => {
     const s = get();
+    // The declaration is dismissable like any modal; the reading and organizing
+    // phases are not — an Escape mid-pipeline would hide work that is still
+    // happening, not cancel it.
+    if (s.batchReveal?.phase === 'declare') {
+      set({ batchReveal: null });
+      return;
+    }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {
       set({ captureOpen: false, askOpen: false, settingsOpen: false });
       return;
@@ -188,10 +275,13 @@ export const useUiStore = create<UiState>((set, get) => ({
     // An answer and its highlight are one surface, so they clear together. The
     // answer has to be checked independently: a refusal cites nothing and
     // therefore highlights nothing, and it must still be dismissable.
-    if (s.highlightedIds.length > 0 || s.answer !== null) {
+    if (s.highlightedIds.length > 0 || s.answer !== null || s.answerDraft !== null) {
       set({
         highlightedIds: [],
         answer: null,
+        answerDraft: null,
+        // The conversation dies with the answer surface it happened on.
+        askThread: [],
         // The answer folder cannot outlive the answer it holds.
         openCategoryId: s.openCategoryId === ANSWER_FOLDER_ID ? null : s.openCategoryId,
       });

@@ -1,0 +1,33 @@
+# Fly rather than Vercel, and the reason is the database.
+#
+# server/db/sqlite.ts talks to `node:sqlite`, a file on a disk. Serverless
+# functions have no disk that survives the request, so the corpus would reset
+# between every capture. This needs a machine with a volume, which is what the
+# [mounts] block below is.
+#
+# Secrets are NOT here. Set them once with:
+#   fly secrets set OPENAI_API_KEY=... RECALL_INVITE=...
+# A committed key is a key to rotate.
+
+app = "recall"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  RECALL_DB = "/data/recall.db"
+  RECALL_STATIC = "/app/dist"
+
+[mounts]
+  source = "recall_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never to zero: the first visitor after a scale-down would wait for a cold
+  # start on a demo whose whole claim is that it answers in under a second.
+  auto_stop_machines = false
+  min_machines_running = 1

@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import { t, currentLocale } from '../i18n';
+import { mergeCandidates, relatedMemories } from '../core/related';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
 const SOURCE_LABEL: Record<Source['type'], string> = {
-  text: 'Note',
-  link: 'Link',
-  screenshot: 'Screenshot',
+  text: t('type.text'),
+  link: t('type.link'),
+  screenshot: t('type.screenshot'),
 };
 
 const relativeDate = (iso: string): string => {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(currentLocale() === 'ko' ? 'ko-KR' : 'en-GB', { day: 'numeric', month: 'short' });
 };
 
 function SourceCard({ source }: { source: Source }) {
@@ -44,7 +46,7 @@ function MemoryRow({
     <button className="memory-row" onClick={() => onSelect(memory.id)}>
       <span className="memory-row__text">{memory.text}</span>
       <span className="memory-row__meta">
-        {source ? SOURCE_LABEL[source.type] : 'Unknown'} · {relativeDate(memory.created_at)}
+        {source ? SOURCE_LABEL[source.type] : t('inspector.unknown')} · {relativeDate(memory.created_at)}
       </span>
     </button>
   );
@@ -88,7 +90,7 @@ function CategoryName({ category }: { category: Category }) {
       <h2
         className="inspector__name"
         data-testid="category-name"
-        title="Click to rename"
+        title={t('inspector.renameTitle')}
         onClick={() => setEditing(true)}
       >
         {category.name}
@@ -160,14 +162,14 @@ function CategoryDetail({
 
   return (
     <>
-      <div className="inspector__eyebrow">Category</div>
+      <div className="inspector__eyebrow">{t('inspector.category')}</div>
       <CategoryName category={category} />
       <div className="inspector__meta">
-        {parent ? `${parent.name} › ${category.name}` : 'Top level'} · {memories.length} memories
+        {t('inspector.categoryMeta', { path: parent ? `${parent.name} › ${category.name}` : t('inspector.topLevel'), count: memories.length })}
       </div>
       {locked && (
         <div className="chips">
-          <span className="chip chip--lock">Named by you — AI won't reorganize this</span>
+          <span className="chip chip--lock">{t('inspector.namedLock')}</span>
         </div>
       )}
       {childIds.length > 0 && (
@@ -186,8 +188,10 @@ function CategoryDetail({
         <div className="chips">
           {mix.map((x) => (
             <span key={x.type} className="chip">
-              {x.n} {SOURCE_LABEL[x.type].toLowerCase()}
-              {x.n === 1 ? '' : 's'}
+              {x.n}{' '}
+              {currentLocale() === 'ko'
+                ? SOURCE_LABEL[x.type]
+                : `${SOURCE_LABEL[x.type].toLowerCase()}${x.n === 1 ? '' : 's'}`}
             </span>
           ))}
         </div>
@@ -200,15 +204,58 @@ function CategoryDetail({
   );
 }
 
+/** A user-driven merge, one step at a time: AI explains, the person decides. */
+type MergeState =
+  | { phase: 'loading'; withId: string }
+  | { phase: 'preview'; withId: string; reason: string; mergedText: string }
+  | { phase: 'applying'; withId: string; reason: string; mergedText: string }
+  | { phase: 'error'; withId: string }
+  | null;
+
 function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPayload }) {
+  const related = relatedMemories(payload, memory.id);
+  const candidates = mergeCandidates(payload, memory.id);
   const select = useUiStore((s) => s.select);
   const category = payload.categories.find((c) => c.id === memory.category_id);
   const source = payload.sources.find((s) => s.id === memory.source_id);
   const entities = payload.entities.filter((e) => memory.entity_ids.includes(e.id));
 
+  const [merge, setMerge] = useState<MergeState>(null);
+  useEffect(() => setMerge(null), [memory.id]);
+  const canMerge = Boolean(useWorkspaceStore.getState().source.mergePreview);
+
+  const startMerge = async (otherId: string) => {
+    setMerge({ phase: 'loading', withId: otherId });
+    try {
+      const src = useWorkspaceStore.getState().source;
+      const draft = await src.mergePreview!([memory.id, otherId]);
+      setMerge({
+        phase: 'preview',
+        withId: otherId,
+        reason: draft.reason,
+        mergedText: draft.merged_text,
+      });
+    } catch {
+      setMerge({ phase: 'error', withId: otherId });
+    }
+  };
+
+  const confirmMerge = async (withId: string, reason: string, mergedText: string) => {
+    setMerge({ phase: 'applying', withId, reason, mergedText });
+    try {
+      const store = useWorkspaceStore.getState();
+      const result = await store.source.mergeMemories!([memory.id, withId], mergedText);
+      store.applyPayload(result.graph);
+      select(result.mergedMemoryId);
+      useUiStore.getState().toast(t('toast.merged'));
+    } catch {
+      setMerge({ phase: 'error', withId });
+    }
+  };
+
   return (
     <>
-      <div className="inspector__eyebrow">Memory</div>
+      <div className="inspector__eyebrow">{t('inspector.memory')}</div>
       <p className="memory-text">{memory.text}</p>
       <div className="chips">
         {category && (
@@ -217,7 +264,12 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
           </button>
         )}
         <span className="chip">{memory.kind}</span>
-        {memory.category_locked && <span className="chip chip--lock">Moved by you</span>}
+        {(memory.times_seen ?? 1) > 1 && (
+          <span className="chip chip--times" data-testid="times-chip">
+            {t('inspector.timesSeen', { n: memory.times_seen! })}
+          </span>
+        )}
+        {memory.category_locked && <span className="chip chip--lock">{t('inspector.movedLock')}</span>}
       </div>
       {entities.length > 0 && (
         <div className="chips">
@@ -229,13 +281,92 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
         </div>
       )}
       {source && <SourceCard source={source} />}
+      {/*
+        Alike enough to be the same thought said twice — offer, never act. Its
+        own section rather than a decoration on "related": related excludes
+        same-source siblings, and one page saying the same thing twice is
+        precisely the first merge a person wants. The AI explains why they
+        overlap and drafts the one text that holds everything; the person
+        decides. API mode only — the scripted demo cannot draft this honestly.
+      */}
+      {canMerge && candidates.length > 0 && (
+        <>
+          <div className="inspector__eyebrow">{t('inspector.merge.section')}</div>
+          {candidates.map(({ memory: m }) => (
+            <div key={m.id}>
+              <MemoryRow memory={m} payload={payload} onSelect={select} />
+              {merge?.withId !== m.id && (
+                <button
+                  className="merge__offer"
+                  data-testid={`merge-offer-${m.id}`}
+                  title={t('inspector.merge.title')}
+                  onClick={() => void startMerge(m.id)}
+                >
+                  {t('inspector.merge')}
+                </button>
+              )}
+              {merge?.withId === m.id && (
+                <div className="merge" data-testid="merge-card">
+                  {merge.phase === 'loading' && (
+                    <p className="merge__note">{t('inspector.merge.loading')}</p>
+                  )}
+                  {merge.phase === 'error' && (
+                    <p className="merge__note">{t('inspector.merge.error')}</p>
+                  )}
+                  {(merge.phase === 'preview' || merge.phase === 'applying') && (
+                    <>
+                      <div className="merge__eyebrow">{t('inspector.merge.why')}</div>
+                      <p className="merge__reason" data-testid="merge-reason">
+                        {merge.reason}
+                      </p>
+                      <div className="merge__eyebrow">{t('inspector.merge.result')}</div>
+                      <p className="merge__text" data-testid="merge-text">
+                        {merge.mergedText}
+                      </p>
+                      <div className="merge__actions">
+                        <button
+                          className="merge__confirm"
+                          data-testid="merge-confirm"
+                          disabled={merge.phase === 'applying'}
+                          onClick={() =>
+                            void confirmMerge(merge.withId, merge.reason, merge.mergedText)
+                          }
+                        >
+                          {merge.phase === 'applying'
+                            ? t('inspector.merge.applying')
+                            : t('inspector.merge.confirm')}
+                        </button>
+                        <button
+                          className="merge__cancel"
+                          data-testid="merge-cancel"
+                          onClick={() => setMerge(null)}
+                        >
+                          {t('inspector.merge.cancel')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+      {related.length > 0 && (
+        <>
+          <div className="inspector__eyebrow">{t('inspector.related')}</div>
+          {related.map(({ memory: m }) => (
+            <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
+          ))}
+        </>
+      )}
       <div className="inspector__footer">
         <DeleteButton
-          label="this memory"
+          label={t('inspector.deleteMemoryLabel')}
           onConfirm={() => {
             useWorkspaceStore.getState().deleteMemory(memory.id);
             select(null);
-            useUiStore.getState().toast('Deleted.');
+            useUiStore.getState().toast(t('toast.deleted'));
           }}
         />
       </div>
@@ -269,7 +400,7 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
         onConfirm();
       }}
     >
-      {armed ? `Delete ${label} — click again` : 'Delete'}
+      {armed ? t('inspector.deleteArmed', { label }) : t('inspector.delete')}
     </button>
   );
 }
@@ -279,11 +410,15 @@ function AnswerDetail() {
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload)!;
 
-  const parts = answer.answer.split(/(\[\d+\])/g).filter(Boolean);
+  // A refusal renders in the viewer's language; it cites nothing, so the
+  // [n] splitting has nothing to lose from the substitution.
+  const parts = (answer.refused ? t('ask.refusalText') : answer.answer)
+    .split(/(\[\d+\])/g)
+    .filter(Boolean);
 
   return (
     <>
-      <div className="inspector__eyebrow">Answer</div>
+      <div className="inspector__eyebrow">{t('inspector.answer')}</div>
       <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }}>{answer.question}</h2>
       <p className="answer" data-testid="answer">
         {parts.map((part, i) => {
@@ -304,7 +439,7 @@ function AnswerDetail() {
         })}
       </p>
 
-      {answer.citations.length > 0 && <div className="inspector__eyebrow">Sources</div>}
+      {answer.citations.length > 0 && <div className="inspector__eyebrow">{t('inspector.sources')}</div>}
       {answer.citations.map((c) => {
         const memory = payload.memories.find((m) => m.id === c.memory_id);
         const source = payload.sources.find((s) => s.id === c.source_id);
@@ -352,10 +487,13 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
   if (!welcomeDismissed) return null;
   return (
     <>
-      <div className="inspector__eyebrow">Workspace</div>
+      <div className="inspector__eyebrow">{t('inspector.workspace')}</div>
       <div className="stats">
-        {payload.memories.length} memories · {payload.sources.length} sources ·{' '}
-        {payload.categories.length} categories
+        {t('inspector.stats', {
+          memories: payload.memories.length,
+          sources: payload.sources.length,
+          categories: payload.categories.length,
+        })}
       </div>
 
       {/*
@@ -368,13 +506,13 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
       */}
       {view === 'map' && (
         <>
-          <div className="inspector__eyebrow">What you are looking at</div>
+          <div className="inspector__eyebrow">{t('inspector.legendTitle')}</div>
           <ul className="legend">
             {[
-              ['#E8A33D', 'Category', 'bigger the more it holds'],
-              ['#B0782E', 'Sub-category', 'a group inside one'],
-              ['#C9C9CE', 'Memory', 'one thing you saved'],
-              ['#5B8FB0', 'Entity', 'a name that recurs'],
+              ['#E8A33D', t('legend.category'), t('legend.categoryNote')],
+              ['#B0782E', t('legend.sub'), t('legend.subNote')],
+              ['#C9C9CE', t('legend.memory'), t('legend.memoryNote')],
+              ['#5B8FB0', t('legend.entity'), t('legend.entityNote')],
             ].map(([colour, name, note]) => (
               <li key={name} className="legend__row">
                 <span className="legend__dot" style={{ background: colour }} />
@@ -387,7 +525,7 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
       )}
       {history.length > 0 && (
         <>
-          <div className="inspector__eyebrow">Recent changes</div>
+          <div className="inspector__eyebrow">{t('inspector.recent')}</div>
           {history.slice(0, 3).map((e) => (
             <div key={e.id} className="memory-row">
               <span className="memory-row__text">{e.banner_text.replace(/\*\*/g, '')}</span>
@@ -406,7 +544,7 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
 
   return (
     <>
-      <div className="inspector__eyebrow">Source</div>
+      <div className="inspector__eyebrow">{t('inspector.source')}</div>
       <h2>{source.title}</h2>
       <div className="inspector__meta">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
@@ -416,14 +554,14 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
       {source.url && (
         <div className="chips">
           <a className="chip" href={source.url} target="_blank" rel="noreferrer noopener">
-            Open link ↗
+            {t('inspector.openLink')}
           </a>
         </div>
       )}
 
       <div className="source-card">
         <div className="source-card__type">
-          {source.type === 'screenshot' ? 'What Recall saw' : 'Raw content'}
+          {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
         </div>
         <div className="source-card__body">
           {source.type === 'screenshot' && source.scene_description
@@ -435,10 +573,10 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
       {extracted.length === 0 ? (
         // The state the "It's in your Sources" toast points at. Saying so beats
         // an empty list that reads like a bug.
-        <p className="inspector__meta">Recall couldn't find anything to remember in this.</p>
+        <p className="inspector__meta">{t('inspector.emptySource')}</p>
       ) : (
         <>
-          <div className="inspector__eyebrow">Memories extracted from this</div>
+          <div className="inspector__eyebrow">{t('inspector.extracted')}</div>
           {extracted.map((m) => (
             <MemoryRow key={m.id} memory={m} payload={payload} onSelect={select} />
           ))}

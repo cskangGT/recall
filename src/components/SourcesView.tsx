@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { GraphPayload, Source, SourceType } from '../core/types';
@@ -15,9 +16,9 @@ import type { GraphPayload, Source, SourceType } from '../core/types';
  */
 
 const SOURCE_LABEL: Record<SourceType, string> = {
-  text: 'Note',
-  link: 'Link',
-  screenshot: 'Screenshot',
+  text: t('type.text'),
+  link: t('type.link'),
+  screenshot: t('type.screenshot'),
 };
 
 const SOURCE_ICON: Record<SourceType, string> = {
@@ -80,7 +81,7 @@ export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'a
 }
 
 const relativeDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  new Date(iso).toLocaleDateString(currentLocale() === 'ko' ? 'ko-KR' : 'en-GB', { day: 'numeric', month: 'short' });
 
 export function SourcesView() {
   const payload = useWorkspaceStore((s) => s.payload);
@@ -98,7 +99,7 @@ export function SourcesView() {
   const retrySource = async (sourceId: string) => {
     const { source: dataSource, applyPayload } = useWorkspaceStore.getState();
     if (!dataSource.retrySource) {
-      useUiStore.getState().toast('Retry needs the server — this is seed mode.');
+      useUiStore.getState().toast(t('toast.retrySeed'));
       return;
     }
     setRetrying(sourceId);
@@ -106,7 +107,7 @@ export function SourcesView() {
       applyPayload(await dataSource.retrySource(sourceId));
     } catch (err) {
       useUiStore.getState().toast(
-        err instanceof Error ? `Retry failed — ${err.message}` : 'Retry failed.',
+        err instanceof Error ? t('toast.retryFailedWith', { message: err.message }) : t('toast.retryFailed'),
       );
     } finally {
       setRetrying(null);
@@ -123,7 +124,7 @@ export function SourcesView() {
   return (
     <div className="sources" data-testid="sources-view">
       <div className="sources__head">
-        <span>Sources</span>
+        <span>{t('sources.title')}</span>
         <div className="sources__filters">
           {(['all', 'text', 'link', 'screenshot'] as const).map((f) => (
             <button
@@ -132,13 +133,13 @@ export function SourcesView() {
               data-testid={`sources-filter-${f}`}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? 'All' : SOURCE_LABEL[f]}
+              {f === 'all' ? t('sources.filter.all') : SOURCE_LABEL[f]}
             </button>
           ))}
         </div>
       </div>
 
-      {rows.length === 0 && <p className="sources__empty">No sources yet.</p>}
+      {rows.length === 0 && <p className="sources__empty">{t('sources.empty')}</p>}
 
       {rows.map(({ source, memoryCount, empty, failed, error }) => (
         <div
@@ -178,8 +179,8 @@ export function SourcesView() {
             <span className="source-row__title">{source.title}</span>
             <span className="source-row__meta">
               {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
-              {empty ? ' · nothing to remember in this' : ''}
-              {failed ? ` · couldn't process this${error ? ` — ${error}` : ''}` : ''}
+              {empty ? t('sources.meta.empty') : ''}
+              {failed ? `${t('sources.meta.failed')}${error ? ` — ${error}` : ''}` : ''}
             </span>
           </span>
           {failed ? (
@@ -192,7 +193,7 @@ export function SourcesView() {
               }}
               disabled={retrying === source.id}
             >
-              {retrying === source.id ? 'Retrying…' : 'Retry'}
+              {retrying === source.id ? t('sources.retrying') : t('sources.retry')}
             </button>
           ) : (
             <span className="source-row__count">{memoryCount}</span>

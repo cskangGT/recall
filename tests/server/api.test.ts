@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteRepository } from '../../server/db/sqlite';
-import { importSeed } from '../../server/seed/import';
+import { importSeed, namespaceSeed } from '../../server/seed/import';
+import workspaceJson from '../../seed/workspace.json';
 import { IngestPipeline } from '../../server/pipeline/ingest';
 import { AskPipeline } from '../../server/pipeline/ask';
 import { FixtureProvider, FixtureEmbeddings } from '../../server/ai/fixture';
@@ -228,7 +229,7 @@ describe('PATCH category', () => {
     const children = payload.categories.filter((c) => c.parent_id !== null);
     const res = await patch(`${base}/categories/${children[0]!.id}`, { parentId: children[1]!.id });
     expect(res.status).toBe(400);
-    expect((res.body as { error: string }).error).toBe('Recall keeps categories two levels deep.');
+    expect((res.body as { error: string }).error).toBe('Mado keeps categories two levels deep.');
   });
 
   it('400s an update with nothing in it', async () => {
@@ -363,5 +364,148 @@ describe('DELETE memory', () => {
     expect(
       graph.memories.filter((m) => m.source_id === victim.source_id).length,
     ).toBe(siblings);
+  });
+});
+
+/**
+ * More than one workspace.
+ *
+ * The schema was always multi-tenant — every table carries a workspace_id with
+ * a foreign key and an index — but nothing had ever created a second one, and
+ * two things were only unique *within* one while sitting in a column that is a
+ * global primary key. Both failed on the first write of the second visitor's
+ * session, which is the worst possible moment to find out.
+ */
+describe('a second workspace', () => {
+  const mint = () => {
+    const id = `ws_${Math.random().toString(36).slice(2, 10)}`;
+    importSeed(repo, id, namespaceSeed(workspaceJson as unknown as GraphPayload, id));
+    return id;
+  };
+
+  it('can be created at all — the seed has fixed primary keys', () => {
+    // Importing the seed twice unnamespaced fails on `UNIQUE constraint failed:
+    // sources.id`, which is why namespaceSeed exists.
+    const a = mint();
+    const b = mint();
+    expect(repo.getGraphPayload(a).memories).toHaveLength(47);
+    expect(repo.getGraphPayload(b).memories).toHaveLength(47);
+  });
+
+  it('rewrites every reference, not just the ids', () => {
+    const graph = repo.getGraphPayload(mint());
+    // A missed reference inserts cleanly and then fails validateSeed in the
+    // browser, a long way from the mistake.
+    expect(() => validateSeed(graph)).not.toThrow();
+  });
+
+  it('keeps one visitor out of another visitor\'s corpus', async () => {
+    const a = mint();
+    const b = mint();
+    await post(`/api/workspaces/${a}/capture`, { type: 'text', content: 'anything' });
+
+    expect(repo.getGraphPayload(a).memories.length).toBeGreaterThan(47);
+    expect(repo.getGraphPayload(b).memories).toHaveLength(47);
+  });
+
+  /** `edges.id` is a global primary key and rebuildEdges counts per workspace. */
+  it('lets both of them capture — edge ids must not collide', async () => {
+    const a = mint();
+    const b = mint();
+    const first = await post(`/api/workspaces/${a}/capture`, { type: 'text', content: 'anything' });
+    const second = await post(`/api/workspaces/${b}/capture`, { type: 'text', content: 'anything' });
+
+    expect((first.body as { status: string }).status).toBe('complete');
+    expect((second.body as { status: string }).status).toBe('complete');
+  });
+});
+
+/**
+ * The invite gate.
+ *
+ * A public deployment runs extraction and embedding on somebody's paid account,
+ * so an open POST /capture is an open invitation to spend it. Reading stays
+ * free — the demo is meant to be shown to anyone — and everything that writes
+ * needs the token.
+ */
+describe('invite token', () => {
+  // Built per call: `deps` is assigned in beforeEach, so spreading it at module
+  // scope captures undefined.
+  const call = (method: string, path: string, invite?: string) =>
+    handle(
+      { method, path, body: { type: 'text', content: 'x' }, invite },
+      { ...deps, inviteToken: 'let-me-in' },
+    );
+
+  it('lets anyone read', async () => {
+    expect((await call('GET', `${base}/graph`)).status).toBe(200);
+  });
+
+  it('refuses a write with no token', async () => {
+    const res = await call('POST', `${base}/capture`);
+    expect(res.status).toBe(403);
+    expect((res.body as { error: string }).error).toContain('read-only');
+  });
+
+  it('refuses a write with the wrong token', async () => {
+    expect((await call('POST', `${base}/capture`, 'guess')).status).toBe(403);
+  });
+
+  it('refuses a delete too — every method that writes, not just capture', async () => {
+    const victim = repo.getGraphPayload(WS).memories[0]!.id;
+    expect((await call('DELETE', `${base}/memories/${victim}`)).status).toBe(403);
+    expect(repo.getGraphPayload(WS).memories.some((m) => m.id === victim)).toBe(true);
+  });
+
+  it('allows the write when the token matches', async () => {
+    expect((await call('POST', `${base}/capture`, 'let-me-in')).status).toBe(200);
+  });
+
+  /** Absent a token the gate is off — what local development and this suite want. */
+  it('is off entirely when no token is configured', async () => {
+    const res = await handle(
+      { method: 'POST', path: `${base}/capture`, body: { type: 'text', content: 'x' } },
+      deps,
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('what the capture response carries', () => {
+  it('names the categories it touched, so a caller need not search the graph', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'screenshot', content: 'Braintrust vs Langfuse', imagePath: '/seed/demo-screenshot.png',
+    });
+    const body = res.body as { touchedCategories: { id: string; name: string }[] };
+    expect(body.touchedCategories.length).toBeGreaterThan(0);
+    for (const c of body.touchedCategories) {
+      expect(typeof c.name).toBe('string');
+      expect(c.name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('omits the graph when the caller says it does not want it', async () => {
+    // The payload carries every memory's 1024-float vector and grows forever.
+    // The extension shows a notification and closes; it never reads this.
+    const res = await post(`${base}/capture`, {
+      type: 'text', content: 'a note', includeGraph: false,
+    });
+    const body = res.body as Record<string, unknown>;
+    expect(body.graph).toBeUndefined();
+    expect(body.touchedCategories).toBeDefined();
+    expect(body.addedMemoryIds).toBeDefined();
+  });
+
+  it('still sends the graph by default — the web client needs it', async () => {
+    const res = await post(`${base}/capture`, { type: 'text', content: 'a note' });
+    expect((res.body as Record<string, unknown>).graph).toBeDefined();
+  });
+
+  it('accepts a title and puts it on the source', async () => {
+    const res = await post(`${base}/capture`, {
+      type: 'link', url: 'https://example.com/a', title: 'A Page Title', content: 'body',
+    });
+    const { sourceId } = res.body as { sourceId: string };
+    expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
   });
 });

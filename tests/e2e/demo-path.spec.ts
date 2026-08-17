@@ -103,7 +103,7 @@ test('below 1280px it refuses to render the app (AC-41)', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto('/?skipWelcome=1');
   await expect(
-    page.getByText('Recall is desktop-first. Please open on a larger screen.'),
+    page.getByText('Mado is desktop-first. Please open on a larger screen.'),
   ).toBeVisible();
   await expect(page.getByTestId('map-canvas')).toHaveCount(0);
 });
@@ -118,7 +118,7 @@ test('a wide but short window is refused too', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 700 });
   await page.goto('/?skipWelcome=1');
   await expect(
-    page.getByText('Recall is desktop-first. Please open on a larger screen.'),
+    page.getByText('Mado is desktop-first. Please open on a larger screen.'),
   ).toBeVisible();
   await expect(page.getByTestId('arc-browser')).toHaveCount(0);
 });

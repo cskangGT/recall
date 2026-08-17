@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
 import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
-import { fallbackName, validateName } from '../ai/provider.ts';
+import { fallbackName } from '../ai/provider.ts';
 import type { Category, GraphPayload, Memory, SourceType } from '../../src/core/types.ts';
 import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
 import { evaluateReorg } from '../../src/core/gates.ts';
@@ -27,9 +27,19 @@ export interface IngestInput {
   type: SourceType;
   /** Pasted text, or the fetched body of a link. */
   content?: string;
+  /**
+   * What to call this source, when the caller knows better than we can guess.
+   *
+   * The browser extension does: it has the page's own `<title>`, which is
+   * authoritative and free. Without it the title is the first sixty characters
+   * of the body, which for a saved article is a sentence fragment.
+   */
+  title?: string;
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];
+  /** The viewer's language — category names are UI, not content. */
+  locale?: 'en' | 'ko';
 }
 
 export interface IngestResult {
@@ -49,8 +59,148 @@ export interface IngestResult {
   note?: string;
 }
 
+export interface BatchIngestResult {
+  /** One per input, in input order. Per-item `reorg` is always null here. */
+  results: IngestResult[];
+  /**
+   * Every structural operation the batch settled into, oldest first.
+   *
+   * A first fill is a different regime from a daily capture: spec 8.4.3's
+   * one-op-per-ingest exists so a person can absorb one structural idea per
+   * beat, but a bulk import's reveal summarizes the whole result at once —
+   * so the gates run until they go quiet (capped), not once. Ninety-nine
+   * memories that got exactly one split came out as one category holding
+   * eighty-six of them, which is a pile with a name, not a map.
+   */
+  reorgs: ReorgEventRow[];
+}
+
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+/**
+ * Where each extracted memory goes, decided before anything is written.
+ *
+ * Pulled out of `persist` because naming a new category needs the model, the
+ * model call is async, and `persist` runs inside a synchronous transaction. So
+ * the decision happens first, the naming happens between, and the writing
+ * happens last with the names already in hand.
+ *
+ * Pure on purpose — no repository, no clock, no model — so "would this memory
+ * open a new category" is answerable in a test without any of them.
+ *
+ * The provisional profile at the end of the loop is the part worth keeping:
+ * a category that memory 0 opens has to be visible to memory 1, or a source
+ * that says two related things opens two categories for them.
+ */
+export type PlannedAssignment =
+  | {
+      kind: 'skip';
+      index: number;
+      text: string;
+      similarity: number;
+      /** The held memory this arrival reinforces — absent when it duplicates
+       *  something from this same batch that has no id yet. */
+      reinforcesMemoryId?: string;
+    }
+  | { kind: 'existing'; index: number; categoryId: string; score: number }
+  /** Joins a category an earlier memory in this same batch opened. */
+  | { kind: 'joins'; index: number; clusterId: string; score: number }
+  | { kind: 'new'; index: number; parentId: string | null; score: number; clusterId: string };
+
+export function planAssignments(
+  payload: GraphPayload,
+  texts: readonly string[],
+  vectors: readonly number[][],
+): PlannedAssignment[] {
+  const profiles = categoryProfiles(payload.categories, payload.memories);
+  const plan: PlannedAssignment[] = [];
+
+  texts.forEach((text, index) => {
+    const vector = vectors[index]!;
+    const decision = assignMemory(vector, profiles);
+
+    /*
+     * Something already held is not written a second time.
+     *
+     * `assignMemory` takes the argmax of `bestMemberSimilarity` across every
+     * profile, so `decision.score` *is* the candidate's nearest neighbour in the
+     * whole corpus — the check is a comparison, not a computation. Decided here
+     * rather than later so a duplicate cannot reach the namer on its way to
+     * being discarded, and so it contributes no provisional profile of its own.
+     */
+    if (decision.score >= DUPLICATE_SIMILARITY) {
+      /*
+       * A duplicate is a signal, not noise: the same thought arriving again is
+       * the most honest importance measure there is. Find the held memory it
+       * echoes so persist() can count it — times_seen is what the UI ranks,
+       * sizes and says "this thought keeps coming back" with.
+       */
+      let nearest: { id: string; score: number } | null = null;
+      for (const m of payload.memories) {
+        const score = cosine(vector, m.vector);
+        if (!nearest || score > nearest.score) nearest = { id: m.id, score };
+      }
+      plan.push({
+        kind: 'skip',
+        index,
+        text,
+        similarity: decision.score,
+        reinforcesMemoryId:
+          nearest && nearest.score >= DUPLICATE_SIMILARITY ? nearest.id : undefined,
+      });
+      return;
+    }
+
+    if (decision.kind === 'existing') {
+      /*
+       * The category it matched may not exist yet — the provisional profiles
+       * below carry synthetic ids, and a memory can land on one an earlier
+       * memory in this same batch opened. Saying which of the two it is here
+       * keeps `persist` from having to guess whether an id is real.
+       */
+      const openedHere = plan.find(
+        (p) => p.kind === 'new' && p.clusterId === decision.categoryId,
+      );
+      plan.push(
+        openedHere
+          ? { kind: 'joins', index, clusterId: decision.categoryId!, score: decision.score }
+          : { kind: 'existing', index, categoryId: decision.categoryId!, score: decision.score },
+      );
+      return;
+    }
+
+    const parentId = decision.kind === 'new_child' ? decision.parentId! : null;
+    const clusterId = `new_${index}`;
+    plan.push({ kind: 'new', index, parentId, score: decision.score, clusterId });
+    profiles.push({ id: clusterId, parentId, vectors: [vector] });
+  });
+
+  return plan;
+}
+
+
+/**
+ * True when the source's title was derived rather than given.
+ *
+ * A predicate rather than a `title_locked` column, and rather than a flag
+ * threaded through `process()`. A column would need a migration, and
+ * `migrate()` is `CREATE TABLE IF NOT EXISTS` only — a new column silently
+ * never appears in a database that already exists, which after the launchd
+ * agent means every real corpus. A flag would not survive `retry()`, which
+ * reconstructs from the row and has no idea where the title came from.
+ *
+ * Reading it back off the row survives both.
+ */
+export function isDerivedTitle(source: SourceRow): boolean {
+  const title = source.title;
+  return (
+    title === '' ||
+    title === 'Untitled' ||
+    title === source.url ||
+    title === source.raw_content.slice(0, 60)
+  );
+}
 
 export class IngestPipeline {
   // Written out rather than as constructor parameter properties: those emit
@@ -60,13 +210,41 @@ export class IngestPipeline {
   private readonly ai: AiProvider;
   private readonly embeddings: EmbeddingProvider;
 
+  /**
+   * All ingest work runs through here, one at a time.
+   *
+   * Spec 5.3 has always said captures process serially — parallel
+   * reorganization of one taxonomy produces conflicting structural decisions —
+   * but nothing enforced it, and the Notes button made the race real: two
+   * imports interleaving transactions on one SQLite connection came out as
+   * FOREIGN KEY failures on perfectly good notes. A promise chain is the whole
+   * queue; the failure of one job must not dam the jobs behind it.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private serialize<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(work, work);
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   constructor(repo: Repository, ai: AiProvider, embeddings: EmbeddingProvider) {
     this.repo = repo;
     this.ai = ai;
     this.embeddings = embeddings;
   }
 
-  async ingest(input: IngestInput): Promise<IngestResult> {
+  ingest(input: IngestInput, options: { reorganize?: boolean } = {}): Promise<IngestResult> {
+    return this.serialize(() => this.ingestInner(input, options));
+  }
+
+  private async ingestInner(
+    input: IngestInput,
+    options: { reorganize?: boolean } = {},
+  ): Promise<IngestResult> {
     const sourceId = id('src');
 
     // ---- 1. Persist the raw source first. A capture is never lost.
@@ -74,7 +252,9 @@ export class IngestPipeline {
       id: sourceId,
       workspace_id: input.workspaceId,
       type: input.type,
-      title: input.content?.slice(0, 60) ?? input.url ?? 'Untitled',
+      // `||` not `??`: a link capture with `content: ''` is not nullish, so the
+      // old `??` gave it a title of the empty string.
+      title: input.title?.trim() || input.content?.slice(0, 60) || input.url || 'Untitled',
       raw_content: input.content ?? '',
       scene_description: null,
       url: input.url ?? null,
@@ -86,7 +266,74 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    return this.process(input.workspaceId, source);
+    return this.process(input.workspaceId, source, { ...options, locale: input.locale });
+  }
+
+  /**
+   * Many sources, one structural operation.
+   *
+   * Items are processed serially — parallel reorganization of the same taxonomy
+   * produces conflicting structural decisions (spec §5.3) — with the per-item
+   * reorganize suppressed. The gates then run once over everything the batch
+   * touched, so "at most one structural operation per ingest" (spec 8.4.3)
+   * holds for the batch as a whole: thirty items re-clustering thirty times is
+   * a blob rearranging, and a reveal can only declare one structural sentence.
+   *
+   * A failed item is recorded on its own source row and does not stop the rest;
+   * a batch that dies at item 17 of 30 with nothing to show would lose the
+   * user's trust at the exact moment built to earn it.
+   */
+  ingestBatch(inputs: IngestInput[]): Promise<BatchIngestResult> {
+    // One serialized section for the whole batch — items inside call the
+    // unserialized inner path, or the batch would deadlock behind itself.
+    return this.serialize(() => this.ingestBatchInner(inputs));
+  }
+
+  private async ingestBatchInner(inputs: IngestInput[]): Promise<BatchIngestResult> {
+    const results: IngestResult[] = [];
+    const touched = new Set<string>();
+
+    for (const input of inputs) {
+      const result = await this.ingestInner(input, { reorganize: false });
+      results.push(result);
+      for (const categoryId of result.touchedCategoryIds) touched.add(categoryId);
+    }
+
+    const reorgs: ReorgEventRow[] = [];
+    const workspaceId = inputs[0]?.workspaceId;
+    // The trigger source is the last item that actually landed memories — the
+    // capture that tipped the geometry, which is what the column means.
+    const trigger = [...results].reverse().find((r) => r.addedMemoryIds.length > 0);
+    if (
+      workspaceId !== undefined &&
+      trigger !== undefined &&
+      touched.size > 0 &&
+      this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false
+    ) {
+      /*
+       * Run the gates until they go quiet. Each round widens the scope with
+       * whatever the last operation touched or created — a split's children
+       * are exactly the categories the next round needs to look at. The cap
+       * is a backstop, not a target; the gates converge on their own because
+       * every operation reduces the tension that fired it.
+       */
+      const MAX_ROUNDS = 5;
+      const scope = new Set(touched);
+      const locale = inputs[0]?.locale;
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        try {
+          const reorg = await this.reorganize(workspaceId, trigger.sourceId, [...scope], locale);
+          if (!reorg) break;
+          reorgs.push(reorg);
+          for (const id of reorg.affected_category_ids) scope.add(id);
+          for (const id of reorg.created_category_ids) scope.add(id);
+        } catch {
+          break; // silent by design — the memories all landed (spec §7.4)
+        }
+      }
+    }
+
+    return { results, reorgs };
   }
 
   /**
@@ -99,19 +346,25 @@ export class IngestPipeline {
    * Only failures are retried. Re-running a completed source would extract its
    * memories a second time, and nothing here de-duplicates.
    */
-  async retry(workspaceId: string, sourceId: string): Promise<IngestResult> {
-    const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
-    if (!source) throw new Error(`unknown source ${sourceId}`);
-    if (source.status !== 'failed') {
-      throw new Error(`source ${sourceId} is ${source.status}, not failed`);
-    }
+  retry(workspaceId: string, sourceId: string): Promise<IngestResult> {
+    return this.serialize(async () => {
+      const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
+      if (!source) throw new Error(`unknown source ${sourceId}`);
+      if (source.status !== 'failed') {
+        throw new Error(`source ${sourceId} is ${source.status}, not failed`);
+      }
 
-    this.repo.updateSourceStatus(sourceId, 'processing', { error_message: null });
-    return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
+      this.repo.updateSourceStatus(sourceId, 'processing', { error_message: null });
+      return this.process(workspaceId, { ...source, status: 'processing', error_message: null });
+    });
   }
 
   /** Steps 2-6, shared by a first attempt and a retry. */
-  private async process(workspaceId: string, source: SourceRow): Promise<IngestResult> {
+  private async process(
+    workspaceId: string,
+    source: SourceRow,
+    options: { reorganize?: boolean; locale?: 'en' | 'ko' } = {},
+  ): Promise<IngestResult> {
     const sourceId = source.id;
     const input = {
       workspaceId,
@@ -140,7 +393,7 @@ export class IngestPipeline {
         return {
           sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [],
           skipped: [], reorg: null,
-          note: "Saved, but Recall couldn't find anything to remember in this. It's in your Sources.",
+          note: "Saved, but Mado couldn't find anything to remember in this. It's in your Sources.",
         };
       }
 
@@ -150,12 +403,31 @@ export class IngestPipeline {
       // ---- 5. Assign, then apply. Everything from here is one transaction:
       // a half-applied ingest is worse than one that fails outright.
       const payload = this.repo.getGraphPayload(input.workspaceId);
+      const plan = planAssignments(payload, extracted.memories.map((m) => m.text), vectors);
+      // Named before the transaction opens, because this is the one part that
+      // has to ask a model and a transaction cannot wait for one.
+      const names = await this.nameNewCategories(input.workspaceId, plan, extracted, payload, options.locale);
       const result = this.repo.transaction(() =>
-        this.persist(input.workspaceId, sourceId, extracted, vectors, payload),
+        this.persist(input.workspaceId, sourceId, extracted, vectors, payload, plan, names),
       );
 
+      /*
+       * `suggested_title` was extracted and thrown away.
+       *
+       * The extract prompt has always asked for it — "five words or fewer,
+       * naming the source, not the contents" — and nothing ever wrote it down,
+       * so a pasted note was titled with its own first sixty characters
+       * forever. That is what Sources has been showing.
+       *
+       * It fills in only where nothing better exists. A title the caller gave
+       * us wins: the extension has the page's own `<title>`, which is
+       * authoritative, and a model's guess must not overwrite it. `null` is
+       * "leave it alone" by the COALESCE above.
+       */
       this.repo.updateSourceStatus(sourceId, 'complete', {
-        summary: extracted.summary, processed_at: now(),
+        summary: extracted.summary,
+        processed_at: now(),
+        title: isDerivedTitle(source) ? extracted.suggested_title.trim() || null : null,
       });
 
       // ---- 6. Reorganize. A failure here is silent by design (spec §7.4):
@@ -165,9 +437,9 @@ export class IngestPipeline {
       // has been in the schema and the payload since Phase 3 and was read by
       // nobody — declared and ignored.
       let reorg: ReorgEventRow | null = null;
-      if (this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
+      if (options.reorganize !== false && this.repo.getWorkspace(workspaceId)?.auto_reorganize !== false) {
         try {
-          reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds);
+          reorg = await this.reorganize(workspaceId, sourceId, result.touchedCategoryIds, options.locale);
         } catch {
           reorg = null;
         }
@@ -187,6 +459,48 @@ export class IngestPipeline {
     }
   }
 
+  /**
+   * Names every category this capture is about to open, in one call.
+   *
+   * One call rather than one each, so two categories born from the same source
+   * cannot be handed the same name — `nameClusters` accumulates what it has
+   * already used into `forbiddenNames` as it goes, and it retries twice before
+   * falling back to term statistics.
+   *
+   * Those statistics were the *only* path until now, and they are hopeless here:
+   * a brand-new category has one sentence in it, and one sentence has no term
+   * frequencies to compare. It is why a note about lowering a pricing tier came
+   * out called "Because Consider".
+   */
+  private async nameNewCategories(
+    workspaceId: string,
+    plan: PlannedAssignment[],
+    extracted: Awaited<ReturnType<AiProvider['extract']>>,
+    payload: GraphPayload,
+    locale?: 'en' | 'ko',
+  ): Promise<Map<string, string>> {
+    const opening = plan.filter((p): p is Extract<PlannedAssignment, { kind: 'new' }> => p.kind === 'new');
+    if (opening.length === 0) return new Map();
+
+    const tombstones = this.repo.listTombstones(workspaceId);
+    const parents = new Set(opening.map((o) => o.parentId));
+    const siblings = payload.categories
+      .filter((c) => parents.has(c.parent_id))
+      .map((c) => c.name);
+
+    const named = await this.ai.nameClusters({
+      operation: 'new_category',
+      clusters: opening.map((o) => ({
+        cluster_id: o.clusterId,
+        sample_texts: [extracted.memories[o.index]!.text],
+      })),
+      forbiddenNames: [...siblings, ...tombstones],
+      locale,
+    });
+
+    return new Map(named.map((n) => [n.cluster_id, n.name]));
+  }
+
   // ---------------------------------------------------------------- persist
 
   private persist(
@@ -195,63 +509,53 @@ export class IngestPipeline {
     extracted: Awaited<ReturnType<AiProvider['extract']>>,
     vectors: number[][],
     payload: GraphPayload,
+    plan: PlannedAssignment[],
+    names: Map<string, string>,
   ): { addedMemoryIds: string[]; touchedCategoryIds: string[];
        skipped: { text: string; similarity: number }[] } {
-    const profiles = categoryProfiles(payload.categories, payload.memories);
-    const tombstones = new Set(this.repo.listTombstones(workspaceId));
     const memories: Memory[] = [];
+    /** Synthetic cluster id -> the real category it became, for `joins`. */
+    const createdByCluster = new Map<string, string>();
     const assignments: { memoryId: string; categoryId: string; confidence: number }[] = [];
     const touched = new Set<string>();
     const skipped: { text: string; similarity: number }[] = [];
     /** Extracted index -> the row it became. Absent when it was a duplicate. */
     const memoryIdByExtractedIndex = new Map<number, string>();
 
+    /*
+     * Writing only. Every decision was made by `planAssignments` and every new
+     * name by `nameNewCategories`, both before this transaction opened — the
+     * namer gets no say in *whether* a category is created, only in what it is
+     * called, which is the rule this pipeline has always been built on.
+     */
     extracted.memories.forEach((extractedMemory, i) => {
-      const vector = vectors[i]!;
-      const memoryId = id('mem');
-      const decision = assignMemory(vector, profiles);
-
-      /*
-       * Something already held is not written a second time.
-       *
-       * The number this needs is already here. `assignMemory` takes the argmax
-       * of `bestMemberSimilarity` across every category profile, so
-       * `decision.score` *is* the candidate's nearest neighbour in the entire
-       * corpus — a duplicate check is a comparison, not a computation.
-       *
-       * Skipped before the category branch on purpose: a duplicate must not be
-       * able to create a category on its way to being discarded. And because
-       * `profiles` is mutated as this loop runs, a source that says the same
-       * thing twice catches its own second copy without a separate pass.
-       */
-      if (decision.score >= DUPLICATE_SIMILARITY) {
-        skipped.push({ text: extractedMemory.text, similarity: decision.score });
+      const step = plan[i]!;
+      if (step.kind === 'skip') {
+        skipped.push({ text: step.text, similarity: step.similarity });
+        if (step.reinforcesMemoryId) this.repo.reinforceMemory(step.reinforcesMemoryId);
         return;
       }
 
-      let categoryId: string;
-      if (decision.kind === 'existing') {
-        categoryId = decision.categoryId!;
-      } else {
-        // A new category needs a name. The namer gets no say in *whether* one is
-        // created — that came from geometry above.
-        const parentId = decision.kind === 'new_child' ? decision.parentId! : null;
-        const siblings = payload.categories
-          .filter((c) => c.parent_id === parentId)
-          .map((c) => c.name);
-        const forbidden = [...siblings, ...tombstones];
-        const proposed = fallbackName([extractedMemory.text], [[extractedMemory.text]]);
-        const name = validateName(proposed, forbidden).ok ? proposed : `${proposed} Notes`;
+      const vector = vectors[i]!;
+      const memoryId = id('mem');
 
+      let categoryId: string;
+      if (step.kind === 'existing') {
+        categoryId = step.categoryId;
+      } else if (step.kind === 'joins') {
+        categoryId = createdByCluster.get(step.clusterId)!;
+      } else {
         const created: Category = {
-          id: id('cat'), parent_id: parentId, name,
-          rationale: `auto-created at similarity ${decision.score.toFixed(3)}`,
+          id: id('cat'),
+          parent_id: step.parentId,
+          name: names.get(step.clusterId) ?? fallbackName([extractedMemory.text], [[extractedMemory.text]]),
+          rationale: `auto-created at similarity ${step.score.toFixed(3)}`,
           name_locked: false, user_created: false,
           x: null, y: null, pinned: false, created_by: 'ai',
         };
         this.repo.insertCategory(workspaceId, created);
         payload.categories.push(created);
-        profiles.push({ id: created.id, parentId, vectors: [vector] });
+        createdByCluster.set(step.clusterId, created.id);
         categoryId = created.id;
       }
 
@@ -270,7 +574,7 @@ export class IngestPipeline {
         pinned: false,
         created_at: now(),
       });
-      assignments.push({ memoryId, categoryId, confidence: decision.score });
+      assignments.push({ memoryId, categoryId, confidence: step.score });
       memoryIdByExtractedIndex.set(i, memoryId);
       touched.add(categoryId);
     });
@@ -336,7 +640,14 @@ export class IngestPipeline {
         if (seen.has(key)) continue;
         seen.add(key);
         edges.push({
-          id: `edg_${seen.size.toString().padStart(4, '0')}`,
+          /*
+           * Namespaced by workspace, because `edges.id` is a global primary key
+           * and this counter only counts within one. It never collided while
+           * exactly one workspace existed — and the moment a second visitor got
+           * their own copy, their first capture died on
+           * `UNIQUE constraint failed: edges.id`.
+           */
+          id: `edg_${workspaceId}_${seen.size.toString().padStart(4, '0')}`,
           source_memory_id: a!,
           target_memory_id: b!,
           similarity: Math.round(sim * 1e4) / 1e4,
@@ -352,6 +663,7 @@ export class IngestPipeline {
     workspaceId: string,
     sourceId: string,
     touchedCategoryIds: string[],
+    locale?: 'en' | 'ko',
   ): Promise<ReorgEventRow | null> {
     const before = this.repo.getGraphPayload(workspaceId);
     const candidate = evaluateReorg(before, touchedCategoryIds);
@@ -385,6 +697,7 @@ export class IngestPipeline {
       const named = await this.ai.nameClusters({
         operation: candidate.operation,
         clusters,
+        locale,
         // A split must not reuse the name it is dividing; a merge may keep the
         // surviving category's name, so those names stay allowed.
         forbiddenNames:
@@ -450,6 +763,101 @@ export class IngestPipeline {
     });
 
     return row;
+  }
+
+  // -------------------------------------------------------------- user merge
+
+  /** Whether the wired model can explain and draft a merge at all. */
+  canMerge(): boolean {
+    return typeof this.ai.mergeMemories === 'function';
+  }
+
+  /**
+   * The AI's half of a user-driven merge: why these overlap, and the one text
+   * that would hold everything. Reads nothing but the memories and writes
+   * nothing at all — the user is about to decide, and a preview that mutated
+   * state would be deciding for them.
+   */
+  async previewMerge(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ reason: string; merged_text: string }> {
+    if (!this.ai.mergeMemories) throw new Error('this model cannot draft merges');
+    const byId = new Map(this.repo.listMemories(workspaceId).map((m) => [m.id, m]));
+    const texts = memoryIds.map((mid) => byId.get(mid)?.text).filter((t): t is string => !!t);
+    if (texts.length < 2) throw new Error('a merge needs at least two memories');
+    return this.ai.mergeMemories({ texts, locale });
+  }
+
+  /**
+   * Applies a merge the user confirmed, with the text they saw.
+   *
+   * Nothing is lost by construction: the merged text carries every fact (the
+   * user approved it), the original sources stay untouched in the source list,
+   * entity links are the union, and times_seen is the sum — three arrivals of
+   * a thought are still three arrivals after it becomes one row. The merged
+   * memory keeps the newest original's source and date, so the free-window
+   * math treats it as the most recent time the thought showed up.
+   */
+  applyMerge(workspaceId: string, memoryIds: string[], mergedText: string): Memory {
+    const all = this.repo.listMemories(workspaceId);
+    const originals = memoryIds
+      .map((mid) => all.find((m) => m.id === mid))
+      .filter((m): m is Memory => m !== undefined);
+    if (originals.length < 2) throw new Error('a merge needs at least two memories');
+    const text = mergedText.trim();
+    if (!text) throw new Error('merged text must not be empty');
+
+    const newest = [...originals].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]!;
+    /*
+     * The merged vector is the normalized mean of the originals', not a fresh
+     * embedding. Synchronous (this runs inside a transaction), free, and honest:
+     * the merged row should sit where its parts sat, and the mean of vectors
+     * this close is within noise of re-embedding their union.
+     */
+    const dims = newest.vector.length;
+    const mean = new Array<number>(dims).fill(0);
+    for (const m of originals) for (let i = 0; i < dims; i++) mean[i]! += m.vector[i]! / originals.length;
+    const norm = Math.sqrt(mean.reduce((s, v) => s + v * v, 0)) || 1;
+    const vector = mean.map((v) => v / norm);
+
+    const merged: Memory = {
+      id: id('mem'),
+      source_id: newest.source_id,
+      text,
+      kind: newest.kind,
+      confidence: Math.max(...originals.map((m) => m.confidence)),
+      category_id: newest.category_id,
+      // The merge itself is a user edit; no reorganization may quietly undo it.
+      category_locked: true,
+      entity_ids: [],
+      vector,
+      x: null,
+      y: null,
+      pinned: false,
+      created_at: newest.created_at,
+    };
+    const timesSeen = originals.reduce((s, m) => s + (m.times_seen ?? 1), 0);
+    const entityIds = [...new Set(originals.flatMap((m) => m.entity_ids))];
+
+    this.repo.transaction(() => {
+      this.repo.insertMemories(workspaceId, [merged]);
+      this.repo.assign({
+        memoryId: merged.id,
+        categoryId: merged.category_id,
+        confidence: merged.confidence,
+        assignedBy: 'user',
+        locked: true,
+      });
+      for (const entityId of entityIds) this.repo.linkMemoryEntity(merged.id, entityId);
+      // times_seen starts at 1; count the other arrivals back in.
+      for (let i = 1; i < timesSeen; i++) this.repo.reinforceMemory(merged.id);
+      for (const m of originals) this.repo.deleteMemory(m.id);
+    });
+
+    this.rebuildEdges(workspaceId);
+    return merged;
   }
 
   /** Pure restore from the event's snapshot — spec §8.4.5, AC-22. */

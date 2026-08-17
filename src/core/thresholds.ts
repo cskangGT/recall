@@ -126,6 +126,17 @@ export const DUPLICATE_SIMILARITY = num('VITE_DUPLICATE_MIN_SIM', 0.68);
 export const ECHO_SIMILARITY = num('VITE_ECHO_MIN_SIM', 1.01);
 
 /**
+ * At or above this, two memories are close enough that the Inspector offers to
+ * merge them — offers, never acts. DUPLICATE_SIMILARITY catches "I saved that
+ * already"; this band exists for "I wrote that thought again": the measured
+ * restatement-in-different-words case sits at 0.5657, beneath the duplicate
+ * gate and above the ordinary-neighbour band. Only a person can tell a
+ * restatement from a related-but-distinct thought, which is why this threshold
+ * feeds a suggestion and not a gate.
+ */
+export const MERGE_SUGGEST_SIMILARITY = num('VITE_MERGE_SUGGEST_MIN_SIM', 0.5);
+
+/**
  * relates_to edges are materialized above this similarity (spec 8.1).
  *
  * Chosen by edge count rather than by percentile: at 0.40, 45 of the 1,081

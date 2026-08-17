@@ -2,8 +2,9 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
-  AiProvider, AnswerResult, ExtractResult, NameCluster, NamedCluster,
+  AiProvider, AnswerResult, AskTurn, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
+  NameOperation,
 } from './provider.ts';
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
@@ -92,9 +93,10 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async nameClusters(input: {
-    operation: 'split' | 'merge' | 'promote';
+    operation: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]> {
     const accepted: NamedCluster[] = [];
     let pending = input.clusters;
@@ -124,7 +126,11 @@ export class AnthropicProvider implements AiProvider {
       .filter((a): a is NamedCluster => a !== undefined);
   }
 
-  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+  async answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    history?: AskTurn[];
+  }): Promise<AnswerResult> {
     const raw = await this.json(buildAnswerPrompt(input), answerSchema, 2048);
     return resolveAnswer(raw, input.retrieved);
   }

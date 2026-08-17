@@ -43,10 +43,14 @@ export interface Repository {
   /** Applies the schema. Idempotent. */
   migrate(): void;
 
-  createWorkspace(input: { id: string; name: string; isDemo?: boolean }): void;
+  createWorkspace(input: { id: string; name: string; isDemo?: boolean; plan?: 'free' | 'pro' }): void;
   /** Drops a workspace and everything under it. Used to reset the demo. */
   deleteWorkspace(id: string): void;
-  getWorkspace(id: string): { id: string; name: string; auto_reorganize: boolean } | null;
+  getWorkspace(
+    id: string,
+  ): { id: string; name: string; auto_reorganize: boolean; plan: 'free' | 'pro' } | null;
+  /** Billing writes this; nothing else does. */
+  setPlan(id: string, plan: 'free' | 'pro'): void;
   setAutoReorganize(id: string, enabled: boolean): void;
 
   /**
@@ -59,11 +63,18 @@ export interface Repository {
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],
-    fields?: { error_message?: string | null; summary?: string | null; processed_at?: string | null },
+    fields?: {
+      error_message?: string | null;
+      summary?: string | null;
+      processed_at?: string | null;
+      title?: string | null;
+    },
   ): void;
   listSources(workspaceId: string): SourceRow[];
 
   insertMemories(workspaceId: string, memories: Memory[]): void;
+  /** A duplicate arrival strengthens what is already held — never rewrites it. */
+  reinforceMemory(id: string): void;
   listMemories(workspaceId: string): Memory[];
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void;
   /**

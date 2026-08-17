@@ -1,13 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  AiProvider, AnswerResult, EmbeddingProvider, ExtractResult, NameCluster, NamedCluster,
-  NormalizeInput, NormalizeResult, RetrievedMemory,
+  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, MergeDraft, NameCluster,
+  NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
+  NameOperation,
 } from './provider.ts';
 import {
-  answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt, buildNormalizePrompt,
-  coerceExtract, coerceNormalize, extractSchema, nameByFallback, nameSchema, normalizeSchema,
-  resolveAnswer, resolveNames,
+  answerSchema, answerSoFar, buildAnswerPrompt, buildExtractPrompt, buildMergePrompt,
+  buildNamePrompt, buildNormalizePrompt, coerceExtract, coerceMerge, coerceNormalize,
+  extractSchema, mergeSchema, nameByFallback, nameSchema, normalizeSchema, resolveAnswer,
+  resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
@@ -270,9 +272,10 @@ export class OpenAiProvider implements AiProvider {
   }
 
   async nameClusters(input: {
-    operation: 'split' | 'merge' | 'promote';
+    operation: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]> {
     const accepted: NamedCluster[] = [];
     let pending = input.clusters;
@@ -303,8 +306,85 @@ export class OpenAiProvider implements AiProvider {
       .filter((a): a is NamedCluster => a !== undefined);
   }
 
-  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+  async answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    history?: AskTurn[];
+  }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
+  }
+
+  async mergeMemories(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft> {
+    return coerceMerge(
+      await this.json(buildMergePrompt(input), 'merge', mergeSchema, 2048),
+      input.texts,
+    );
+  }
+
+  /**
+   * `answer`, streamed. The API emits the schema'd response as JSON text in
+   * SSE chunks; `answerSoFar` reads the answer field out of the partial JSON
+   * and only the newly-arrived suffix goes to `onDelta`. The final result is
+   * parsed from the complete buffer with the same `resolveAnswer` the
+   * non-streaming path uses — streaming changes when words arrive, not what
+   * the pipeline validates.
+   */
+  async answerStream(
+    input: { question: string; retrieved: RetrievedMemory[]; history?: AskTurn[] },
+    onDelta: (text: string) => void,
+  ): Promise<AnswerResult> {
+    const response = await this.fetchImpl(CHAT_ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        max_completion_tokens: 2048,
+        stream: true,
+        messages: [{ role: 'user', content: buildAnswerPrompt(input) }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'answer', strict: true, schema: answerSchema },
+        },
+      }),
+    });
+    if (!response.ok || !response.body) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`OpenAI ${response.status}: ${detail.slice(0, 240)}`);
+    }
+
+    let buffer = '';
+    let content = '';
+    let sent = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are newline-delimited `data: {...}` lines; a frame can be
+      // split across network chunks, so only complete lines are consumed.
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const data = line.startsWith('data: ') ? line.slice(6).trim() : null;
+        if (!data || data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data) as {
+            choices?: { delta?: { content?: string } }[];
+          };
+          content += parsed.choices?.[0]?.delta?.content ?? '';
+        } catch {
+          // A malformed frame is dropped; the final parse is the arbiter.
+        }
+        const soFar = answerSoFar(content);
+        if (soFar.length > sent.length && soFar.startsWith(sent)) {
+          onDelta(soFar.slice(sent.length));
+          sent = soFar;
+        }
+      }
+    }
+
+    return resolveAnswer(JSON.parse(content), input.retrieved);
   }
 }
 

@@ -1,4 +1,5 @@
 import { cosine } from '../core/vectorMath';
+import { t } from '../i18n';
 import { ECHO_SIMILARITY } from '../core/thresholds';
 import type { GraphPayload, Memory } from '../core/types';
 
@@ -71,7 +72,7 @@ export function buildCaptureStory(
       // Separated, because these are distinct sentences and joining them on a
       // space runs the end of one into the start of the next.
       saw: alreadyHeld.map((h) => h.text).join(' · '),
-      sourceTitle: 'Nothing new',
+      sourceTitle: t('story.nothingNew'),
       memories: [],
       alreadyHeld,
       destination: null,
@@ -110,7 +111,7 @@ export function buildCaptureStory(
       source?.type === 'screenshot' && source.scene_description
         ? source.scene_description
         : (source?.raw_content ?? added.map((m) => m.text).join(' ')),
-    sourceTitle: source?.title ?? 'Untitled capture',
+    sourceTitle: source?.title ?? t('story.untitled'),
     memories,
     alreadyHeld,
     destination: parentNameOf(after, added[0]!.category_id),

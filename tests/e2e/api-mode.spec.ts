@@ -126,7 +126,7 @@ test('a user correction persists to the server (AC-28)', async ({ page }) => {
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 14 });
   await page.mouse.up();
 
-  await expect(page.getByTestId('toast')).toContainText("Moved. Recall won't change this again.");
+  await expect(page.getByTestId('toast')).toContainText("Moved. Mado won't change this again.");
 
   // Reload: if the move only happened in the store, it is gone now.
   await page.reload();

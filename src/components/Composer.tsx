@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import { answerQuestion } from '../ask/scriptedAsk';
-import { askedCategories } from '../arc/interest';
-import { useInterestStore } from '../store/interestStore';
+import { runAsk } from '../ask/runAsk';
+import { t } from '../i18n';
 
 /**
  * The one place you talk to Recall.
@@ -27,60 +26,51 @@ import { useInterestStore } from '../store/interestStore';
 export function Composer({
   firstRun = false,
   onSubmitted,
+  placeholder,
 }: {
   firstRun?: boolean;
   onSubmitted?: () => void;
+  /**
+   * A context-aware suggestion — the placeholder is the one place the app can
+   * recommend a question without taking up any room. ArcBrowser passes one
+   * built from whatever is open; absent, the generic invitation stands.
+   */
+  placeholder?: string;
 }) {
-  const setAnswer = useUiStore((s) => s.setAnswer);
-  const recordInterest = useInterestStore((s) => s.record);
-  const setHighlight = useUiStore((s) => s.setHighlight);
-  const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
+  // Shared with every other surface that asks (the summarize button, the
+  // reveal's suggested questions) — a question out through any of them shows
+  // as thinking here too, because this is where the answer will land.
+  const thinking = useUiStore((s) => s.asking);
 
   const [text, setText] = useState('');
-  const [thinking, setThinking] = useState(false);
 
   const submit = async () => {
-    const question = text.trim();
-    if (!question || !payload) {
+    if (!text.trim() || !payload) {
       onSubmitted?.();
       return;
     }
-    setThinking(true);
-
-    const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(question).catch(() => answerQuestion(question, payload))
-      : answerQuestion(question, payload);
-
-    setAnswer({ ...result, question });
-    /*
-     * Asking is the strongest of the three signals the arc ranks by, and until
-     * now it left no trace anywhere: the server writes `ask_history` and reads
-     * it back nowhere, and the client never saw it at all. Recorded against the
-     * top-level categories the answer actually drew on, so the arc reflects what
-     * you were thinking about rather than what you happened to click.
-     */
-    for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
-      recordInterest(categoryId, 'asked');
-    }
-    setHighlight(result.highlighted_node_ids);
-    select(null);
-    setText('');
-    setThinking(false);
+    if (await runAsk(text)) setText('');
     onSubmitted?.();
   };
 
   return (
     <div className="composer composer--docked" data-testid="composer">
+      {/*
+        Saving, given its own door. The input used to promise both jobs
+        ("ask anything, or drop a screenshot") while Enter only ever asked —
+        a promise the keyboard broke. Now the input is the question and this
+        labeled button is the saving: two verbs, two surfaces, one row.
+      */}
       <button
         className="composer__add"
         data-testid="composer-add"
-        title="Add a note, link, or screenshot (⌘K)"
-        aria-label="Add a note, link, or screenshot"
+        title={t('composer.addTitle')}
+        aria-label={t('composer.add')}
         onClick={() => useUiStore.getState().setCaptureOpen(true)}
       >
-        +
+        <span aria-hidden="true">+</span>
+        <span className="composer__add-label">{t('composer.addLabel')}</span>
       </button>
       {/*
         Deliberately not autofocused. The greeting's "press Enter to look
@@ -94,10 +84,14 @@ export function Composer({
         /* A placeholder is not a name. It disappears the moment you type, and
            several readers do not announce it at all — this input had no
            accessible name whatsoever. */
-        aria-label="Ask a question, or paste something to save"
-        placeholder="Ask anything, or drop a screenshot to save it…"
+        aria-label={t('composer.ask')}
+        placeholder={placeholder ?? t('composer.placeholder')}
         value={text}
-        disabled={thinking}
+        /*
+         * Never disabled. Disabling blurs, and losing focus mid-think hands
+         * the next Escape to the window — which clears the very answer that is
+         * about to arrive. Double-submit is guarded in the handler instead.
+         */
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           /*
@@ -121,7 +115,7 @@ export function Composer({
           }
           if (e.key !== 'Enter') return;
           e.preventDefault();
-          void submit();
+          if (!thinking) void submit();
         }}
       />
       <button
@@ -131,12 +125,10 @@ export function Composer({
            out and kept in step with what the button will actually do. */
         aria-label={
           thinking
-            ? 'Thinking'
+            ? t('composer.thinkingAria')
             : text.trim()
-              ? 'Ask'
-              : firstRun && (payload?.memories.length ?? 0) > 0
-                ? 'Look around'
-                : 'Send'
+              ? t('composer.askAction')
+              : t('composer.send')
         }
         disabled={thinking}
         onClick={() => void submit()}
@@ -144,13 +136,13 @@ export function Composer({
         {/* "Look around" offers to fan the categories out, so it can only be
             offered when there are categories. On an empty workspace it invited
             the one gesture in the app guaranteed to do nothing. */}
+        {/* The doors above own "look around" now — a second button saying the
+            same words two rows apart read as a stutter, not an affordance. */}
         {thinking
-          ? 'Thinking…'
+          ? t('composer.thinking')
           : text.trim()
-            ? 'Ask'
-            : firstRun && (payload?.memories.length ?? 0) > 0
-              ? 'Look around'
-              : '↵'}
+            ? t('composer.askAction')
+            : '↵'}
       </button>
     </div>
   );

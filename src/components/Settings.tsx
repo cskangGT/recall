@@ -2,6 +2,9 @@ import { useUiStore } from '../store/uiStore';
 import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
+import { currentPlan, FREE_WINDOW_DAYS } from '../core/plan';
+import { startUpgrade } from '../billing/upgrade';
+import { t, currentLocale, chooseLocale } from '../i18n';
 
 /**
  * Settings, kept deliberately small.
@@ -24,14 +27,14 @@ export function Settings() {
 
   const auto = payload?.workspace.auto_reorganize ?? true;
   const offline = isOffline();
-  const mode = offline ? 'Offline — seeded data, no network' : source.mode;
+  const mode = offline ? t('settings.source.offline') : source.mode;
 
   const reset = async () => {
     // Seed mode resets by reloading the committed corpus; the API has to be
     // told, because its copy lives in a database that survives a refresh.
     await load();
     setSettingsOpen(false);
-    toast('Workspace reset.');
+    toast(t('toast.workspaceReset'));
   };
 
   return (
@@ -54,17 +57,14 @@ export function Settings() {
         aria-labelledby="settings-title"
       >
         <div className="bar__head">
-          <span id="settings-title">Settings</span>
-          <span>esc</span>
+          <span id="settings-title">{t('settings.title')}</span>
+          <span>{t('settings.esc')}</span>
         </div>
 
         <label className="settings__row">
           <span className="settings__body">
-            <span className="settings__label">Let Recall reorganize on its own</span>
-            <span className="settings__hint">
-              Off means new items still get filed — the structure just stops moving
-              without you.
-            </span>
+            <span className="settings__label">{t('settings.auto.label')}</span>
+            <span className="settings__hint">{t('settings.auto.hint')}</span>
           </span>
           <input
             type="checkbox"
@@ -76,27 +76,59 @@ export function Settings() {
 
         <div className="settings__row">
           <span className="settings__body">
-            <span className="settings__label">Data source</span>
+            <span className="settings__label">{t('settings.source.label')}</span>
             <span className="settings__hint" data-testid="settings-mode">
               {mode}
             </span>
           </span>
           {!offline && (
             <a className="settings__action" href="?offline=1">
-              Go offline
+              {t('settings.source.goOffline')}
             </a>
           )}
         </div>
 
         <div className="settings__row">
           <span className="settings__body">
-            <span className="settings__label">Reset the workspace</span>
-            <span className="settings__hint">
-              Back to the 47 seeded memories. Captures and corrections are discarded.
+            <span className="settings__label">{t('settings.language.label')}</span>
+            <span className="settings__hint">{t('settings.language.hint')}</span>
+          </span>
+          <button
+            className="settings__action"
+            data-testid="settings-language"
+            onClick={() => chooseLocale(currentLocale() === 'ko' ? 'en' : 'ko')}
+          >
+            {currentLocale() === 'ko' ? 'English' : '한국어'}
+          </button>
+        </div>
+
+        <div className="settings__row">
+          <span className="settings__body">
+            <span className="settings__label">{t('settings.plan.label')}</span>
+            <span className="settings__hint" data-testid="settings-plan">
+              {currentPlan(undefined, payload?.workspace.plan) === 'free'
+                ? t('settings.plan.free', { days: FREE_WINDOW_DAYS })
+                : t('settings.plan.pro')}
             </span>
           </span>
+          {currentPlan(undefined, payload?.workspace.plan) === 'free' && (
+            <button
+              className="settings__action"
+              data-testid="settings-upgrade"
+              onClick={() => void startUpgrade()}
+            >
+              {t('settings.plan.upgrade')}
+            </button>
+          )}
+        </div>
+
+        <div className="settings__row">
+          <span className="settings__body">
+            <span className="settings__label">{t('settings.reset.label')}</span>
+            <span className="settings__hint">{t('settings.reset.hint', { count: 47 })}</span>
+          </span>
           <button className="settings__action" data-testid="reset-workspace" onClick={() => void reset()}>
-            Reset
+            {t('settings.reset.action')}
           </button>
         </div>
       </div>

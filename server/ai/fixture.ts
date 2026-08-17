@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
-  AiProvider, AnswerResult, EmbeddingProvider, ExtractResult,
+  AiProvider,
+  NameOperation, AnswerResult, EmbeddingProvider, ExtractResult,
   NameCluster, NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
@@ -127,13 +128,30 @@ export class FixtureProvider implements AiProvider {
    * The names the demo expects for a split; TF-IDF for anything else. Both go
    * through the same validation a real namer faces, so a fixture run exercises
    * the fallback path rather than sidestepping it.
+   *
+   * `new_category` gets a canned answer too, and it has to be *distinguishable*
+   * from the statistical one — otherwise every test that captures into an empty
+   * workspace passes whether the model was asked or not, which is the exact
+   * thing this operation was added to fix.
    */
   async nameClusters(input: {
-    operation?: 'split' | 'merge' | 'promote';
+    operation?: NameOperation;
     clusters: NameCluster[];
     forbiddenNames: string[];
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]> {
     const allTexts = input.clusters.map((x) => x.sample_texts);
+    if (input.operation === 'new_category') {
+      return input.clusters.map((c, i) => {
+        const proposed = i === 0 ? 'Fixture Category' : `Fixture Category ${i + 1}`;
+        const check = validateName(proposed, input.forbiddenNames);
+        return {
+          cluster_id: c.cluster_id,
+          name: check.ok ? proposed : fallbackName(c.sample_texts, allTexts),
+          rationale: check.ok ? 'fixture' : `fell back: ${check.reason}`,
+        };
+      });
+    }
     const canned = input.operation === 'merge' ? [] : ['Agent Frameworks', 'Evals & Observability'];
     return input.clusters.map((c, i) => {
       const proposed = canned[i] ?? fallbackName(c.sample_texts, allTexts);
@@ -146,9 +164,24 @@ export class FixtureProvider implements AiProvider {
     });
   }
 
-  async answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult> {
+  async answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    history?: { question: string; answer: string }[];
+  }): Promise<AnswerResult> {
     const q = input.question.toLowerCase();
-    const entry = answers.find((a) => a.match.every((kw) => q.includes(kw)));
+    // A follow-up rarely repeats the keywords its referent carried — "which
+    // tool won?" says nothing about evals. Match the question alone first;
+    // failing that, match with the conversation the way a real model would
+    // resolve it. The refusal path stays real: no scripted entry, no answer.
+    const withHistory = [...(input.history ?? []).map((t) => t.question), input.question]
+      .join(' ')
+      .toLowerCase();
+    const entry =
+      answers.find((a) => a.match.every((kw) => q.includes(kw))) ??
+      (input.history?.length
+        ? answers.find((a) => a.match.every((kw) => withHistory.includes(kw)))
+        : undefined);
     if (!entry) {
       return {
         answer: "I don't have anything saved about that yet.",

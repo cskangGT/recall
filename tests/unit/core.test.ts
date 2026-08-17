@@ -303,8 +303,10 @@ describe('hitTest', () => {
     expect(hitTest([big, small], camera, viewport, { sx: 500, sy: 400 })?.id).toBe('mem');
   });
 
-  it('scales the hit radius with zoom', () => {
-    expect(hitTest([big], { x: 0, y: 0, zoom: 2 }, viewport, { sx: 550, sy: 400 })?.id).toBe('cat');
+  it('scales the hit radius with the painted (√zoom-damped) radius', () => {
+    // Categories paint at radius * √zoom — at zoom 4 this node paints at 60px,
+    // so a point 50px out is inside it; at zoom 1 it paints at 30px and misses.
+    expect(hitTest([big], { x: 0, y: 0, zoom: 4 }, viewport, { sx: 550, sy: 400 })?.id).toBe('cat');
     expect(hitTest([big], camera, viewport, { sx: 550, sy: 400 })).toBeNull();
   });
 });
@@ -426,5 +428,38 @@ describe('answerQuestion', () => {
     for (const c of r.citations) expect(r.highlighted_node_ids).toContain(c.memory_id);
     const cat = withDemo.memories.find((m) => m.id === r.citations[0]!.memory_id)!.category_id;
     expect(r.highlighted_node_ids).toContain(cat);
+  });
+});
+
+/**
+ * An empty workspace is a legitimate state, not a malformed payload.
+ *
+ * The width check used to fail when there was no memory to take a width from,
+ * which was safe while every payload came from the seed — and stopped being
+ * safe the moment a personal instance could start with nothing in it. The API
+ * returned a perfectly good empty graph and the app refused to boot on it.
+ */
+describe('validateSeed on an empty workspace', () => {
+  const empty = {
+    workspace: { id: 'ws_mine', name: 'Recall', auto_reorganize: true },
+    sources: [],
+    memories: [],
+    categories: [],
+    entities: [],
+    edges: [],
+  };
+
+  it('accepts it', () => {
+    expect(() => validateSeed(empty)).not.toThrow();
+  });
+
+  it('still refuses vectors that disagree once there are some', () => {
+    const [first] = minimal.memories;
+    expect(() =>
+      validateSeed({
+        ...minimal,
+        memories: [first, { ...first, id: 'mem_odd', vector: [...first!.vector, 0.1] }],
+      }),
+    ).toThrow(/dimension/);
   });
 });

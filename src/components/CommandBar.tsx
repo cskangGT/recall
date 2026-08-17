@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
-import { answerQuestion, isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
+import { runAsk } from '../ask/runAsk';
+import { t } from '../i18n';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
-import { askedCategories } from '../arc/interest';
-import { useInterestStore } from '../store/interestStore';
 
-export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
+export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
   const [hasImage, setHasImage] = useState(false);
@@ -22,7 +23,31 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
   const submit = () => {
     if (!text.trim() && !hasImage) return;
     setCaptureOpen(false);
-    onSubmit();
+    /*
+     * What you typed, sent on.
+     *
+     * This box collected text, detected its type, showed you the verdict — and
+     * then called `onSubmit()` with nothing, so every capture ingested the same
+     * hard-coded demo item regardless. Harmless while the only backend was the
+     * fixture; the moment a personal instance ran against real extraction it
+     * meant the tool could not save anything you actually wrote.
+     *
+     * A screenshot still has no path to send: there is no upload, so an image
+     * capture falls back to the demo's own file (spec §10.1's OCR path is
+     * implemented server-side and unreachable without object storage).
+     */
+    onSubmit(
+      hasImage
+        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+        : {
+            type: detected.type,
+            content: text.trim(),
+            url: detected.type === 'link' ? text.trim() : undefined,
+            // Already parsed out of the text for the type verdict; the server
+            // stores them rather than parsing the same string a second time.
+            referencedUrls: detected.referencedUrls,
+          },
+    );
   };
 
   return (
@@ -45,14 +70,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
         aria-labelledby="capture-bar-title"
       >
         <div className="bar__head">
-          <span id="capture-bar-title">Add to Recall</span>
+          <span id="capture-bar-title">{t('capture.title')}</span>
           <span>esc</span>
         </div>
         <textarea
           ref={ref}
           data-testid="capture-input"
           rows={3}
-          placeholder="Paste text, a link, or an image…"
+          placeholder={t('capture.placeholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
@@ -79,7 +104,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
               </button>
             ))}
           </div>
-          <span>⏎ to add</span>
+          <span>{t('capture.submit')}</span>
         </div>
       </div>
     </div>
@@ -88,9 +113,8 @@ export function CaptureBar({ onSubmit }: { onSubmit: () => void }) {
 
 export function AskBar() {
   const setAskOpen = useUiStore((s) => s.setAskOpen);
-  const setAnswer = useUiStore((s) => s.setAnswer);
-  const recordInterest = useInterestStore((s) => s.record);
-  const setHighlight = useUiStore((s) => s.setHighlight);
+  const askThread = useUiStore((s) => s.askThread);
+  const clearAskThread = useUiStore((s) => s.clearAskThread);
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload);
   const setHovered = useUiStore((s) => s.setHovered);
@@ -136,27 +160,9 @@ export function AskBar() {
   };
 
   const ask = async (question: string) => {
-    if (!payload || !question.trim()) return;
+    if (!question.trim()) return;
     setAskOpen(false);
-
-    const source = useWorkspaceStore.getState().source;
-    const result = source.ask
-      ? await source.ask(question).catch(() => answerQuestion(question, payload))
-      : answerQuestion(question, payload);
-
-    setAnswer({ ...result, question });
-    /*
-     * Asking is the strongest of the three signals the arc ranks by, and until
-     * now it left no trace anywhere: the server writes `ask_history` and reads
-     * it back nowhere, and the client never saw it at all. Recorded against the
-     * top-level categories the answer actually drew on, so the arc reflects what
-     * you were thinking about rather than what you happened to click.
-     */
-    for (const categoryId of askedCategories(payload, result.citations.map((c) => c.memory_id))) {
-      recordInterest(categoryId, 'asked');
-    }
-    setHighlight(result.highlighted_node_ids);
-    select(null);
+    await runAsk(question);
   };
 
   return (
@@ -170,14 +176,35 @@ export function AskBar() {
       >
         <div className="bar__head">
           <span id="ask-bar-title" data-testid="bar-mode">
-            {searching ? 'Search' : 'Ask'}
+            {searching ? t('ask.mode.search') : t('ask.mode.ask')}
           </span>
           <span>esc</span>
         </div>
+        {/* The conversation, named. A follow-up only works if you can see what
+            it would follow — and end it, because "start fresh" must never
+            require dismissing the answer you are looking at. */}
+        {!searching && askThread.length > 0 && (
+          <div className="bar__followup" data-testid="ask-followup">
+            <span className="bar__followup-q">
+              {t('ask.followingUp', { question: askThread[askThread.length - 1]!.question })}
+            </span>
+            <button
+              className="bar__followup-clear"
+              data-testid="ask-followup-clear"
+              onClick={clearAskThread}
+            >
+              {t('ask.startFresh')}
+            </button>
+          </div>
+        )}
         <input
           ref={ref}
           data-testid="ask-input"
-          placeholder="Ask across everything you've saved…"
+          placeholder={
+            askThread.length > 0
+              ? t('ask.placeholderFollowUp')
+              : t('ask.placeholder')
+          }
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -201,7 +228,7 @@ export function AskBar() {
         {searching && (
           <div className="bar__results" data-testid="search-results">
             {results.length === 0 ? (
-              <p className="bar__no-results">No matches.</p>
+              <p className="bar__no-results">{t('ask.noMatches')}</p>
             ) : (
               groups.map((group) => (
                 <div key={group.categoryId} className="bar__group">

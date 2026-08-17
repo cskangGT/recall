@@ -12,6 +12,10 @@ import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './com
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
+import { importFiles, isTextLike, isZip } from './capture/importFiles';
+import { t } from './i18n';
+import { BatchReveal } from './components/BatchReveal';
+import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
 import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
@@ -67,6 +71,18 @@ export function App() {
     }
   }, []);
 
+  // Back from a Stripe checkout that succeeded. The plan itself was flipped by
+  // the webhook server-side; this is only the welcome home. The param is
+  // stripped so a reload does not congratulate twice.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('upgraded') !== '1') return;
+    useUiStore.getState().toast(t('toast.upgraded'));
+    params.delete('upgraded');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  }, []);
+
   useEffect(() => {
     const onResize = () =>
       setRoomy(
@@ -76,7 +92,7 @@ export function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const capture = useCallback(async () => {
+  const capture = useCallback(async (input?: CaptureInput) => {
     if (busy.current) return;
     busy.current = true;
     const ui = useUiStore.getState();
@@ -84,8 +100,19 @@ export function App() {
     // Snapshotted before the ingest so novelty is measured against the corpus
     // as it was, not one that already contains the new memories.
     const before = useWorkspaceStore.getState().payload;
-    const result = await ingestItem();
+    const result = await ingestItem(input);
     const ws = useWorkspaceStore.getState();
+
+    /*
+     * Putting something in is looking around.
+     *
+     * The arc renders `welcomeDismissed ? nodes : []`, so on a fresh instance
+     * the first capture landed in the database and nothing appeared — the
+     * greeting was still up, and the greeting is what suppresses the arc. The
+     * tool looked like it had done nothing at the exact moment it had done the
+     * only thing it is for.
+     */
+    if (result.addedMemoryIds.length > 0) ui.dismissWelcome();
 
     if (before && ws.payload) {
       ui.setLastCapture(
@@ -143,7 +170,7 @@ export function App() {
     if (event) {
       ui.pushReorg(event);
     } else {
-      ui.toast('Added 2 memories.');
+      ui.toast(t('toast.added', { count: 2 }));
     }
     setAnimation(null);
     busy.current = false;
@@ -211,7 +238,7 @@ export function App() {
           e.preventDefault();
           ws.deleteMemory(memory.id);
           ui.select(null);
-          ui.toast('Deleted.');
+          ui.toast(t('toast.deleted'));
           return;
         }
       }
@@ -269,6 +296,22 @@ export function App() {
         if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
         useUiStore.getState().setDropActive(false);
+
+        /*
+         * One file keeps the single-capture path and its choreography. A ZIP
+         * or several text files become a batch — importFiles is the shared
+         * routine the welcome screen's file picker also uses, so a drop and a
+         * pick can never behave differently. `busy` still guards both paths.
+         */
+        const files = Array.from(e.dataTransfer.files);
+        if (files.some(isZip) || files.filter(isTextLike).length >= 2) {
+          if (busy.current) return;
+          busy.current = true;
+          void importFiles(files).finally(() => {
+            busy.current = false;
+          });
+          return;
+        }
         void capture();
       }}
     >
@@ -288,7 +331,7 @@ export function App() {
 
       {dropActive && (
         <div className="dropzone" data-testid="dropzone">
-          <div className="dropzone__inner">Drop it anywhere — Recall will read it and file it</div>
+          <div className="dropzone__inner">{t('drop.hint')}</div>
         </div>
       )}
       <LeftRail />
@@ -306,10 +349,10 @@ export function App() {
         {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
-            <h2>Nothing saved yet.</h2>
-            <p>Add a note, a link, or a screenshot and Recall will start building your map.</p>
+            <h2>{t('map.empty.title')}</h2>
+            <p>{t('map.empty.sub')}</p>
             <button onClick={() => useUiStore.getState().setCaptureOpen(true)}>
-              Add your first item
+              {t('map.empty.cta')}
             </button>
           </div>
         )}
@@ -339,6 +382,7 @@ export function App() {
         )}
       </div>
       <Inspector />
+      <BatchReveal />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
       {settingsOpen && <Settings />}

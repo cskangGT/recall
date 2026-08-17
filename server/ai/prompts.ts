@@ -1,5 +1,5 @@
 import type {
-  AnswerCitation, ExtractResult, ExtractedMemory, NameCluster, NamedCluster,
+  AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, MergeDraft, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
@@ -121,6 +121,15 @@ export function buildExtractPrompt(input: {
     'context. Write it as a full sentence in the past or present tense. Do not',
     'summarise the source; state what it says.',
     '',
+    'Write every memory, the summary, and the title in the language the source',
+    'is written in — a Korean caption yields Korean memories, never a translation.',
+    '',
+    'Keep only what the person would want back later: decisions, how-tos, facts,',
+    'recommendations, ideas. NEVER extract: calls to action ("follow", "save',
+    'this", "link in bio"), hashtags and mentions, greetings, promotional lines,',
+    'or sentences that merely describe the source ("this post is about…") —',
+    'those are packaging, not content. An empty list beats padded noise.',
+    '',
     `At most ${MAX_MEMORIES}. Returning none is a valid answer — plenty of things`,
     'are not worth remembering, and an empty list is better than padding.',
     '',
@@ -194,14 +203,54 @@ export function buildNamePrompt(input: {
   clusters: NameCluster[];
   forbiddenNames: string[];
   retryReasons?: Record<string, string>;
+  /** The viewer's language — a category name is UI, not content. */
+  locale?: 'en' | 'ko';
 }): string {
+  /*
+   * Phrased per operation rather than interpolated raw. "Name the result of this
+   * new_category" is a sentence about the codebase; the others are sentences
+   * about what happened, and the model answers the second kind better.
+   */
+  const opening =
+    input.operation === 'new_category'
+      ? [
+          'Name the category these belong in. They arrived together and nothing',
+          'already saved is close enough to hold them, so this is a new one.',
+        ]
+      : [
+          `Name the result of this ${input.operation}. The change has already been decided;`,
+          'you are naming it, not judging it.',
+        ];
+
   const lines = [
-    `Name the result of this ${input.operation}. The change has already been decided;`,
-    'you are naming it, not judging it.',
+    ...opening,
     '',
     'One to three words. A name a person would recognise as their own category.',
     'Never a container word — "Miscellaneous", "Other", "General", "Various" are',
     'refusals to decide, not names.',
+    '',
+    // The names sit in the chrome next to translated labels — mixed-language
+    // shelves read as a bug even when every individual name is good. Stated
+    // as a hard rule with an example: the soft version still produced
+    // "CTO Workflow Design" for a Korean viewer over Korean notes.
+    input.locale === 'ko'
+      ? 'Every name MUST be in Korean (한국어). This applies even when the notes below\n' +
+        'are in English — the name is a UI label for a Korean-language viewer.\n' +
+        'An English name is a wrong answer. ("Workflow Design" ✗ → "업무 설계" ✓)'
+      : '',
+    '',
+    /*
+     * The headings below are identifiers, and the model has to be told so.
+     *
+     * Without this line gpt-4.1 reads "## new_0" as a placeholder heading and
+     * answers with a cluster_id of its own invention — "pricing_decisions" for
+     * a name of "Pricing Decisions". `resolveNames` matches on cluster_id, so a
+     * perfectly good name arrives as "no name returned", is retried once, and
+     * lands on TF-IDF. That is how a note about a pricing argument came out
+     * called "Discussed Lowering" *with the namer working*.
+     */
+    'Return one entry per section below. Its `cluster_id` must be the section',
+    'heading copied exactly — it is an identifier, not a title to improve.',
     '',
     input.forbiddenNames.length > 0
       ? `Already taken, do not reuse: ${input.forbiddenNames.join(', ')}`
@@ -304,6 +353,7 @@ export const answerSchema = {
 export function buildAnswerPrompt(input: {
   question: string;
   retrieved: RetrievedMemory[];
+  history?: AskTurn[];
 }): string {
   const numbered = input.retrieved
     .map(
@@ -312,6 +362,24 @@ export function buildAnswerPrompt(input: {
     )
     .join('\n');
 
+  /*
+   * The conversation resolves referents, nothing more. It sits above the
+   * memories and below the rules so the model reads it as context for the
+   * question — "which of those?" needs a *those* — while the citation contract
+   * stays anchored to the numbered memories alone. A prior answer is never
+   * evidence: it was built from citations that are not in this prompt, and
+   * citing it would be citing a citation.
+   */
+  const conversation =
+    input.history && input.history.length > 0
+      ? [
+          'Earlier in this conversation (context for pronouns and follow-ups only —',
+          'never a source to cite or repeat from):',
+          ...input.history.map((t) => `Q: ${t.question}\nA: ${t.answer}`),
+          '',
+        ]
+      : [];
+
   return [
     'Answer using only the numbered memories below. They are the entire world.',
     '',
@@ -319,10 +387,27 @@ export function buildAnswerPrompt(input: {
     'Two or three sentences. Say what the person decided or believes, in their',
     'own terms — you are reminding them, not briefing a stranger.',
     '',
+    /*
+     * The voice, fixed rather than left to the model's mood: Mado answers as
+     * the person's own memory surfacing, not as an assistant reporting on
+     * their files. Left unfixed, one answer arrived as a briefing and the
+     * next as a chat message — a second brain with a different personality
+     * every time is a stranger.
+     */
+    'Voice: you ARE this person\'s memory, speaking as the remembering itself.',
+    'Recall, never report — no "according to your notes", no "you saved",',
+    'no "the records show". Say it the way a memory surfaces: "That was',
+    'decided in August — ..." / "8월에 정했었지 — ...". Never address them as',
+    '"you/너/당신" from the outside; the memory is theirs, so speak from',
+    'inside it. In Korean use the soft recollective register (…였지, …하기로',
+    '했잖아), never the formal report style (…하셨습니다). Answer in the',
+    'language the question is asked in.',
+    '',
     'If the memories do not actually answer the question, set refused to true and',
     'leave citations empty. Refusing is correct and costs nothing; a confident',
     'answer built out of near-misses costs their trust in everything else here.',
     '',
+    ...conversation,
     `Question: ${input.question}`,
     '',
     'Memories:',
@@ -362,4 +447,102 @@ export function resolveAnswer(raw: unknown, retrieved: RetrievedMemory[]): {
     return { answer: '', citations: [], refused: true };
   }
   return { answer, citations, refused: false };
+}
+
+// ---------------------------------------------------------------------- merge
+
+export const mergeSchema = {
+  type: 'object',
+  properties: {
+    reason: { type: 'string' },
+    merged_text: { type: 'string' },
+  },
+  required: ['reason', 'merged_text'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The user is deciding whether to merge; the model explains and drafts.
+ *
+ * Two hard rules, both stated as rules because soft phrasings have failed
+ * before in this file: nothing may be lost (the merged text must carry every
+ * distinct fact), and nothing may be added (a merge is a rewrite of what is
+ * there, not a synthesis of what might be). The reason is UI and follows the
+ * viewer's language; the merged text is content and stays in the source's.
+ */
+export function buildMergePrompt(input: { texts: string[]; locale?: 'en' | 'ko' }): string {
+  const lines = [
+    'A person saved these memories separately and suspects they say overlapping',
+    'things. Help them decide whether to keep one instead of several.',
+    '',
+    'Return two fields:',
+    '- `reason`: one or two sentences on what these have in common — why a',
+    '  person might want them as one memory. This is shown before they decide.',
+    input.locale === 'ko'
+      ? '  Write `reason` in Korean (한국어) — it is UI for a Korean-language viewer.'
+      : '',
+    '- `merged_text`: ONE memory that preserves EVERY distinct fact, number,',
+    '  name and nuance from ALL of them. Nothing may be lost. Nothing may be',
+    '  added — no fact that does not appear below. Where two lines say the same',
+    '  thing, say it once; where they differ, keep both differences. Write it',
+    '  in the same language the memories themselves are written in.',
+    '',
+    'The memories:',
+    ...input.texts.map((t, i) => `${i + 1}. ${t}`),
+  ];
+  return lines.filter((l) => l !== '').join('\n');
+}
+
+export function coerceMerge(raw: unknown, fallbackTexts: string[]): MergeDraft {
+  const o = (raw ?? {}) as { reason?: unknown; merged_text?: unknown };
+  const merged = typeof o.merged_text === 'string' ? o.merged_text.trim() : '';
+  return {
+    reason: typeof o.reason === 'string' ? o.reason.trim() : '',
+    // A model that returns nothing must not cost the user their content — the
+    // honest fallback is the originals, joined, which loses nothing either.
+    merged_text: merged.length > 0 ? merged : fallbackTexts.join(' · '),
+  };
+}
+
+// ------------------------------------------------------------------ streaming
+
+/**
+ * The answer field of a partially-streamed JSON response, unescaped as far as
+ * it goes.
+ *
+ * The chat API streams the schema'd response as JSON *text*, so mid-flight the
+ * buffer looks like `{"answer":"The decision was to\n`. `answer` is the
+ * schema's first property, which makes this a scan rather than a parse: find
+ * the field, walk the string, resolve escapes, stop at the closing quote or —
+ * mid-stream — at the end of what has arrived. A trailing half-escape (a lone
+ * backslash, a cut-off \uXXXX) is held back rather than guessed at.
+ */
+export function answerSoFar(partialJson: string): string {
+  const start = partialJson.indexOf('"answer"');
+  if (start === -1) return '';
+  const open = partialJson.indexOf('"', partialJson.indexOf(':', start + 8) + 1);
+  if (open === -1) return '';
+
+  let out = '';
+  for (let i = open + 1; i < partialJson.length; i++) {
+    const ch = partialJson[i]!;
+    if (ch === '"') return out; // closed — the field is complete
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    const next = partialJson[i + 1];
+    if (next === undefined) return out; // half an escape — hold it back
+    i++;
+    if (next === 'n') out += '\n';
+    else if (next === 't') out += '\t';
+    else if (next === 'r') out += '\r';
+    else if (next === 'u') {
+      const hex = partialJson.slice(i + 1, i + 5);
+      if (hex.length < 4) return out; // cut-off \uXXXX — hold it back
+      out += String.fromCharCode(parseInt(hex, 16));
+      i += 4;
+    } else out += next; // \" \\ \/ and anything else escaped literally
+  }
+  return out;
 }

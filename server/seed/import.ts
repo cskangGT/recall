@@ -10,6 +10,49 @@ import workspaceJson from '../../seed/workspace.json' with { type: 'json' };
  * the backend path: the tuned vectors go in verbatim, so the gates see exactly
  * what they saw on the frontend.
  */
+/**
+ * The same corpus under fresh ids.
+ *
+ * The schema has always been multi-tenant — every table carries a workspace_id
+ * with a foreign key and an index — but the *seed* is not: its rows have fixed
+ * primary keys (`src_00`, `mem_00`, `cat_hiring`), so importing it a second
+ * time fails on `UNIQUE constraint failed: sources.id`. Which means that until
+ * now exactly one workspace could exist, and nobody had noticed because exactly
+ * one ever did.
+ *
+ * Giving each visitor a copy needs the ids namespaced, and every reference
+ * rewritten with them: a category's parent, a memory's source and category and
+ * entities, and both ends of every edge. Missing one produces a payload that
+ * inserts cleanly and then fails `validateSeed` in the browser, which is a long
+ * way from the mistake.
+ */
+export function namespaceSeed(payload: GraphPayload, prefix: string): GraphPayload {
+  const id = (original: string) => `${prefix}_${original}`;
+  return {
+    ...payload,
+    sources: payload.sources.map((s) => ({ ...s, id: id(s.id) })),
+    categories: payload.categories.map((c) => ({
+      ...c,
+      id: id(c.id),
+      parent_id: c.parent_id === null ? null : id(c.parent_id),
+    })),
+    entities: payload.entities.map((e) => ({ ...e, id: id(e.id) })),
+    memories: payload.memories.map((m) => ({
+      ...m,
+      id: id(m.id),
+      source_id: id(m.source_id),
+      category_id: id(m.category_id),
+      entity_ids: m.entity_ids.map(id),
+    })),
+    edges: payload.edges.map((e) => ({
+      ...e,
+      id: id(e.id),
+      source_memory_id: id(e.source_memory_id),
+      target_memory_id: id(e.target_memory_id),
+    })),
+  };
+}
+
 export function importSeed(
   repo: Repository,
   workspaceId = 'ws_demo',

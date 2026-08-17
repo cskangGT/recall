@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useUiStore, STAGE_LABEL } from '../store/uiStore';
+import { t } from '../i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 
 /**
@@ -21,14 +22,14 @@ export function TopBar() {
 
   const here =
     arcLevelId === null
-      ? 'Everything'
-      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? 'Everything');
+      ? t('topbar.everything')
+      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? t('topbar.everything'));
 
   return (
     <div className="topbar">
       <span>{here}</span>
       <button className="topbar__link" data-testid="go-map" onClick={() => setView('map')}>
-        See the big picture ⇢
+        {t('topbar.bigPicture')}
       </button>
     </div>
   );
@@ -52,14 +53,14 @@ export function LeftRail() {
      * this. `aria-current` marks where you are — the active view was carrying
      * that in a CSS class, which is invisible to everything but a monitor.
      */
-    <nav className="rail" aria-label="Views">
+    <nav className="rail" aria-label={t('rail.views')}>
       <div className="rail__mark" aria-hidden="true">
-        R
+        M
       </div>
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
-        title="Map (G)"
-        aria-label="Map (G)"
+        title={t('rail.map')}
+        aria-label={t('rail.map')}
         aria-current={view === 'map' ? 'page' : undefined}
         data-testid="rail-map"
         onClick={() => setView('map')}
@@ -68,8 +69,8 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
-        title="Browse (T)"
-        aria-label="Browse (T)"
+        title={t('rail.browse')}
+        aria-label={t('rail.browse')}
         aria-current={view === 'browse' ? 'page' : undefined}
         data-testid="rail-tree"
         onClick={() => setView('browse')}
@@ -78,8 +79,8 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
-        title="Sources (S)"
-        aria-label="Sources (S)"
+        title={t('rail.sources')}
+        aria-label={t('rail.sources')}
         aria-current={view === 'sources' ? 'page' : undefined}
         data-testid="rail-sources"
         onClick={() => setView('sources')}
@@ -88,8 +89,8 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title="Ask (⌘/)"
-        aria-label="Ask (⌘/)"
+        title={t('rail.ask')}
+        aria-label={t('rail.ask')}
         data-testid="rail-ask"
         onClick={() => setAskOpen(true)}
       >
@@ -98,8 +99,8 @@ export function LeftRail() {
       <div className="rail__spacer" />
       <button
         className="rail__btn"
-        title="Settings (,)"
-        aria-label="Settings (,)"
+        title={t('rail.settings')}
+        aria-label={t('rail.settings')}
         data-testid="rail-settings"
         onClick={() => useUiStore.getState().setSettingsOpen(true)}
       >
@@ -107,8 +108,8 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title="Add (⌘K)"
-        aria-label="Add (⌘K)"
+        title={t('rail.add')}
+        aria-label={t('rail.add')}
         data-testid="rail-capture"
         onClick={() => setCaptureOpen(true)}
       >
@@ -167,7 +168,7 @@ export function Toasts() {
 }
 
 export function TooSmall() {
-  return <div className="too-small">Recall is desktop-first. Please open on a larger screen.</div>;
+  return <div className="too-small">{t('tooSmall')}</div>;
 }
 
 export function Loading() {

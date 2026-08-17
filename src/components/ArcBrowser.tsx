@@ -4,11 +4,18 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
 import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
 import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
+import { filterByKeywords, keywordsFor } from '../arc/keywords';
 import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
+import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
+import { startUpgrade } from '../billing/upgrade';
+import { importFiles } from '../capture/importFiles';
+import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
+import { runAsk } from '../ask/runAsk';
+import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
 /**
@@ -57,16 +64,24 @@ export function ArcBrowser() {
   const arcLevelId = useUiStore((s) => s.arcLevelId);
   const setArcLevel = useUiStore((s) => s.setArcLevel);
   const answer = useUiStore((s) => s.answer);
+  const answerDraft = useUiStore((s) => s.answerDraft);
+  const askThread = useUiStore((s) => s.askThread);
   const lastCapture = useUiStore((s) => s.lastCapture);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
   const toast = useUiStore((s) => s.toast);
+  const asking = useUiStore((s) => s.asking);
   const interestEvents = useInterestStore((s) => s.events);
   const recordInterest = useInterestStore((s) => s.record);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
   const [dragId, setDragId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fillOpen, setFillOpen] = useState(false);
+  const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
+  const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
+  const hasSourceChoices = canImportNotes || canImportNotion;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -96,7 +111,19 @@ export function ArcBrowser() {
    */
   const hasSubfolders = (id: string) => categoryRows.some((r) => r.parentId === id);
 
-  const showingAnswer = openCategoryId === ANSWER_FOLDER_ID && answer !== null;
+  const showingAnswer =
+    openCategoryId === ANSWER_FOLDER_ID && (answer !== null || answerDraft !== null);
+
+  /*
+   * The conversation, visible. The thread always worked — three turns ride
+   * along so "which of those?" has a *those* — but the screen showed only the
+   * latest answer, so it never *felt* like a conversation. Prior turns stack
+   * above the current answer, dimmed; an answered question is the thread's
+   * last entry, so it is sliced off to avoid showing the present twice.
+   */
+  const priorTurns =
+    !showingAnswer ? [] : answer && !answer.refused ? askThread.slice(0, -1) : askThread;
+  const currentQuestion = answer?.question ?? answerDraft?.question ?? null;
 
   /** Citations that resolve to a memory we can show a row for. */
   const answerMemories = useMemo(() => {
@@ -250,6 +277,57 @@ export function ArcBrowser() {
       .sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   }, [payload, openRow, showingAnswer, answerMemories]);
 
+  /*
+   * The free window. Rows past it render archived — present but not readable —
+   * and one line under the list says why and what opens them. An answer's
+   * citations are never archived mid-answer: the answer already read them, and
+   * redacting its own evidence would make the product look like it is lying.
+   */
+  const planCutoff = useMemo(
+    () =>
+      payload
+        ? freeCutoff(payload.memories, currentPlan(undefined, payload.workspace.plan))
+        : null,
+    [payload],
+  );
+  const archivedCount = showingAnswer
+    ? 0
+    : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
+
+  /*
+   * The keyword lens. Sentences have to be read; keywords can be scanned — so
+   * an open category leads with chips, and each pick narrows the list and
+   * re-derives the chips from what is left. Flat categories drill down just as
+   * well as nested ones this way. Selection resets on every navigation: a lens
+   * carried from one category into another would silently show a subset.
+   */
+  const [lensKeywords, setLensKeywords] = useState<string[]>([]);
+  useEffect(() => setLensKeywords([]), [openCategoryId]);
+
+  // Derived from readable rows only: an archived memory's text is behind the
+  // paywall, and a chip that quotes it would be reading it out loud.
+  const readable = useMemo(
+    () =>
+      showingAnswer
+        ? contents
+        : contents.filter((m) => !isArchivedByPlan(m.created_at, planCutoff)),
+    [contents, showingAnswer, planCutoff],
+  );
+  const lensed = useMemo(
+    () => (payload ? filterByKeywords(readable, lensKeywords, payload) : readable),
+    [readable, lensKeywords, payload],
+  );
+  const lensChips = useMemo(
+    () => (payload && !showingAnswer ? keywordsFor(lensed, lensKeywords, payload) : []),
+    [lensed, lensKeywords, payload, showingAnswer],
+  );
+  /** What the reading list renders. Archived rows step back while a lens is on. */
+  const visibleRows = useMemo(() => {
+    if (showingAnswer) return contents;
+    if (lensKeywords.length > 0) return lensed;
+    return contents;
+  }, [contents, lensed, lensKeywords.length, showingAnswer]);
+
   const goTo = (levelId: string | null, back: boolean) => {
     setPage(0);
     setGoingBack(back);
@@ -358,17 +436,17 @@ export function ArcBrowser() {
     if (rejection === 'depth') {
       setRejectedId(node.id);
       setTimeout(() => setRejectedId(null), 420);
-      toast('Recall keeps categories two levels deep.');
+      toast(t('toast.twoLevels'));
       return;
     }
     if (rejection) return;
 
     if (dragged.kind === 'memory') {
       moveMemory(dragged.id, node.id);
-      toast("Moved. Recall won't change this again.");
+      toast(t('toast.moved'));
     } else {
       moveCategory(dragged.id, node.id);
-      toast(`Moved ${dragged.label} into ${node.label}.`);
+      toast(t('toast.movedInto', { a: dragged.label, b: node.label }));
     }
   };
 
@@ -395,11 +473,108 @@ export function ArcBrowser() {
 
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
+  /*
+   * The fill door, shared by both greetings. On an empty workspace it is the
+   * whole point of the screen; on a seeded one it stands beside "look around".
+   * One door either way: when the local Mac server offers a second source it
+   * opens into the choice, otherwise it IS the file picker.
+   */
+  const fillDoor = (
+    <>
+      <button
+        className="arc__door arc__door--fill"
+        data-testid="door-fill"
+        aria-expanded={hasSourceChoices ? fillOpen : undefined}
+        onClick={() => {
+          if (hasSourceChoices) setFillOpen((v) => !v);
+          else fileInputRef.current?.click();
+        }}
+      >
+        <span className="arc__door-name">{t('welcome.fill')}</span>
+        <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
+      </button>
+    </>
+  );
+
+  const fillSources = fillOpen && hasSourceChoices && (
+    <div className="arc__sources" data-testid="fill-sources">
+      <button
+        className="arc__source"
+        data-testid="source-files"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {t('welcome.sourceFiles')}
+      </button>
+      {canImportNotes && (
+        <button
+          className="arc__source"
+          data-testid="source-notes"
+          onClick={() => void importAppleNotesFlow()}
+        >
+          {t('welcome.notes')}
+        </button>
+      )}
+      {canImportNotion && (
+        <button
+          className="arc__source"
+          data-testid="source-notion"
+          onClick={() => void importNotionFlow()}
+        >
+          {t('welcome.notion')}
+        </button>
+      )}
+    </div>
+  );
+
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      multiple
+      hidden
+      data-testid="door-fill-input"
+      accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        if (files.length > 0) void importFiles(files);
+      }}
+    />
+  );
+
   const heading = showingAnswer
-    ? 'What Recall pulled'
+    ? t('answer.heading')
     : openRow
       ? openRow.label
-      : 'Where would you like to look?';
+      : t('welcome.prompt');
+
+  /*
+   * The composer's placeholder is the one place a question can be recommended
+   * without taking up any room — so it follows the eye: a selected keyword
+   * beats the open category, the open category beats the generic invitation.
+   * The two category templates alternate by name so the suggestion does not
+   * fossilize into furniture.
+   */
+  const composerHint = (() => {
+    if (showingAnswer || !openRow) return undefined;
+    const kw = lensKeywords[lensKeywords.length - 1];
+    if (kw) return t('composer.ph.keyword', { kw });
+    const sum = [...openRow.label].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+    return sum % 2 === 0
+      ? t('composer.ph.decisions', { name: openRow.label })
+      : t('composer.ph.overview', { name: openRow.label });
+  })();
+
+  const canAsk = Boolean(useWorkspaceStore.getState().source.ask);
+  const summarize = () => {
+    if (!openRow) return;
+    const kw = lensKeywords[lensKeywords.length - 1];
+    void runAsk(
+      kw
+        ? t('ask.summarizeKw', { name: openRow.label, kw })
+        : t('ask.summarize', { name: openRow.label }),
+    );
+  };
 
   return (
     /*
@@ -589,21 +764,37 @@ export function ArcBrowser() {
             */}
             {payload.memories.length === 0 ? (
               <>
-                <p className="arc__greeting-line">Nothing up here yet.</p>
-                <p className="arc__greeting-aside">
-                  Paste a note, a link, or a screenshot below and Recall will read it and
-                  find it a place. The map builds itself from there.
-                </p>
+                <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
+                <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
+                <div className="arc__doors">{fillDoor}</div>
+                {fillSources}
+                {fileInput}
               </>
             ) : (
               <>
-                <p className="arc__greeting-line">Want to think something through?</p>
+                <p className="arc__greeting-line">{t('welcome.title')}</p>
                 {/* The scale belongs in the sentence, where the eye already is —
                     the Inspector used to shout it from the corner instead. */}
                 <p className="arc__greeting-aside">
-                  {payload.memories.length} memories from {payload.sources.length} sources,
-                  already sorted. Ask me anything about them — or press Enter to look around.
+                  {t('welcome.sub', {
+                    memories: payload.memories.length,
+                    sources: payload.sources.length,
+                  })}
                 </p>
+                {/*
+                  Two doors, because there are two kinds of first visit: someone
+                  ready to pour their own files in, and someone who wants to see
+                  what the tool even is before feeding it anything. The second
+                  door is the old Enter-to-look-around, given a surface.
+                */}
+                <div className="arc__doors">
+                  {fillDoor}
+                  <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
+                    <span className="arc__door-name">{t('welcome.browse')}</span>
+                  </button>
+                </div>
+                {fillSources}
+                {fileInput}
               </>
             )}
           </div>
@@ -611,32 +802,159 @@ export function ArcBrowser() {
 
       {/* The conversation never moves. It is docked here on the first frame and
           stays docked; there is no welcome screen for it to travel from. */}
-      <Composer firstRun={!welcomeDismissed} onSubmitted={dismissWelcome} />
+      <Composer
+        firstRun={!welcomeDismissed}
+        onSubmitted={dismissWelcome}
+        placeholder={composerHint}
+      />
 
       {isOpen && (
       <div className="reading" data-testid="reading-list" style={{ top: geometry.listTop }}>
         <div className="reading__head">
           <span>{heading}</span>
+          {/* One click from looking to understanding — but only where a model
+              is connected. The scripted demo answerer cannot summarize an
+              arbitrary list honestly, and a button that produces a refusal is
+              worse than no button (same rule as the reveal's bridge). */}
+          {!showingAnswer && openRow && canAsk && (
+            /*
+             * The wait is shown where the click happened. A summary takes
+             * seconds, and a button that goes silent for seconds sends people
+             * off pressing everything else to see if anything is happening —
+             * so it says it is working, and refuses a second question while
+             * one is out (runAsk enforces the same rule for every surface).
+             */
+            <button
+              className={`reading__summarize${asking ? ' reading__summarize--busy' : ''}`}
+              data-testid="reading-summarize"
+              title={t('reading.summarize.title')}
+              disabled={asking}
+              onClick={summarize}
+            >
+              {asking ? t('reading.summarizing') : t('reading.summarize')}
+            </button>
+          )}
           {/* "Folder" was left over from the two-pane list this replaced, and
               then survived a stone and a star. There is nothing on this screen
               a person would call a folder; what is above them is a category
               with a name under it, so the hint says that. */}
           <span className="reading__hint">
-            {showingAnswer
-              ? 'Drag any of these up to a category to keep it'
-              : 'Drag one up to a category to re-file it'}
+            {showingAnswer ? t('reading.hint.answer') : t('reading.hint.folder')}
           </span>
         </div>
 
+        {showingAnswer && priorTurns.length > 0 && (
+          <div className="thread" data-testid="ask-thread" aria-label={t('thread.aria')}>
+            {priorTurns.map((turn, i) => (
+              <div key={i} className="thread__turn">
+                <div className="thread__q">{turn.question}</div>
+                <p className="thread__a">
+                  {turn.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {showingAnswer && currentQuestion && (
+          <div className="thread__q thread__q--current" data-testid="thread-question">
+            {currentQuestion}
+          </div>
+        )}
         {showingAnswer && answer && (
           <p className="reading__answer" data-testid="browser-answer">
-            {answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
+            {/* A refusal renders in the viewer's language — the server's
+                constant is English, and a Korean screen must not switch
+                voices at exactly the moment it says it remembers nothing. */}
+            {(answer.refused ? t('ask.refusalText') : answer.answer)
+              .replace(/\[\d+\]/g, '')
+              .replace(/\s+([.,])/g, '$1')}
+          </p>
+        )}
+        {/* The draft: words as they arrive, with a breathing caret. The final
+            answer supersedes it in the same spot, citations and all. */}
+        {showingAnswer && !answer && answerDraft && (
+          <p
+            className="reading__answer reading__answer--streaming"
+            data-testid="browser-answer-draft"
+          >
+            {answerDraft.text.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1')}
           </p>
         )}
 
-        {contents.map((memory) => {
+        {!showingAnswer && (lensKeywords.length > 0 || lensChips.length > 0) && (
+          <div
+            className="reading__keywords"
+            data-testid="keyword-strip"
+            role="group"
+            aria-label={t('keywords.aria')}
+          >
+            {lensKeywords.map((k) => (
+              <button
+                key={k}
+                className="kw kw--selected"
+                data-testid={`kw-selected-${k}`}
+                title={t('keywords.remove')}
+                onClick={() => setLensKeywords((s) => s.filter((x) => x !== k))}
+              >
+                {k}
+                <span className="kw__x" aria-hidden="true">
+                  ×
+                </span>
+              </button>
+            ))}
+            {lensChips.map((c) => (
+              <button
+                key={c.label}
+                className={`kw${c.kind === 'entity' ? ' kw--entity' : ''}`}
+                data-testid={`kw-${c.label}`}
+                title={t('keywords.chip.title')}
+                onClick={() => setLensKeywords((s) => [...s, c.label])}
+              >
+                {c.label}
+                <span className="kw__count">{c.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {visibleRows.map((memory, index) => {
           const source = payload.sources.find((s) => s.id === memory.source_id);
           const home = payload.categories.find((c) => c.id === memory.category_id);
+          const archived = !showingAnswer && isArchivedByPlan(memory.created_at, planCutoff);
+          // Several memories from one capture sit together in the list; naming
+          // the source once per run reads as provenance, once per row as an
+          // echo — the screen looked like it was stuttering.
+          const repeatedSource =
+            index > 0 && visibleRows[index - 1]!.source_id === memory.source_id;
+          if (archived) {
+            return (
+              <div
+                key={memory.id}
+                data-testid={`item-${memory.id}`}
+                className="item item--archived"
+                role="button"
+                tabIndex={0}
+                aria-label={t('reading.archived.aria')}
+                onClick={() => useUiStore.getState().toast(t('toast.archivedTap'))}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  useUiStore.getState().toast(t('toast.archivedTap'));
+                }}
+              >
+                <span className="item__icon">{source ? SOURCE_ICON[source.type] : '·'}</span>
+                <span className="item__body">
+                  <span className="item__text item__text--archived" aria-hidden="true">
+                    {memory.text}
+                  </span>
+                  <span className="item__meta">{t('reading.archived.meta', { date: memory.created_at.slice(0, 10) })}</span>
+                </span>
+                <span className="item__lock" title={t('reading.archived.title')}>
+                  ◷
+                </span>
+              </div>
+            );
+          }
           return (
             <div
               key={memory.id}
@@ -674,17 +992,43 @@ export function ArcBrowser() {
                 <span className="item__text">{memory.text}</span>
                 <span className="item__meta">
                   {home && home.id !== openRow?.id ? `${home.name} · ` : ''}
-                  {source?.title ?? 'Unknown source'}
+                  {repeatedSource ? '〃' : (source?.title ?? t('inspector.unknown'))}
                 </span>
               </span>
+              {(memory.times_seen ?? 1) > 1 && (
+                <span
+                  className="item__times"
+                  data-testid="item-times"
+                  title={t('reading.times.title', { n: memory.times_seen! })}
+                >
+                  ×{memory.times_seen}
+                </span>
+              )}
               {memory.category_locked && (
-                <span className="item__lock" title="Moved by you — AI won't change it">
+                <span className="item__lock" title={t('reading.lock.title')}>
                   ⦿
                 </span>
               )}
             </div>
           );
         })}
+
+        {archivedCount > 0 && (
+          <div className="reading__paywall" data-testid="plan-paywall">
+            <span>
+              {archivedCount === 1
+                ? t('paywall.line.one', { days: FREE_WINDOW_DAYS })
+                : t('paywall.line.many', { days: FREE_WINDOW_DAYS, count: archivedCount })}
+            </span>
+            <button
+              className="reading__upgrade"
+              data-testid="plan-upgrade"
+              onClick={() => void startUpgrade()}
+            >
+              {t('paywall.cta')}
+            </button>
+          </div>
+        )}
       </div>
       )}
     </div>

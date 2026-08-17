@@ -53,7 +53,16 @@ export interface ExtractResult {
 
 // ---------------------------------------------------------------- call 4: name
 
-export type NameOperation = 'split' | 'merge' | 'promote';
+/**
+ * What is being named.
+ *
+ * `new_category` is a category being born rather than one being rearranged, and
+ * it was missing — so the one case a personal instance meets constantly, where
+ * a capture arrives and nothing it could belong to exists yet, never reached the
+ * model at all. It fell to `fallbackName`, which reads term statistics out of a
+ * single sentence that has none.
+ */
+export type NameOperation = 'split' | 'merge' | 'promote' | 'new_category';
 
 export interface NameCluster {
   cluster_id: string;
@@ -68,6 +77,17 @@ export interface NamedCluster {
 }
 
 // ---------------------------------------------------------------- ask
+
+/**
+ * One prior exchange, oldest first. Follow-ups carry the last few so "which of
+ * those?" has a *those* — the model resolves the referent; retrieval gets the
+ * same context separately (see AskPipeline). Each question is still answered
+ * against the corpus alone: history disambiguates, it is never evidence.
+ */
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
 
 export interface AnswerCitation {
   n: number;
@@ -112,65 +132,53 @@ export interface AiProvider {
     clusters: NameCluster[];
     /** Sibling names the result must not collide with. */
     forbiddenNames: string[];
+    /** The viewer's language — names are UI, not content. */
+    locale?: 'en' | 'ko';
   }): Promise<NamedCluster[]>;
-  answer(input: { question: string; retrieved: RetrievedMemory[] }): Promise<AnswerResult>;
+  answer(input: {
+    question: string;
+    retrieved: RetrievedMemory[];
+    /** Recent exchanges, oldest first — absent on a fresh question. */
+    history?: AskTurn[];
+  }): Promise<AnswerResult>;
+  /**
+   * Optional: `answer`, with the text arriving as it is generated. `onDelta`
+   * receives each new run of answer text (never the whole so-far); the
+   * returned result is identical to what `answer` would have produced, and
+   * every downstream check — citation validation, the refusal contract — runs
+   * on that, so streaming changes when the words arrive and nothing else.
+   */
+  answerStream?(
+    input: {
+      question: string;
+      retrieved: RetrievedMemory[];
+      history?: AskTurn[];
+    },
+    onDelta: (text: string) => void,
+  ): Promise<AnswerResult>;
+  /**
+   * Optional: says why these memories overlap and writes the one memory that
+   * holds every distinct fact from all of them. The user decides whether the
+   * merge happens; the model only explains and drafts. Providers that cannot
+   * do this honestly (the fixture) simply do not have it, and the route
+   * answers 501.
+   */
+  mergeMemories?(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft>;
+}
+
+export interface MergeDraft {
+  /** One or two sentences: why these say overlapping things. Viewer language. */
+  reason: string;
+  /** The single memory that preserves every distinct fact. Source language. */
+  merged_text: string;
 }
 
 // ---------------------------------------------------------------- naming validation
 
-/** Rejected outright by spec §10.4 — a container name is a failure to decide. */
-const GENERIC = new Set(['miscellaneous', 'other', 'general', 'various', 'stuff', 'misc']);
-
-export interface NameValidation {
-  ok: boolean;
-  reason?: string;
-}
-
-/**
- * Applied to model output before it is written. A badly named category is
- * recoverable by the user; a failed reorganization is not — so callers fall
- * back to a TF-IDF name rather than abandoning the operation (spec §10.4).
+/*
+ * Moved to src/core/naming.ts when the client's batch pipeline started naming
+ * categories too — one rule, two ingest paths. Re-exported so everything
+ * server-side keeps importing it from where the provider contract lives.
  */
-export function validateName(name: string, forbidden: string[]): NameValidation {
-  const trimmed = name.trim();
-  if (trimmed.length === 0) return { ok: false, reason: 'empty' };
-  const words = trimmed.split(/\s+/);
-  if (words.length > 3) return { ok: false, reason: `${words.length} words, max 3` };
-  if (GENERIC.has(trimmed.toLowerCase())) return { ok: false, reason: 'generic container name' };
-  if (forbidden.some((f) => f.toLowerCase() === trimmed.toLowerCase())) {
-    return { ok: false, reason: 'duplicates an existing or tombstoned name' };
-  }
-  return { ok: true };
-}
-
-/**
- * Deterministic fallback when naming fails validation twice: the two highest
- * TF-IDF terms in the cluster, title-cased.
- */
-export function fallbackName(sampleTexts: string[], allTexts: string[][]): string {
-  const STOP = new Set(
-    ('the a an and or but of to in for on with at by from as is are was were be been it its this that ' +
-      'these those not no you your we our they their he she i me my more most than then so if when ' +
-      'what which who how why can could should would will just also very much every all any'
-    ).split(' '),
-  );
-  const tokens = (t: string) =>
-    t.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
-
-  const tf = new Map<string, number>();
-  for (const t of sampleTexts) for (const w of tokens(t)) tf.set(w, (tf.get(w) ?? 0) + 1);
-
-  const df = new Map<string, number>();
-  for (const doc of allTexts) {
-    for (const w of new Set(doc.flatMap(tokens))) df.set(w, (df.get(w) ?? 0) + 1);
-  }
-
-  const n = Math.max(1, allTexts.length);
-  const scored = [...tf.entries()]
-    .map(([w, freq]) => ({ w, score: freq * Math.log(n / (1 + (df.get(w) ?? 0))) }))
-    .sort((a, b) => (b.score - a.score) || a.w.localeCompare(b.w));
-
-  const title = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
-  const picked = scored.slice(0, 2).map((s) => title(s.w));
-  return picked.length > 0 ? picked.join(' ') : 'Unsorted';
-}
+export { validateName, fallbackName } from '../../src/core/naming.ts';
+export type { NameValidation } from '../../src/core/naming.ts';

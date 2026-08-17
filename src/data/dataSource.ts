@@ -1,4 +1,5 @@
 import type { GraphPayload } from '../core/types';
+import { currentLocale } from '../i18n';
 import { validateSeed } from './validateSeed';
 import workspaceJson from '../../seed/workspace.json';
 
@@ -14,6 +15,8 @@ import workspaceJson from '../../seed/workspace.json';
 export interface CaptureInput {
   type: 'text' | 'link' | 'screenshot';
   content?: string;
+  /** What to call the source. The extension has the page's own <title>. */
+  title?: string;
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];
@@ -34,6 +37,25 @@ export interface CaptureResult {
   note?: string;
 }
 
+export interface CaptureBatchResult {
+  /** One per item, in item order. */
+  results: {
+    sourceId: string;
+    status: string;
+    addedMemoryIds: string[];
+    touchedCategoryIds: string[];
+    skipped: { text: string; similarity: number }[];
+    note?: string;
+  }[];
+  /** Every structural operation the batch settled into, oldest first. */
+  reorgs: NonNullable<CaptureResult['reorg']>[];
+  graph: GraphPayload;
+}
+
+export interface NotesImportResult extends CaptureBatchResult {
+  notes: { total: number; imported: number; droppedSecretLines: number };
+}
+
 export interface AskResult {
   answer: string;
   citations: { n: number; memory_id: string; source_id: string }[];
@@ -41,12 +63,44 @@ export interface AskResult {
   refused: boolean;
 }
 
+/** One prior exchange, for follow-up questions. Oldest first. */
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
 export interface DataSource {
   readonly mode: 'seed' | 'api';
   load(): Promise<GraphPayload>;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
-  ask?(question: string): Promise<AskResult>;
+  /** Many items, one reorganization — the server half of the bulk-drop reveal. */
+  captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
+  /** Reads the Mac's Notes.app — only a local darwin server can. */
+  importAppleNotes?(days?: number): Promise<NotesImportResult>;
+  /** Reads Notion pages — present when the server holds a token. */
+  importNotionPages?(days?: number): Promise<NotesImportResult>;
+  ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
+  /**
+   * `ask`, with the answer text arriving as it is generated. `onDelta` gets
+   * each new run of text; the resolved result is exactly what `ask` would
+   * have returned, and callers treat the deltas as a draft it supersedes.
+   */
+  askStream?(
+    question: string,
+    onDelta: (text: string) => void,
+    history?: AskTurn[],
+  ): Promise<AskResult>;
+  /**
+   * The AI's half of a user-driven merge: why these memories overlap and the
+   * one text that would hold everything. Writes nothing — the user decides.
+   */
+  mergePreview?(memoryIds: string[]): Promise<{ reason: string; merged_text: string }>;
+  /** Applies a merge the user confirmed, with the exact text they approved. */
+  mergeMemories?(
+    memoryIds: string[],
+    mergedText: string,
+  ): Promise<{ mergedMemoryId: string; graph: GraphPayload }>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
@@ -58,6 +112,11 @@ export interface DataSource {
   /** Re-runs a capture whose processing failed. Only the API can do this. */
   retrySource?(sourceId: string): Promise<GraphPayload>;
   setAutoReorganize?(enabled: boolean): Promise<GraphPayload>;
+  /**
+   * Starts a Pro checkout and returns the Stripe-hosted URL to redirect to.
+   * The plan flips when the server's webhook confirms payment, never client-side.
+   */
+  upgrade?(returnUrl: string): Promise<{ url: string }>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -109,12 +168,101 @@ export class ApiDataSource implements DataSource {
   }
 
   async capture(input: CaptureInput): Promise<CaptureResult> {
-    const result = await this.post<CaptureResult>('/capture', input);
+    // The locale rides along so category names arrive in the viewer's
+    // language — a name is UI, and the server has no other way to know.
+    const result = await this.post<CaptureResult>('/capture', { ...input, locale: currentLocale() });
     return { ...result, graph: validateSeed(result.graph) };
   }
 
-  ask(question: string): Promise<AskResult> {
-    return this.post<AskResult>('/ask', { question });
+  async captureBatch(items: CaptureInput[]): Promise<CaptureBatchResult> {
+    const result = await this.post<CaptureBatchResult>('/capture/batch', {
+      items,
+      locale: currentLocale(),
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async importAppleNotes(days = 14): Promise<NotesImportResult> {
+    const result = await this.post<NotesImportResult>('/import/apple-notes', {
+      days,
+      locale: currentLocale(),
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async importNotionPages(days = 14): Promise<NotesImportResult> {
+    const result = await this.post<NotesImportResult>('/import/notion', {
+      days,
+      locale: currentLocale(),
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  upgrade(returnUrl: string): Promise<{ url: string }> {
+    return this.post<{ url: string }>('/billing/checkout', { returnUrl });
+  }
+
+  ask(question: string, history?: AskTurn[]): Promise<AskResult> {
+    return this.post<AskResult>('/ask', { question, history });
+  }
+
+  async askStream(
+    question: string,
+    onDelta: (text: string) => void,
+    history?: AskTurn[],
+  ): Promise<AskResult> {
+    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}/ask/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question, history }),
+    });
+    if (!response.ok || !response.body) {
+      throw new HttpError(response.status, `stream failed (${response.status})`);
+    }
+
+    // SSE frames: `event: X\ndata: {...}\n\n`, possibly split across chunks —
+    // only complete double-newline-terminated frames are consumed.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: AskResult | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const event = /^event: (.+)$/m.exec(frame)?.[1];
+        const data = /^data: (.+)$/m.exec(frame)?.[1];
+        if (!event || !data) continue;
+        if (event === 'delta') onDelta((JSON.parse(data) as { text: string }).text);
+        else if (event === 'done') result = JSON.parse(data) as AskResult;
+        else if (event === 'error') {
+          throw new HttpError(502, (JSON.parse(data) as { error: string }).error);
+        }
+      }
+    }
+    if (!result) throw new HttpError(502, 'stream ended without a result');
+    return result;
+  }
+
+  mergePreview(memoryIds: string[]): Promise<{ reason: string; merged_text: string }> {
+    return this.post<{ reason: string; merged_text: string }>('/memories/merge-preview', {
+      memoryIds,
+      locale: currentLocale(),
+    });
+  }
+
+  async mergeMemories(
+    memoryIds: string[],
+    mergedText: string,
+  ): Promise<{ mergedMemoryId: string; graph: GraphPayload }> {
+    const result = await this.post<{ mergedMemoryId: string; graph: GraphPayload }>(
+      '/memories/merge',
+      { memoryIds, mergedText },
+    );
+    return { ...result, graph: validateSeed(result.graph) };
   }
 
   async undo(reorgId: string): Promise<GraphPayload> {
@@ -189,8 +337,23 @@ export function isOffline(search = typeof window === 'undefined' ? '' : window.l
   return new URLSearchParams(search).get('offline') === '1';
 }
 
+/**
+ * Where the corpus comes from.
+ *
+ * The polarity used to be the wrong way round: the seed fixture was the default
+ * and the real backend was behind `?api=1`, so a deployment that forgot the
+ * flag served 47 hard-coded memories and looked entirely functional. A demo
+ * that is convincingly wrong is worse than one that is obviously broken.
+ *
+ * `VITE_API_DEFAULT` is set at build time by the image that ships with a
+ * server. Local development and the test suite build without it and keep the
+ * fixture, which is what they want — and `?api=1` still forces it on for
+ * checking a local server against the dev build.
+ */
 export function selectDataSource(search = typeof window === 'undefined' ? '' : window.location.search): DataSource {
   if (isOffline(search)) return SeedDataSource;
   const params = new URLSearchParams(search);
-  return params.get('api') === '1' ? new ApiDataSource() : SeedDataSource;
+  if (params.get('api') === '1') return new ApiDataSource();
+  const builtForApi = (import.meta.env ?? {}).VITE_API_DEFAULT === '1';
+  return builtForApi ? new ApiDataSource() : SeedDataSource;
 }

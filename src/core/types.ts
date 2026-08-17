@@ -54,6 +54,14 @@ export interface Memory {
   y: number | null;
   pinned: boolean;
   created_at: string;
+  /**
+   * How many times this thought has arrived. A duplicate capture is never
+   * written twice — it *reinforces* what is already held, and the count is
+   * the honest importance signal: saving the same idea three times says more
+   * than any ranking heuristic. Optional because seed payloads predate it;
+   * absent means 1.
+   */
+  times_seen?: number;
 }
 
 export interface Category {
@@ -86,7 +94,8 @@ export interface RelatesToEdge {
 }
 
 export interface GraphPayload {
-  workspace: { id: string; name: string; auto_reorganize: boolean };
+  /** `plan` is optional because seed payloads predate it; absent means 'pro'. */
+  workspace: { id: string; name: string; auto_reorganize: boolean; plan?: 'free' | 'pro' };
   sources: Source[];
   memories: Memory[];
   categories: Category[];
@@ -106,6 +115,8 @@ export interface GraphNode {
   pinned: boolean;
   /** Parent category id for memories and child categories; null for roots and entities. */
   parentId: string | null;
+  /** Member count for category nodes — drawn into the label so size never has to carry it alone. */
+  count?: number;
 }
 
 export type EdgeKind = 'contains' | 'mentions' | 'relates_to';

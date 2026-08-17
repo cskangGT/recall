@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
-import type { AiProvider, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
+import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
 import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
 
 /**
@@ -49,18 +49,125 @@ export class AskPipeline {
     this.embeddings = embeddings;
   }
 
-  async ask(workspaceId: string, question: string): Promise<AskResult> {
+  /**
+   * `ask`, with the answer text arriving as it is generated.
+   *
+   * An async generator of SSE-shaped events — `delta` frames carrying new
+   * answer text, then exactly one `done` frame carrying the same AskResult
+   * `ask` would have returned. Every guarantee is unchanged: retrieval,
+   * the floor, citation validation and the refusal all run here too, and a
+   * generation that fails validation ends in a refusal even though its text
+   * already streamed — the client replaces the draft with the final result,
+   * so the contract owns what persists.
+   *
+   * A generator rather than a callback so `routes.ts` can stay a pure
+   * function: the route returns the iterable and only the http adapter knows
+   * what a socket is.
+   */
+  async *askStream(
+    workspaceId: string,
+    question: string,
+    history: AskTurn[] = [],
+  ): AsyncGenerator<{ event: 'delta'; data: { text: string } } | { event: 'done'; data: AskResult }> {
+    const prepared = await this.prepare(workspaceId, question, history);
+    if ('refusal' in prepared) {
+      this.record(workspaceId, question, prepared.refusal);
+      yield { event: 'done', data: prepared.refusal };
+      return;
+    }
+    const { payload, context, survivingCount } = prepared;
+
+    /*
+     * The provider pushes deltas through a callback; a generator pulls. The
+     * queue between them is the adapter: pushed text queues up, the loop
+     * drains it, and a notify latch wakes the loop when it went to sleep
+     * with nothing to yield.
+     */
+    const pending: string[] = [];
+    let notify: (() => void) | null = null;
+    const wake = () => {
+      notify?.();
+      notify = null;
+    };
+    const streamFn = this.ai.answerStream?.bind(this.ai);
+    const flight = (
+      streamFn
+        ? streamFn({ question, retrieved: context, history }, (text) => {
+            pending.push(text);
+            wake();
+          })
+        : this.ai.answer({ question, retrieved: context, history })
+    ).finally(wake);
+
+    let settled = false;
+    const settle = flight.then(
+      (r) => ((settled = true), r),
+      (err) => {
+        settled = true;
+        throw err;
+      },
+    );
+    while (!settled || pending.length > 0) {
+      if (pending.length === 0) {
+        await Promise.race([settle.catch(() => {}), new Promise<void>((r) => (notify = r))]);
+        continue;
+      }
+      yield { event: 'delta', data: { text: pending.shift()! } };
+    }
+
+    const result = this.finish(workspaceId, question, payload, context, survivingCount, await settle);
+    yield { event: 'done', data: result };
+  }
+
+  async ask(workspaceId: string, question: string, history: AskTurn[] = []): Promise<AskResult> {
+    const prepared = await this.prepare(workspaceId, question, history);
+    if ('refusal' in prepared) {
+      this.record(workspaceId, question, prepared.refusal);
+      return prepared.refusal;
+    }
+    const { payload, context, survivingCount } = prepared;
+    const generated = await this.ai.answer({ question, retrieved: context, history });
+    return this.finish(workspaceId, question, payload, context, survivingCount, generated);
+  }
+
+  /** Retrieval through context expansion — everything before a model speaks. */
+  private async prepare(
+    workspaceId: string,
+    question: string,
+    history: AskTurn[],
+  ): Promise<
+    | { refusal: AskResult }
+    | {
+        payload: ReturnType<Repository['getGraphPayload']>;
+        context: RetrievedMemory[];
+        survivingCount: number;
+      }
+  > {
     const payload = this.repo.getGraphPayload(workspaceId);
 
-    const [questionVector] = await this.embeddings.embed([question], 'query');
-    const keywordHits = this.repo.keywordSearch(workspaceId, question, RETRIEVE_LIMIT);
+    /*
+     * A follow-up retrieves on the conversation, not on itself. "Which of
+     * those take reservations?" embeds nowhere near restaurants — the referent
+     * lives in the previous question, so the previous question rides along for
+     * the query embedding and the keyword pass. Only the latest turn: two
+     * questions back is a different subject more often than the same one, and
+     * an over-wide query drags the floor down for everything.
+     *
+     * Everything downstream is unchanged on purpose — the floor, the citation
+     * contract, the refusal. History rewords the question; it never lowers the
+     * bar for answering it.
+     */
+    const previous = history.at(-1);
+    const retrievalText = previous ? `${previous.question}\n${question}` : question;
+
+    const [questionVector] = await this.embeddings.embed([retrievalText], 'query');
+    const keywordHits = this.repo.keywordSearch(workspaceId, retrievalText, RETRIEVE_LIMIT);
 
     const fused = fuse(payload, questionVector!, keywordHits, RETRIEVE_LIMIT);
     const surviving = applyFloor(fused);
 
     if (surviving.length < MIN_SUPPORTING_MEMORIES) {
-      this.record(workspaceId, question, refusal(surviving.length));
-      return refusal(surviving.length);
+      return { refusal: refusal(surviving.length) };
     }
 
     // Context expansion (spec §9.2 step 5): the model sees each memory with its
@@ -79,11 +186,21 @@ export class AskPipeline {
       };
     });
 
-    const generated = await this.ai.answer({ question, retrieved: context });
+    return { payload, context, survivingCount: surviving.length };
+  }
 
+  /** Validation and recording — everything after a model spoke. */
+  private finish(
+    workspaceId: string,
+    question: string,
+    payload: ReturnType<Repository['getGraphPayload']>,
+    context: RetrievedMemory[],
+    survivingCount: number,
+    generated: Awaited<ReturnType<AiProvider['answer']>>,
+  ): AskResult {
     if (generated.refused || generated.citations.length === 0) {
-      this.record(workspaceId, question, refusal(surviving.length));
-      return refusal(surviving.length);
+      this.record(workspaceId, question, refusal(survivingCount));
+      return refusal(survivingCount);
     }
 
     // The contract, enforced rather than trusted: a citation the retrieval set
@@ -92,8 +209,8 @@ export class AskPipeline {
     const available = new Set(context.map((c) => c.memory_id));
     const invalid = generated.citations.filter((c) => !available.has(c.memory_id));
     if (invalid.length > 0) {
-      this.record(workspaceId, question, refusal(surviving.length));
-      return refusal(surviving.length);
+      this.record(workspaceId, question, refusal(survivingCount));
+      return refusal(survivingCount);
     }
 
     const highlighted = new Set<string>();
@@ -108,7 +225,7 @@ export class AskPipeline {
       citations: generated.citations,
       highlighted_node_ids: [...highlighted],
       refused: false,
-      retrievedCount: surviving.length,
+      retrievedCount: survivingCount,
     };
     this.record(workspaceId, question, result);
     return result;

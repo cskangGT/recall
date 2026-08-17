@@ -131,7 +131,7 @@ test('dragging a memory onto a category re-files it and locks it (AC-28)', async
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 14 });
   await page.mouse.up();
 
-  await expect(page.getByTestId('toast')).toContainText("Moved. Recall won't change this again.");
+  await expect(page.getByTestId('toast')).toContainText("Moved. Mado won't change this again.");
   const labels = await arcLabels(page);
   expect(labels).toContain('AI Tooling=8');
   expect(labels).toContain('Hiring=8');
@@ -201,7 +201,7 @@ test('a subcategory cannot be nested under another subcategory (AC-31)', async (
   await node(page, 'cat_fundraising').click();
   await named(page, 'Investor Notes').dragTo(named(page, 'Pitch Feedback'));
 
-  await expect(page.getByTestId('toast')).toContainText('Recall keeps categories two levels deep.');
+  await expect(page.getByTestId('toast')).toContainText('Mado keeps categories two levels deep.');
 });
 
 /**
@@ -308,7 +308,7 @@ test('the capture story says what was read, what was new, and where it went', as
 
   const story = page.getByTestId('capture-story');
   await expect(story).toBeVisible({ timeout: 30_000 });
-  await expect(story).toContainText('What Recall saw');
+  await expect(story).toContainText('What Mado saw');
   await expect(page.getByTestId('capture-story-memory')).toHaveCount(2);
 
   /*

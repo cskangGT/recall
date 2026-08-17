@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteRepository } from '../../server/db/sqlite';
 import { importSeed } from '../../server/seed/import';
-import { IngestPipeline } from '../../server/pipeline/ingest';
+import { IngestPipeline, planAssignments } from '../../server/pipeline/ingest';
+import type { PlannedAssignment } from '../../server/pipeline/ingest';
+import type { GraphPayload } from '../../src/core/types';
 import { FixtureProvider, FixtureEmbeddings } from '../../server/ai/fixture';
 import { validateSeed } from '../../src/data/validateSeed';
 import { assignMemory, categoryProfiles } from '../../src/core/assign';
 import { ASSIGN } from '../../src/core/thresholds';
+import demoItem from '../../seed/demo-item.json';
 
 const WS = 'ws_demo';
 let repo: SqliteRepository;
@@ -402,5 +405,173 @@ describe('IngestPipeline — duplicates', () => {
         expect(payload.entities.some((e) => e.id === entityId)).toBe(true);
       }
     }
+  });
+});
+
+describe('planAssignments — every decision made before the transaction opens', () => {
+  const embeddings = new FixtureEmbeddings();
+  const emptyPayload = (): GraphPayload => ({
+    categories: [], memories: [], entities: [], edges: [], sources: [],
+    workspace: repo.getWorkspace(WS)!,
+  });
+
+  it('opens a category for the first memory of an empty corpus', async () => {
+    const texts = ['Braintrust vs Langfuse for agent evals'];
+    const vectors = await embeddings.embed(texts);
+    const plan = planAssignments(emptyPayload(), texts, vectors);
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]!.kind).toBe('new');
+    expect((plan[0] as Extract<PlannedAssignment, { kind: 'new' }>).parentId).toBeNull();
+  });
+
+  it('sends the second copy of a sentence to skip, not to a category', async () => {
+    // The batch has to catch itself: the corpus check cannot see a duplicate
+    // that arrives in the same capture as its original.
+    const texts = ['Braintrust vs Langfuse for agent evals', 'Braintrust vs Langfuse for agent evals'];
+    const vectors = await embeddings.embed(texts);
+    const plan = planAssignments(emptyPayload(), texts, vectors);
+
+    expect(plan.map((p) => p.kind)).toEqual(['new', 'skip']);
+  });
+
+  it('marks a memory joining a category born in the same batch as `joins`', async () => {
+    // The demo capture is exactly this shape: two related memories into an
+    // empty corpus, the first opening a category and the second landing on it.
+    // Calling the second one `existing` carries the synthetic cluster id into
+    // `persist` as if it were a real row — a foreign key to a category that
+    // does not exist yet, and the whole capture fails.
+    const texts = (demoItem as { memories: { text: string }[] }).memories.map((m) => m.text);
+    const vectors = await embeddings.embed(texts);
+    const plan = planAssignments(emptyPayload(), texts, vectors);
+
+    expect(plan.map((p) => p.kind)).toEqual(['new', 'joins']);
+    const joined = plan[1] as Extract<PlannedAssignment, { kind: 'joins' }>;
+    expect(plan.some((p) => p.kind === 'new' && p.clusterId === joined.clusterId)).toBe(true);
+  });
+
+  it('reads an existing corpus and attaches rather than opening', async () => {
+    const payload = repo.getGraphPayload(WS);
+    const text = payload.memories[0]!.text;
+    const vectors = await embeddings.embed([text]);
+    const plan = planAssignments(payload, [text], vectors);
+
+    // A memory already in the corpus is its own nearest neighbour.
+    expect(plan[0]!.kind).toBe('skip');
+  });
+});
+
+describe('a new category is named by the model, not by term statistics', () => {
+  it('asks the namer for a category born in an empty workspace', async () => {
+    repo.createWorkspace({ id: 'ws_fresh', name: 'Fresh', isDemo: false });
+    const p = new IngestPipeline(repo, new FixtureProvider(), new FixtureEmbeddings());
+
+    const result = await p.ingest({
+      workspaceId: 'ws_fresh', type: 'text',
+      content: 'Braintrust vs Langfuse for agent evals',
+    });
+
+    expect(result.status).toBe('complete');
+    const categories = repo.getGraphPayload('ws_fresh').categories;
+    expect(categories.length).toBeGreaterThan(0);
+    // FixtureProvider answers `new_category` with a name term statistics could
+    // never produce, so this asserts the namer was reached — not just that some
+    // name exists.
+    expect(categories.some((c) => c.name.startsWith('Fixture Category'))).toBe(true);
+  });
+
+  it('gives two categories born in one capture two different names', async () => {
+    repo.createWorkspace({ id: 'ws_two', name: 'Two', isDemo: false });
+    const provider = new FixtureProvider();
+    provider.extract = async () => ({
+      memories: [
+        { text: 'Braintrust vs Langfuse for agent evals', kind: 'fact', confidence: 0.9, entities: [] },
+        { text: 'Sourdough starter needs feeding twice a day in summer', kind: 'fact', confidence: 0.9, entities: [] },
+      ],
+      summary: 'two unrelated things', suggested_title: 'Mixed',
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({ workspaceId: 'ws_two', type: 'text', content: 'mixed' });
+    expect(result.status).toBe('complete');
+
+    const names = repo.getGraphPayload('ws_two').categories.map((c) => c.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe('what a source is called', () => {
+  it('uses the title the caller gave, not the first sixty characters of the body', async () => {
+    // What the extension has and we cannot guess: the page's own <title>.
+    const result = await pipeline.ingest({
+      workspaceId: WS,
+      type: 'link',
+      url: 'https://example.com/attention',
+      title: 'Attention Is All You Need',
+      content: 'The dominant sequence transduction models are based on complex recurrent networks.',
+    });
+
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('Attention Is All You Need');
+  });
+
+  it('falls back to the model’s suggested_title when nothing better exists', async () => {
+    // The extract prompt has always asked for one — "five words or fewer,
+    // naming the source" — and it was extracted and discarded, so a pasted note
+    // was titled with its own opening sentence forever.
+    const provider = new FixtureProvider();
+    provider.extract = async () => ({
+      memories: [{ text: 'Braintrust replaced our spreadsheet of scores', kind: 'fact', confidence: 0.9, entities: [] }],
+      summary: 'a note', suggested_title: 'Eval Tooling Notes',
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({ workspaceId: WS, type: 'text', content: 'some long pasted note' });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('Eval Tooling Notes');
+  });
+
+  it('leaves an explicit title alone — a guess must not overwrite the real thing', async () => {
+    const provider = new FixtureProvider();
+    provider.extract = async () => ({
+      memories: [{ text: 'Braintrust replaced our spreadsheet', kind: 'fact', confidence: 0.9, entities: [] }],
+      summary: 'a note', suggested_title: 'Eval Tooling Notes',
+    });
+    const p = new IngestPipeline(repo, provider, new FixtureEmbeddings());
+
+    const result = await p.ingest({
+      workspaceId: WS, type: 'link', url: 'https://example.com/x',
+      title: 'The Real Page Title', content: 'body text',
+    });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).toBe('The Real Page Title');
+  });
+
+  it('does not title a link with the empty string', async () => {
+    // `content: ''` is not nullish, so the old `??` chain never reached the url.
+    const result = await pipeline.ingest({
+      workspaceId: WS, type: 'link', url: 'https://example.com/bare', content: '',
+    });
+    const source = repo.listSources(WS).find((s) => s.id === result.sourceId)!;
+    expect(source.title).not.toBe('');
+  });
+});
+
+describe('reinforcement — duplicates count instead of repeating', () => {
+  it('a re-captured source bumps times_seen on the held memories', async () => {
+    const first = await capture();
+    expect(first.addedMemoryIds).toHaveLength(2);
+
+    const second = await capture();
+    expect(second.addedMemoryIds).toHaveLength(0);
+    expect(second.skipped).toHaveLength(2);
+
+    const memories = repo.listMemories(WS);
+    const reinforced = memories.filter((m) => (m.times_seen ?? 1) > 1);
+    expect(reinforced).toHaveLength(2);
+    for (const m of reinforced) expect(m.times_seen).toBe(2);
+    // And the graph payload carries the count to the client.
+    const payload = repo.getGraphPayload(WS);
+    expect(payload.memories.filter((m) => (m.times_seen ?? 1) > 1)).toHaveLength(2);
   });
 });
