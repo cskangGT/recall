@@ -59,6 +59,7 @@ export class SqliteRepository implements Repository {
      */
     this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
     this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
+    this.ensureColumn('sources', 'reviewed_at', 'TEXT');
   }
 
   /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
@@ -143,6 +144,8 @@ export class SqliteRepository implements Repository {
         // Surfaced so the Sources screen can offer a retry rather than showing
         // a failed capture as merely empty.
         status: s.status, error_message: s.error_message,
+        // Null means "not yet" — the review door in Sources reads this.
+        reviewed_at: s.reviewed_at ?? null,
       })),
       memories: memories.map((m) => ({
         ...m,
@@ -571,6 +574,51 @@ export class SqliteRepository implements Repository {
   }
 
   // ---------------------------------------------------------------- tombstones
+
+  // ---------------------------------------------------------------- curation
+
+  insertCuration(workspaceId: string, row: import('./repository.ts').CurationRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO curation (id, workspace_id, source_id, memory_text, verdict, edited_text, created_at)
+         VALUES (?,?,?,?,?,?,?)`,
+      )
+      .run(row.id, workspaceId, row.source_id, row.memory_text, row.verdict, row.edited_text, row.created_at);
+  }
+
+  listCuration(
+    workspaceId: string,
+    verdict?: 'keep' | 'discard' | 'edit',
+    limit = 50,
+  ): import('./repository.ts').CurationRow[] {
+    const rows = verdict
+      ? this.db
+          .prepare(
+            `SELECT id, source_id, memory_text, verdict, edited_text, created_at FROM curation
+             WHERE workspace_id = ? AND verdict = ? ORDER BY created_at DESC, id LIMIT ?`,
+          )
+          .all(workspaceId, verdict, limit)
+      : this.db
+          .prepare(
+            `SELECT id, source_id, memory_text, verdict, edited_text, created_at FROM curation
+             WHERE workspace_id = ? ORDER BY created_at DESC, id LIMIT ?`,
+          )
+          .all(workspaceId, limit);
+    return rows as import('./repository.ts').CurationRow[];
+  }
+
+  setSourceReviewed(sourceId: string, reviewedAt: string): void {
+    this.db.prepare('UPDATE sources SET reviewed_at = ? WHERE id = ?').run(reviewedAt, sourceId);
+  }
+
+  updateMemoryText(id: string, text: string, vector: number[]): void {
+    // Text and vector move together — an edit moves the meaning, and a stale
+    // embedding would rot retrieval silently. The FTS trigger follows the
+    // UPDATE OF text on its own.
+    this.db
+      .prepare('UPDATE memories SET text = ?, vector = ? WHERE id = ?')
+      .run(text, JSON.stringify(vector), id);
+  }
 
   addTombstone(workspaceId: string, name: string): void {
     this.db

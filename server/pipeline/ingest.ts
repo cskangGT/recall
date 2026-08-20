@@ -386,7 +386,17 @@ export class IngestPipeline {
       }
 
       // ---- 3. Extract
-      const extracted = await this.ai.extract({ content, sceneDescription, type: input.type });
+      // The curation signal rides in: the last few extractions this person
+      // removed in review become negative examples (spec §21).
+      const rejectedExamples = this.repo
+        .listCuration(input.workspaceId, 'discard', 5)
+        .map((c) => c.memory_text);
+      const extracted = await this.ai.extract({
+        content,
+        sceneDescription,
+        type: input.type,
+        rejectedExamples,
+      });
 
       if (extracted.memories.length === 0) {
         this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
@@ -763,6 +773,84 @@ export class IngestPipeline {
     });
 
     return row;
+  }
+
+  // ------------------------------------------------------------ user review
+
+  /**
+   * Applies one source's review verdicts atomically — the visible half of the
+   * curation feature. Discards delete the row but keep the text in a verdict
+   * record (charter: nothing is lost); edits re-embed and lock the assignment
+   * (a user edit is a fact); keeps are recorded too, because "this survived
+   * review" is as much taste signal as a cut. Edges rebuild once at the end.
+   */
+  async reviewSource(
+    workspaceId: string,
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<void> {
+    const memories = this.repo.listMemories(workspaceId);
+    const bySource = memories.filter((m) => m.source_id === sourceId);
+    const byId = new Map(bySource.map((m) => [m.id, m]));
+
+    for (const mid of input.discard) {
+      if (!byId.has(mid)) throw new Error(`memory ${mid} is not from this source`);
+    }
+    for (const e of input.edits) {
+      if (!byId.has(e.memoryId)) throw new Error(`memory ${e.memoryId} is not from this source`);
+      if (e.text.trim().length === 0) throw new Error('an edited memory must not be empty');
+      if (input.discard.includes(e.memoryId)) {
+        throw new Error('a memory cannot be both edited and discarded');
+      }
+    }
+
+    // Embeddings before the transaction opens — it must stay synchronous.
+    const editVectors = new Map<string, number[]>();
+    if (input.edits.length > 0) {
+      const vectors = await this.embeddings.embed(
+        input.edits.map((e) => e.text.trim()),
+        'document',
+      );
+      input.edits.forEach((e, i) => editVectors.set(e.memoryId, vectors[i]!));
+    }
+
+    const at = now();
+    const record = (memoryText: string, verdict: 'keep' | 'discard' | 'edit', editedText: string | null) =>
+      this.repo.insertCuration(workspaceId, {
+        id: id('cur'),
+        source_id: sourceId,
+        memory_text: memoryText,
+        verdict,
+        edited_text: editedText,
+        created_at: at,
+      });
+
+    this.repo.transaction(() => {
+      const touched = new Set([...input.discard, ...input.edits.map((e) => e.memoryId)]);
+      for (const mid of input.discard) {
+        record(byId.get(mid)!.text, 'discard', null);
+        this.repo.deleteMemory(mid);
+      }
+      for (const e of input.edits) {
+        const memory = byId.get(e.memoryId)!;
+        record(memory.text, 'edit', e.text.trim());
+        this.repo.updateMemoryText(e.memoryId, e.text.trim(), editVectors.get(e.memoryId)!);
+        // A user edit is a fact — no reorganization may reassign it.
+        this.repo.assign({
+          memoryId: e.memoryId,
+          categoryId: memory.category_id,
+          confidence: memory.confidence,
+          assignedBy: 'user',
+          locked: true,
+        });
+      }
+      for (const m of bySource) {
+        if (!touched.has(m.id)) record(m.text, 'keep', null);
+      }
+      this.repo.setSourceReviewed(sourceId, at);
+    });
+
+    this.rebuildEdges(workspaceId);
   }
 
   // -------------------------------------------------------------- user merge

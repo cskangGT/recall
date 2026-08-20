@@ -508,6 +508,36 @@ async function handleWorkspace(
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
+  /*
+   * POST /api/workspaces/:id/sources/:sourceId/review — one source's review
+   * verdicts, applied atomically (spec §21). Unlisted memories are keeps.
+   * Discards keep their text in a verdict row; edits re-embed and lock; the
+   * source is stamped reviewed. The signal teaches the next extraction.
+   */
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'review') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+
+    const body = asRecord(req.body);
+    const discard = (Array.isArray(body.discard) ? body.discard : []).filter(
+      (v): v is string => typeof v === 'string',
+    );
+    const edits = (Array.isArray(body.edits) ? body.edits : [])
+      .map((raw) => asRecord(raw))
+      .filter(
+        (e): e is { memoryId: string; text: string } =>
+          typeof e.memoryId === 'string' && typeof e.text === 'string',
+      )
+      .map((e) => ({ memoryId: e.memoryId, text: e.text }));
+
+    try {
+      await deps.ingest.reviewSource(workspaceId, resourceId, { discard, edits });
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'review failed');
+    }
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
   // POST /api/workspaces/:id/sources/:sourceId/retry — re-run a failed capture.
   if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'retry') {
     const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);

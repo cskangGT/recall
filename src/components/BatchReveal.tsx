@@ -163,6 +163,18 @@ export function BatchReveal() {
               ))}
             </div>
           )}
+          {/* The second door out of the reveal: walk the batch's sources with
+              the original beside what Mado kept. Offered, never owed — the
+              map is already complete (spec §21). */}
+          {(summary.sourceIds?.length ?? 0) > 0 && (
+            <button
+              className="reveal__review"
+              data-testid="batch-reveal-review"
+              onClick={() => useUiStore.getState().openReview(summary.sourceIds!)}
+            >
+              {t('reveal.review')}
+            </button>
+          )}
           <button
             className="reveal__dismiss"
             data-testid="batch-reveal-dismiss"

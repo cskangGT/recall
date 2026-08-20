@@ -15,6 +15,7 @@ import { ingestItem } from './capture/ingest';
 import { importFiles, isTextLike, isZip } from './capture/importFiles';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
+import { ReviewPanel } from './components/ReviewPanel';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
 import { reorgMotion } from './capture/reorgMotion';
@@ -383,6 +384,7 @@ export function App() {
       </div>
       <Inspector />
       <BatchReveal />
+      <ReviewPanel />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
       {settingsOpen && <Settings />}

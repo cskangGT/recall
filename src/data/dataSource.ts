@@ -111,6 +111,14 @@ export interface DataSource {
   ): Promise<GraphPayload>;
   /** Re-runs a capture whose processing failed. Only the API can do this. */
   retrySource?(sourceId: string): Promise<GraphPayload>;
+  /**
+   * Applies one source's review verdicts atomically — unlisted memories are
+   * kept. The server records every verdict as the curation signal (spec §21).
+   */
+  reviewSource?(
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<GraphPayload>;
   setAutoReorganize?(enabled: boolean): Promise<GraphPayload>;
   /**
    * Starts a Pro checkout and returns the Stripe-hosted URL to redirect to.
@@ -374,6 +382,17 @@ export class ApiDataSource implements DataSource {
       method: 'PATCH',
       body: JSON.stringify({ autoReorganize: enabled }),
     });
+    return validateSeed(graph);
+  }
+
+  async reviewSource(
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<GraphPayload> {
+    const { graph } = await this.post<{ graph: GraphPayload }>(
+      `/sources/${encodeURIComponent(sourceId)}/review`,
+      input,
+    );
     return validateSeed(graph);
   }
 

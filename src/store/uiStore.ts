@@ -27,6 +27,8 @@ export interface BatchRevealState {
     categories: BatchCategorySummary[];
     /** The stretch of time this batch rescued, when the import knows it. */
     period?: { from: string; to: string } | null;
+    /** The batch's sources, in order — what "검수하기" walks through. */
+    sourceIds?: string[];
   } | null;
 }
 
@@ -116,6 +118,13 @@ interface UiState {
   dropActive: boolean;
   /** Non-null while a bulk drop is being read, organized, or declared. */
   batchReveal: BatchRevealState | null;
+  /**
+   * The review stepper — one source's original against what Mado made of it,
+   * with the user's verdicts (spec §21). Non-null while reviewing; `index`
+   * walks `sourceIds` so a batch reviews as a sequence, a single source as a
+   * sequence of one.
+   */
+  review: { sourceIds: string[]; index: number } | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -143,6 +152,10 @@ interface UiState {
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
+  openReview: (sourceIds: string[]) => void;
+  /** Steps to the next source, or closes after the last one. */
+  advanceReview: () => void;
+  closeReview: () => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -174,6 +187,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
+  review: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -256,6 +270,18 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
+  // Opening the review dismisses the reveal — they occupy the same attention.
+  openReview: (sourceIds) =>
+    set(sourceIds.length > 0 ? { review: { sourceIds, index: 0 }, batchReveal: null } : {}),
+  advanceReview: () =>
+    set((s) => {
+      if (!s.review) return {};
+      const index = s.review.index + 1;
+      return index >= s.review.sourceIds.length
+        ? { review: null }
+        : { review: { ...s.review, index } };
+    }),
+  closeReview: () => set({ review: null }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -266,6 +292,12 @@ export const useUiStore = create<UiState>((set, get) => ({
     // happening, not cancel it.
     if (s.batchReveal?.phase === 'declare') {
       set({ batchReveal: null });
+      return;
+    }
+    // The review is a modal too — Escape leaves it before touching anything
+    // else. Verdicts not yet confirmed are simply not applied.
+    if (s.review !== null) {
+      set({ review: null });
       return;
     }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {

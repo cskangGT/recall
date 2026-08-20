@@ -265,6 +265,7 @@ export class OpenAiProvider implements AiProvider {
     content: string;
     sceneDescription?: string;
     type: SourceType;
+    rejectedExamples?: string[];
   }): Promise<ExtractResult> {
     return coerceExtract(
       await this.json(buildExtractPrompt(input), 'extract', extractSchema, 4096),

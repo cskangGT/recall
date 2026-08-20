@@ -113,6 +113,7 @@ export function buildExtractPrompt(input: {
   content: string;
   sceneDescription?: string;
   type: string;
+  rejectedExamples?: string[];
 }): string {
   return [
     'Pull out the things worth remembering from this, as atomic memories.',
@@ -133,6 +134,19 @@ export function buildExtractPrompt(input: {
     `At most ${MAX_MEMORIES}. Returning none is a valid answer — plenty of things`,
     'are not worth remembering, and an empty list is better than padding.',
     '',
+    /*
+     * The curation signal (spec §21): what this person cut in review teaches
+     * what not to extract. Negative examples, verbatim — the strongest
+     * personalization a prompt can carry without a fine-tune.
+     */
+    ...(input.rejectedExamples && input.rejectedExamples.length > 0
+      ? [
+          'This person reviewed past extractions and REMOVED ones like these.',
+          'Do not extract anything similar in kind:',
+          ...input.rejectedExamples.map((t) => `- ${t}`),
+          '',
+        ]
+      : []),
     'suggested_title: five words or fewer, naming the source, not the contents.',
     '',
     input.sceneDescription ? `What this capture is: ${input.sceneDescription}` : '',

@@ -28,6 +28,8 @@ export interface Source {
    */
   status?: 'pending' | 'processing' | 'complete' | 'failed' | 'no_memories';
   error_message?: string | null;
+  /** When the user reviewed this source's extractions — absent/null means not yet. */
+  reviewed_at?: string | null;
 }
 
 /**

@@ -54,9 +54,8 @@ test('the current view is marked for a reader, not only in CSS', async ({ page }
 
 test('the chat box has a name — a placeholder is not one', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
-  await expect(
-    page.getByRole('textbox', { name: 'Ask a question, or paste something to save' }),
-  ).toBeVisible();
+  // The name tracks the composer split: the input asks; saving has its own door.
+  await expect(page.getByRole('textbox', { name: 'Ask your memory a question' })).toBeVisible();
 });
 
 /**
@@ -81,7 +80,9 @@ test('every reading-list row can be reached from the keyboard', async ({ page })
   await page.locator('.arc__node').nth(2).click();
   await expect(page.getByTestId('reading-list')).toBeVisible();
 
-  const seen = await tabWalk(page, 14);
+  // The keyword lens chips sit between the heading and the rows now, and every
+  // one of them is (rightly) focusable — the walk is longer, not broken.
+  const seen = await tabWalk(page, 30);
   expect(seen.filter((s) => s.includes('.item')).length).toBeGreaterThan(0);
 });
 

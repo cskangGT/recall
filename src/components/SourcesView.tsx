@@ -207,6 +207,25 @@ export function SourcesView() {
                   {' '}✓ {t('sources.held')}
                 </span>
               )}
+              {/* The later door into review (spec §21): drop now, check when
+                  you like — an unreviewed source says so until you do. */}
+              {!failed &&
+                (source.reviewed_at ? (
+                  <span className="source-row__reviewed" data-testid={`reviewed-${source.id}`}>
+                    {' '}✓ {t('sources.reviewed')}
+                  </span>
+                ) : (
+                  <button
+                    className="source-row__review"
+                    data-testid={`review-open-${source.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      useUiStore.getState().openReview([source.id]);
+                    }}
+                  >
+                    {t('sources.reviewPending')}
+                  </button>
+                ))}
               {source.url && (
                 <a
                   className="source-row__origin"

@@ -44,7 +44,10 @@ CREATE TABLE IF NOT EXISTS sources (
                        CHECK (status IN ('pending','processing','complete','failed','no_memories')),
   error_message      TEXT,
   created_at         TEXT NOT NULL,
-  processed_at       TEXT
+  processed_at       TEXT,
+  -- When the user reviewed this source's extractions (spec §21). NULL means
+  -- unreviewed. Also added by ensureColumn for databases created before it.
+  reviewed_at        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS sources_workspace_created
@@ -224,6 +227,23 @@ CREATE TABLE IF NOT EXISTS category_tombstones (
   deleted_at    TEXT NOT NULL,
   UNIQUE (workspace_id, name)
 );
+
+-- The curation signal (spec §21). Every review verdict, recorded verbatim:
+-- a discard keeps the text it removed (charter: nothing is lost), and the
+-- rows teach the next extraction what this person keeps and what they cut.
+CREATE TABLE IF NOT EXISTS curation (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  -- SET NULL, not CASCADE: the taste signal outlives the source it came from.
+  source_id     TEXT REFERENCES sources(id) ON DELETE SET NULL,
+  memory_text   TEXT NOT NULL,
+  verdict       TEXT NOT NULL CHECK (verdict IN ('keep', 'discard', 'edit')),
+  edited_text   TEXT,
+  created_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS curation_workspace_verdict
+  ON curation(workspace_id, verdict, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS ask_history (
   id            TEXT PRIMARY KEY,

@@ -122,7 +122,16 @@ export interface AiProvider {
   readonly name: string;
   /** Screenshots only; text and link sources skip it (spec §10.1). */
   normalize(input: NormalizeInput): Promise<NormalizeResult>;
-  extract(input: { content: string; sceneDescription?: string; type: SourceType }): Promise<ExtractResult>;
+  extract(input: {
+    content: string;
+    sceneDescription?: string;
+    type: SourceType;
+    /**
+     * Extractions this person removed in review — the curation signal (spec
+     * §21). Negative few-shot: the extractor is told to skip anything similar.
+     */
+    rejectedExamples?: string[];
+  }): Promise<ExtractResult>;
   /**
    * Names the result of a structural change. Receives the operation and the
    * clusters, and has **no** say in whether the change happens (spec §10.4).

@@ -80,6 +80,7 @@ export async function ingestBatch(
         sources: items.length,
         categories: result.categories,
         period: meta.period ?? null,
+        sourceIds: result.sourceIds,
       },
     });
   } catch (err) {
@@ -174,6 +175,7 @@ async function runReaderImport(
         memories: addedMemoryIds.length,
         skipped: skippedCount,
         sources: response.notes.imported,
+        sourceIds: response.results.map((r) => r.sourceId),
         categories: [...byCategory.entries()]
           .map(([id, count]) => ({
             id,
