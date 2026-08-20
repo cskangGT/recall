@@ -124,7 +124,7 @@ test('Escape clears the query, then hands the keyboard back', async ({ page }) =
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 });
 
-test('Enter gathers the results into a zoom, and ← walks back out', async ({ page }) => {
+test('Enter regroups the results into a fresh constellation, and ← dissolves it', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
@@ -139,9 +139,28 @@ test('Enter gathers the results into a zoom, and ← walks back out', async ({ p
   await page.getByTestId('map-search-input').press('Enter');
   await expect(page.getByTestId('map-back')).toBeVisible();
 
-  // The highlight survives the zoom — the found things stay lit.
+  // The regrouped view is real state, not just a camera move.
+  const focused = await page.evaluate(
+    () => document.querySelector('[data-testid="map-canvas"]') !== null,
+  );
+  expect(focused).toBe(true);
   await expect(page.getByTestId('map-search-count')).toBeVisible();
 
   await page.getByTestId('map-back').click();
+  await expect(page.getByTestId('map-back')).toHaveCount(0);
+});
+
+test('clearing the query dissolves the constellation too', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+
+  await page.getByTestId('map-search-input').fill('eval');
+  await page.getByTestId('map-search-input').press('Enter');
+  await expect(page.getByTestId('map-back')).toBeVisible();
+
+  // Escape clears the query; the regrouped view must not outlive it.
+  await page.getByTestId('map-search-input').press('Escape');
   await expect(page.getByTestId('map-back')).toHaveCount(0);
 });

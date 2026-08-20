@@ -94,6 +94,12 @@ interface UiState {
   cameraHistory: Camera[];
   /** True when ← was pressed; the canvas consumes it and pops the trail. */
   cameraPopRequested: boolean;
+  /**
+   * The regrouped view (2안): search results pulled out of their scattered
+   * territories and re-laid-out together — a temporary constellation of just
+   * what matched, clustered by category. Null shows the full map.
+   */
+  mapFocus: { ids: string[] } | null;
   captureOpen: boolean;
   askOpen: boolean;
   settingsOpen: boolean;
@@ -156,6 +162,7 @@ interface UiState {
   requestCameraPop: () => void;
   /** Pops the trail if a ← was requested; null otherwise. */
   consumeCameraPop: () => Camera | null;
+  setMapFocus: (focus: { ids: string[] } | null) => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -200,6 +207,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   zoomToIds: null,
   cameraHistory: [],
   cameraPopRequested: false,
+  mapFocus: null,
   captureOpen: false,
   askOpen: false,
   settingsOpen: false,
@@ -265,6 +273,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ cameraPopRequested: false, cameraHistory: s.cameraHistory.slice(0, -1) });
     return prev;
   },
+  setMapFocus: (mapFocus) => set({ mapFocus }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

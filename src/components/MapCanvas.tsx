@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { drawFrame } from '../graph/renderer';
 import {
   fitToBounds,
@@ -12,6 +12,7 @@ import {
   type Viewport,
 } from '../graph/camera';
 import { hitTest } from '../graph/hitTest';
+import { runLayout } from '../graph/layout';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
 import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
@@ -86,8 +87,48 @@ export function MapCanvas({
   const bannerFired = useRef(false);
   const [grabbing, setGrabbing] = useState(false);
 
-  const nodes = useWorkspaceStore((s) => s.nodes);
-  const edges = useWorkspaceStore((s) => s.edges);
+  const baseNodes = useWorkspaceStore((s) => s.nodes);
+  const baseEdges = useWorkspaceStore((s) => s.edges);
+  const mapFocus = useUiStore((s) => s.mapFocus);
+
+  /*
+   * The regrouped view (2안): only what matched, pulled out of its scattered
+   * territories and laid out fresh. Matched memories bring their category
+   * along as an anchor; positions are zeroed so `runLayout`'s own ring
+   * placement — the same code that seats a bulk import — re-clusters them by
+   * category, and matched entities settle at the centroid of their mentions.
+   * A temporary constellation; the full map is untouched underneath.
+   */
+  const focusScene = useMemo(() => {
+    if (!mapFocus) return null;
+    const byId = new Map(baseNodes.map((n) => [n.id, n]));
+
+    const keep = new Set<string>();
+    for (const id of mapFocus.ids) if (byId.has(id)) keep.add(id);
+    // Each matched memory's category rides along as the anchor it clusters to.
+    for (const id of [...keep]) {
+      const n = byId.get(id)!;
+      if (n.kind === 'memory' && n.parentId && byId.has(n.parentId)) keep.add(n.parentId);
+    }
+    if (keep.size === 0) return null;
+
+    const nodes = [...keep].map((id) => {
+      const n = byId.get(id)!;
+      // Zeroed positions force a fresh layout; categories become loose roots.
+      return { ...n, x: 0, y: 0, parentId: n.kind === 'memory' ? n.parentId : null };
+    });
+    const edges = baseEdges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    return { nodes: runLayout(nodes, edges, { ticks: 60 }), edges };
+  }, [mapFocus, baseNodes, baseEdges]);
+
+  const nodes = focusScene?.nodes ?? baseNodes;
+  const edges = focusScene?.edges ?? baseEdges;
+
+  // The scene the RAF loop draws — a ref, because the loop lives outside React.
+  const sceneRef = useRef<{ nodes: typeof baseNodes; edges: typeof baseEdges } | null>(null);
+  sceneRef.current = focusScene;
+  /** Detects focus entry inside the loop, to push history and fit the camera. */
+  const focusEnteredRef = useRef(false);
 
   // Reset the banner latch whenever a new animation starts.
   useEffect(() => {
@@ -115,7 +156,20 @@ export function MapCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const ui = useUiStore.getState();
-      const current = useWorkspaceStore.getState();
+      const store = useWorkspaceStore.getState();
+      const current = sceneRef.current ?? { nodes: store.nodes, edges: store.edges };
+
+      // ---- entering the regrouped view: remember where we stood, fit to it
+      if (sceneRef.current && !focusEnteredRef.current) {
+        focusEnteredRef.current = true;
+        if (cameraRef.current) ui.pushCameraHistory(cameraRef.current);
+        const fit = fitToBounds(current.nodes, viewport, 0.3);
+        panFrom.current = cameraRef.current ?? fit;
+        // A touch tighter than the search zoom: this view holds nothing else.
+        panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.6) };
+        panStart.current = now;
+      }
+      if (!sceneRef.current) focusEnteredRef.current = false;
 
       // ---- camera: entry animation on first paint, then user-controlled
       const target = fitToBounds(current.nodes, viewport, 0.1);

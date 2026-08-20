@@ -38,6 +38,7 @@ export function MapSearch() {
   const payload = useWorkspaceStore((s) => s.payload);
   const setHighlight = useUiStore((s) => s.setHighlight);
   const historyDepth = useUiStore((s) => s.cameraHistory.length);
+  const focusOn = useUiStore((s) => s.mapFocus !== null);
   const select = useUiStore((s) => s.select);
 
   const [query, setQuery] = useState('');
@@ -84,6 +85,12 @@ export function MapSearch() {
     } else if (owns.current) {
       owns.current = false;
       setHighlight([]);
+      // The regrouped view belongs to the query; it dissolves with it.
+      const ui = useUiStore.getState();
+      if (ui.mapFocus) {
+        ui.setMapFocus(null);
+        ui.requestCameraPop();
+      }
     }
   }, [searching, results, labelIds, setHighlight]);
 
@@ -116,9 +123,11 @@ export function MapSearch() {
              * them together" is one keystroke. ← walks back out.
              */
             if (e.key === 'Enter' && searching && results.length + labelIds.length > 0) {
+              // 2안: not a zoom to where they scattered — a regrouped view of
+              // just what matched, clustered fresh by category.
               useUiStore
                 .getState()
-                .requestZoomTo([...results.map((r) => r.memory.id), ...labelIds]);
+                .setMapFocus({ ids: [...results.map((r) => r.memory.id), ...labelIds] });
               return;
             }
             if (e.key !== 'Escape') return;
@@ -136,11 +145,17 @@ export function MapSearch() {
         )}
       </div>
 
-      {historyDepth > 0 && (
+      {(historyDepth > 0 || focusOn) && (
         <button
           className="mapsearch__back"
           data-testid="map-back"
-          onClick={() => useUiStore.getState().requestCameraPop()}
+          onClick={() => {
+            const ui = useUiStore.getState();
+            // Leaving the regrouped view and stepping back the camera are one
+            // gesture: the constellation dissolves, the map returns as it was.
+            if (ui.mapFocus) ui.setMapFocus(null);
+            ui.requestCameraPop();
+          }}
         >
           ← {t('map.back')}
         </button>
