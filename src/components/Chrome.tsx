@@ -20,14 +20,27 @@ export function TopBar() {
   const setView = useUiStore((s) => s.setView);
   const payload = useWorkspaceStore((s) => s.payload);
 
+  /*
+   * The breadcrumb speaks only once there is a journey: at the top level it
+   * said '전체' — a location label for a walk not yet taken, which read as a
+   * mystery word (the user asked why it was there). Inside a category it
+   * names where you are, prefixed by the way back.
+   */
   const here =
     arcLevelId === null
-      ? t('topbar.everything')
-      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? t('topbar.everything'));
+      ? null
+      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? null);
 
   return (
     <div className="topbar">
-      <span>{here}</span>
+      <span className="topbar__here">
+        {here !== null && (
+          <>
+            <span className="topbar__root">{t('topbar.everything')} › </span>
+            {here}
+          </>
+        )}
+      </span>
       <button className="topbar__link" data-testid="go-map" onClick={() => setView('map')}>
         {t('topbar.bigPicture')}
       </button>

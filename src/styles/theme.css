@@ -3569,3 +3569,8 @@ body:lang(ko) {
 .rail__mark[data-tip]:focus-visible::after {
   opacity: 1;
 }
+
+/* The breadcrumb's way-back half, quieter than where you are. */
+.topbar__root {
+  color: var(--text-faint);
+}
