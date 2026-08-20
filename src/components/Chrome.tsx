@@ -59,7 +59,7 @@ export function LeftRail() {
       </div>
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
-        title={t('rail.map')}
+        data-tip={t('rail.map.tip')}
         aria-label={t('rail.map')}
         aria-current={view === 'map' ? 'page' : undefined}
         data-testid="rail-map"
@@ -69,7 +69,7 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
-        title={t('rail.browse')}
+        data-tip={t('rail.browse.tip')}
         aria-label={t('rail.browse')}
         aria-current={view === 'browse' ? 'page' : undefined}
         data-testid="rail-tree"
@@ -79,7 +79,7 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
-        title={t('rail.sources')}
+        data-tip={t('rail.sources.tip')}
         aria-label={t('rail.sources')}
         aria-current={view === 'sources' ? 'page' : undefined}
         data-testid="rail-sources"
@@ -89,7 +89,7 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title={t('rail.ask')}
+        data-tip={t('rail.ask.tip')}
         aria-label={t('rail.ask')}
         data-testid="rail-ask"
         onClick={() => setAskOpen(true)}
@@ -99,7 +99,7 @@ export function LeftRail() {
       <div className="rail__spacer" />
       <button
         className="rail__btn"
-        title={t('rail.settings')}
+        data-tip={t('rail.settings.tip')}
         aria-label={t('rail.settings')}
         data-testid="rail-settings"
         onClick={() => useUiStore.getState().setSettingsOpen(true)}
@@ -108,7 +108,7 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title={t('rail.add')}
+        data-tip={t('rail.add.tip')}
         aria-label={t('rail.add')}
         data-testid="rail-capture"
         onClick={() => setCaptureOpen(true)}

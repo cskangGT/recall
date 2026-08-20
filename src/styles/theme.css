@@ -3495,3 +3495,45 @@ body:lang(ko) {
   color: var(--text);
   border-color: var(--accent-dim);
 }
+
+/* -------------------------------------------------------------- rail tips
+   Hover a view and it says what it is — a sentence, not a name. Pure CSS off
+   data-tip; a short delay so passing the rail doesn't flash six tooltips. */
+.rail__btn[data-tip] {
+  position: relative;
+}
+
+.rail__btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease 350ms;
+}
+
+.rail__btn[data-tip]:hover::after,
+.rail__btn[data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail__btn[data-tip]::after {
+    transition-delay: 350ms;
+    transition-duration: 0ms;
+  }
+}
