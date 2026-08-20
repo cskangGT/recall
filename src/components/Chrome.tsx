@@ -54,9 +54,17 @@ export function LeftRail() {
      * that in a CSS class, which is invisible to everything but a monitor.
      */
     <nav className="rail" aria-label={t('rail.views')}>
-      <div className="rail__mark" aria-hidden="true">
+      {/* The logo is the way home — people press it on instinct, and the
+          instinct should be right. */}
+      <button
+        className="rail__mark"
+        data-testid="rail-home"
+        aria-label={t('rail.home')}
+        data-tip={t('rail.home.tip')}
+        onClick={() => useUiStore.getState().goHome()}
+      >
         M
-      </div>
+      </button>
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.map.tip')}

@@ -163,6 +163,8 @@ interface UiState {
   /** Pops the trail if a ← was requested; null otherwise. */
   consumeCameraPop: () => Camera | null;
   setMapFocus: (focus: { ids: string[] } | null) => void;
+  /** The logo's promise: back to the start, everything closed, nothing lost. */
+  goHome: () => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -274,6 +276,20 @@ export const useUiStore = create<UiState>((set, get) => ({
     return prev;
   },
   setMapFocus: (mapFocus) => set({ mapFocus }),
+  goHome: () =>
+    set({
+      view: 'browse',
+      openCategoryId: null,
+      arcLevelId: null,
+      selectedId: null,
+      highlightedIds: [],
+      answer: null,
+      answerDraft: null,
+      askThread: [],
+      mapFocus: null,
+      review: null,
+      cameraHistory: [],
+    }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

@@ -3537,3 +3537,35 @@ body:lang(ko) {
     transition-duration: 0ms;
   }
 }
+
+/* The mark is a button now — the way home. Same tooltip family as the rail. */
+.rail__mark {
+  cursor: pointer;
+  border: none;
+  position: relative;
+}
+
+.rail__mark[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease 350ms;
+}
+
+.rail__mark[data-tip]:hover::after,
+.rail__mark[data-tip]:focus-visible::after {
+  opacity: 1;
+}
