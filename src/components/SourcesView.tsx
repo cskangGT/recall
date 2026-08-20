@@ -142,13 +142,14 @@ export function SourcesView() {
     <div className="sources" data-testid="sources-view">
       <div className="sources__head">
         <span>{t('sources.title')}</span>
-        {/* Two grammars for the same drawer: the ledger ("what came in")
-            and the desktop window ("where everything is"). A taste, remembered. */}
+        {/* One control in the head, and only one: the mode. It reads as a
+            single segmented piece, not a crowd of pills — the type filters
+            live a row below, and only where they apply. */}
         <div className="sources__modes" role="group" aria-label={t('sources.mode.aria')}>
           {(['list', 'folders'] as const).map((m) => (
             <button
               key={m}
-              className={`sources__filter${mode === m ? ' sources__filter--on' : ''}`}
+              className={`sources__mode${mode === m ? ' sources__mode--on' : ''}`}
               data-testid={`sources-mode-${m}`}
               aria-pressed={mode === m}
               onClick={() => setMode(m)}
@@ -157,8 +158,10 @@ export function SourcesView() {
             </button>
           ))}
         </div>
-        {mode === 'list' && (
-        <div className="sources__filters">
+      </div>
+
+      {mode === 'list' && (
+        <div className="sources__subbar">
           {(['all', 'text', 'link', 'screenshot'] as const).map((f) => (
             <button
               key={f}
@@ -170,8 +173,7 @@ export function SourcesView() {
             </button>
           ))}
         </div>
-        )}
-      </div>
+      )}
 
       {mode === 'folders' && <FolderView />}
       {mode === 'list' && rows.length === 0 && (

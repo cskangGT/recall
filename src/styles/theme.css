@@ -3444,3 +3444,37 @@ body:lang(ko) {
   margin-left: auto;
   margin-right: 12px;
 }
+
+/* The mode is one segmented piece, not two more pills in the crowd. */
+.sources__modes {
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: 0;
+  padding: 2px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  gap: 0;
+}
+
+.sources__mode {
+  padding: 3px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.sources__mode--on {
+  background: rgba(240, 232, 250, 0.12);
+  color: var(--text);
+}
+
+/* Type filters: a quieter second row, only where they apply. */
+.sources__subbar {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
