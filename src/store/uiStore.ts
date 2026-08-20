@@ -60,6 +60,8 @@ export const ANSWER_FOLDER_ID = '__answer__';
 interface UiState {
   view: View;
   sourceFilter: SourceFilter;
+  /** Sources view mode: the ledger list, or the desktop-window folder grid. */
+  sourcesMode: 'list' | 'folders';
   /**
    * Which folder's memories the reading list is showing. Separate from
    * `selectedId` because clicking a memory in the list must not close the
@@ -129,6 +131,7 @@ interface UiState {
 
   setView: (view: View) => void;
   setSourceFilter: (filter: SourceFilter) => void;
+  setSourcesMode: (mode: 'list' | 'folders') => void;
   openCategory: (id: string | null) => void;
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
@@ -167,6 +170,10 @@ let toastId = 0;
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'browse',
   sourceFilter: 'all',
+  sourcesMode:
+    (typeof localStorage !== 'undefined' && localStorage.getItem('mado.sourcesMode')) === 'folders'
+      ? 'folders'
+      : 'list',
   openCategoryId: null,
   arcLevelId: null,
   welcomeDismissed: false,
@@ -204,6 +211,10 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
 
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+  setSourcesMode: (sourcesMode) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('mado.sourcesMode', sourcesMode);
+    set({ sourcesMode });
+  },
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
   setArcLevel: (arcLevelId) => set({ arcLevelId }),

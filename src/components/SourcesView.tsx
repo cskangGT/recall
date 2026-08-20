@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
+import { FolderView } from './FolderView';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { GraphPayload, Source, SourceType } from '../core/types';
 
@@ -102,6 +103,8 @@ export function SourcesView() {
   const selectedId = useUiStore((s) => s.selectedId);
   const select = useUiStore((s) => s.select);
   const filter = useUiStore((s) => s.sourceFilter);
+  const mode = useUiStore((s) => s.sourcesMode);
+  const setMode = useUiStore((s) => s.setSourcesMode);
   const setFilter = useUiStore((s) => s.setSourceFilter);
 
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -139,6 +142,22 @@ export function SourcesView() {
     <div className="sources" data-testid="sources-view">
       <div className="sources__head">
         <span>{t('sources.title')}</span>
+        {/* Two grammars for the same drawer: the ledger ("what came in")
+            and the desktop window ("where everything is"). A taste, remembered. */}
+        <div className="sources__modes" role="group" aria-label={t('sources.mode.aria')}>
+          {(['list', 'folders'] as const).map((m) => (
+            <button
+              key={m}
+              className={`sources__filter${mode === m ? ' sources__filter--on' : ''}`}
+              data-testid={`sources-mode-${m}`}
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+            >
+              {t(m === 'list' ? 'sources.mode.list' : 'sources.mode.folders')}
+            </button>
+          ))}
+        </div>
+        {mode === 'list' && (
         <div className="sources__filters">
           {(['all', 'text', 'link', 'screenshot'] as const).map((f) => (
             <button
@@ -151,18 +170,23 @@ export function SourcesView() {
             </button>
           ))}
         </div>
+        )}
       </div>
 
-      {rows.length === 0 && <p className="sources__empty">{t('sources.empty')}</p>}
+      {mode === 'folders' && <FolderView />}
+      {mode === 'list' && rows.length === 0 && (
+        <p className="sources__empty">{t('sources.empty')}</p>
+      )}
 
       {/* The migration story in one line: what's here is held, whole. */}
-      {rows.some((r) => r.safe) && (
+      {mode === 'list' && rows.some((r) => r.safe) && (
         <p className="sources__held-summary" data-testid="sources-held-summary">
           {t('sources.safeSummary', { n: rows.filter((r) => r.safe).length })}
         </p>
       )}
 
-      {rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
+      {mode === 'list' &&
+        rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
         <div
           key={source.id}
           data-testid={`source-row-${source.id}`}
