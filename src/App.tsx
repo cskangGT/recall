@@ -285,7 +285,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' ? ' shell--diary sky sky--dusk' : ''}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.

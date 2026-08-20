@@ -752,7 +752,18 @@ export function ArcBrowser() {
 
       {!isOpen &&
         (welcomeDismissed ? (
-          <p className="arc__prompt">{heading}</p>
+          <>
+            <p className="arc__prompt">{heading}</p>
+            {/* The quiet door to today's page — home should always know the
+                way to the diary. */}
+            <button
+              className="arc__diarylink"
+              data-testid="home-diary-link"
+              onClick={() => useUiStore.getState().setView('diary')}
+            >
+              ✎ {t('arc.diaryLink')}
+            </button>
+          </>
         ) : (
           <div className="arc__greeting" data-testid="welcome">
             {/*
@@ -793,6 +804,14 @@ export function ArcBrowser() {
                   {fillDoor}
                   <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
                     <span className="arc__door-name">{t('welcome.browse')}</span>
+                  </button>
+                  <button
+                    className="arc__door"
+                    data-testid="door-diary"
+                    onClick={() => useUiStore.getState().setView('diary')}
+                  >
+                    <span className="arc__door-name">{t('welcome.diary')}</span>
+                    <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
                   </button>
                 </div>
                 {fillSources}

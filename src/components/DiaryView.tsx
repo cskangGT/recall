@@ -32,6 +32,8 @@ export function DiaryView() {
   const [day, setDay] = useState(today);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  /** The ceremony: a star born at the save button, rising to join the sky. */
+  const [rising, setRising] = useState(0);
 
   const { entriesByDay, memoriesByDay } = useMemo(() => {
     const entries = new Map<string, Source[]>();
@@ -101,6 +103,15 @@ export function DiaryView() {
         store.applyPayload(stamped);
       }
       setDraft('');
+      /*
+       * The ceremony. Saving a day is not a database write to the person
+       * doing it — it is the same feeling as the recent sky: something of
+       * mine is up there now. A star is born at the button and rises; the
+       * calendar's mark twinkles in; the toast speaks the sky's language.
+       * And the claim is true — the newest memory IS the brightest star in
+       * the browse sky the moment this resolves.
+       */
+      setRising((n) => n + 1);
       useUiStore.getState().toast(t('diary.saved'));
     } catch {
       useUiStore.getState().toast(t('toast.batchFailed'));
@@ -143,7 +154,11 @@ export function DiaryView() {
               >
                 <span>{Number(k.slice(8))}</span>
                 <span className="diary__marks">
-                  {entriesByDay.has(k) && <span className="diary__mark-entry">●</span>}
+                  {entriesByDay.has(k) && (
+                    <span className={`diary__mark-entry${k === day && rising > 0 ? ' diary__mark-entry--born' : ''}`}>
+                      ●
+                    </span>
+                  )}
                   {!entriesByDay.has(k) && (memoriesByDay.get(k) ?? 0) > 0 && (
                     <span className="diary__mark-mem">·</span>
                   )}
@@ -174,6 +189,11 @@ export function DiaryView() {
           onChange={(e) => setDraft(e.target.value)}
         />
         <div className="diary__actions">
+          {rising > 0 && (
+            <span key={rising} className="diary__risingstar" aria-hidden="true">
+              <span className="diary__risingstar-dot" />
+            </span>
+          )}
           <button
             className="diary__save"
             data-testid="diary-save"
