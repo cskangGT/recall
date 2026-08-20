@@ -166,6 +166,17 @@ export interface AiProvider {
     onDelta: (text: string) => void,
   ): Promise<AnswerResult>;
   /**
+   * Optional: looks back over a stretch of diary days and says, in the
+   * memory's own voice, how this person's thinking moved through them.
+   * Providers that cannot do it honestly simply do not have it.
+   */
+  retrospect?(input: {
+    entries: { date: string; text: string }[];
+    /** Non-diary memories from the same days — context, capped by the caller. */
+    memories?: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ reflection: string }>;
+  /**
    * Optional: says why these memories overlap and writes the one memory that
    * holds every distinct fact from all of them. The user decides whether the
    * merge happens; the model only explains and drafts. Providers that cannot

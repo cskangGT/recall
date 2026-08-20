@@ -399,6 +399,29 @@ async function handleWorkspace(
     return { status: 200, body: null, events: deps.ask.askStream(workspaceId, body.question, history) };
   }
 
+  /*
+   * POST /api/workspaces/:id/diary/retro — the look back: diary days in
+   * [from, to] gathered and reflected on in the memory's own voice. 501
+   * where no model can do it honestly; an empty range answers plainly.
+   */
+  if (req.method === 'POST' && resource === 'diary' && resourceId === 'retro' && !action) {
+    if (!deps.ask.canRetrospect()) {
+      return { status: 501, body: { error: 'this server cannot look back' } };
+    }
+    const body = asRecord(req.body);
+    const DAY = /^\d{4}-\d{2}-\d{2}$/;
+    if (typeof body.from !== 'string' || typeof body.to !== 'string' || !DAY.test(body.from) || !DAY.test(body.to)) {
+      return badRequest('from and to must be YYYY-MM-DD');
+    }
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ask.retrospect(workspaceId, body.from, body.to, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'retro failed' } };
+    }
+  }
+
   // POST /api/workspaces/:id/reorgs/:reorgId/undo
   if (req.method === 'POST' && resource === 'reorgs' && resourceId && action === 'undo') {
     const event = deps.repo.listReorgEvents(workspaceId, 50).find((e) => e.id === resourceId);

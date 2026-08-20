@@ -122,3 +122,46 @@ describe('the signal teaches the next extraction', () => {
     expect(buildExtractPrompt({ content: 'anything', type: 'text' })).not.toContain('REMOVED');
   });
 });
+
+describe('POST diary/retro', () => {
+  it('501 where no model can look back — the fixture', async () => {
+    const res = await post(`${base}/diary/retro`, { from: '2026-08-01', to: '2026-08-31' });
+    expect(res.status).toBe(501);
+  });
+
+  it('gathers only in-range diary days and reflects through the capability', async () => {
+    const provider = Object.assign(new FixtureProvider(), {
+      retrospect: async (input: { entries: { date: string; text: string }[] }) => ({
+        reflection: `looked over ${input.entries.length} entries`,
+      }),
+    });
+    deps.ask = new AskPipeline(repo, provider, new FixtureEmbeddings());
+
+    // Two diary sources in range, one out of range.
+    const src = (id: string, day: string) => repo.insertSource(WS, {
+      id, workspace_id: WS, type: 'text', title: `일기 ${day}`, raw_content: `${day}의 하루`,
+      scene_description: null, url: null, image_path: null, referenced_urls: [],
+      status: 'complete', error_message: null, created_at: `${day}T09:00:00Z`,
+      processed_at: null, diary_date: day,
+    } as never);
+    src('src_d1', '2026-08-02');
+    src('src_d2', '2026-08-15');
+    src('src_d3', '2026-09-01');
+
+    const res = await post(`${base}/diary/retro`, { from: '2026-08-01', to: '2026-08-31', locale: 'ko' });
+    expect(res.status).toBe(200);
+    const body = res.body as { reflection: string; days: number };
+    expect(body.days).toBe(2);
+    expect(body.reflection).toBe('looked over 2 entries');
+  });
+
+  it('an empty month answers plainly, and bad dates answer 400', async () => {
+    const provider = Object.assign(new FixtureProvider(), {
+      retrospect: async () => ({ reflection: 'x' }),
+    });
+    deps.ask = new AskPipeline(repo, provider, new FixtureEmbeddings());
+    const empty = await post(`${base}/diary/retro`, { from: '2031-01-01', to: '2031-01-31' });
+    expect((empty.body as { days: number }).days).toBe(0);
+    expect((await post(`${base}/diary/retro`, { from: 'nope', to: '2026-08-31' })).status).toBe(400);
+  });
+});

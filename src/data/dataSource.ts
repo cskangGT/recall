@@ -83,6 +83,8 @@ export interface DataSource {
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
+  /** The diary's look back over [from, to] — the memory's own voice, longer form. */
+  diaryRetro?(from: string, to: string): Promise<{ reflection: string; days: number }>;
   /**
    * `ask`, with the answer text arriving as it is generated. `onDelta` gets
    * each new run of text; the resolved result is exactly what `ask` would
@@ -336,6 +338,14 @@ export class ApiDataSource implements DataSource {
     }
     if (!result) throw new HttpError(502, 'stream ended without a result');
     return result;
+  }
+
+  diaryRetro(from: string, to: string): Promise<{ reflection: string; days: number }> {
+    return this.post<{ reflection: string; days: number }>('/diary/retro', {
+      from,
+      to,
+      locale: currentLocale(),
+    });
   }
 
   mergePreview(memoryIds: string[]): Promise<{ reason: string; merged_text: string }> {

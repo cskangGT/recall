@@ -3973,3 +3973,61 @@ body:lang(ko) {
   .diary__risingstar-dot { animation: none; opacity: 0; }
   .diary__mark-entry--born { animation: none; }
 }
+
+/* The look back: the month's reflection, in a card that reads like dusk. */
+.diary__retro-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(232, 163, 61, 0.35);
+  background: rgba(232, 163, 61, 0.08);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.diary__retro-btn:hover:not(:disabled) {
+  background: rgba(232, 163, 61, 0.16);
+}
+
+.diary__retro-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.diary__retro {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(232, 163, 61, 0.3);
+  background: rgba(20, 12, 20, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+.diary__retro-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.diary__retro-close {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.diary__retro-close:hover {
+  color: var(--text);
+}
+
+.diary__retro-text {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.8;
+  text-wrap: pretty;
+}

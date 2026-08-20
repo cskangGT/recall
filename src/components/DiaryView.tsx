@@ -34,6 +34,10 @@ export function DiaryView() {
   const [saving, setSaving] = useState(false);
   /** The ceremony: a star born at the save button, rising to join the sky. */
   const [rising, setRising] = useState(0);
+  /** The look back for the viewed month — the memory's voice, longer form. */
+  const [retro, setRetro] = useState<{ month: string; text: string } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const canRetro = Boolean(useWorkspaceStore.getState().source.diaryRetro);
 
   const { entriesByDay, memoriesByDay } = useMemo(() => {
     const entries = new Map<string, Source[]>();
@@ -71,6 +75,25 @@ export function DiaryView() {
   const dayMemories = payload.memories
     .filter((m) => m.created_at.slice(0, 10) === day)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  const lookBack = async () => {
+    if (looking) return;
+    const from = dayKey(new Date(month.getFullYear(), month.getMonth(), 1));
+    const to = dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+    setLooking(true);
+    try {
+      const result = await useWorkspaceStore.getState().source.diaryRetro!(from, to);
+      if (result.days === 0 || !result.reflection) {
+        useUiStore.getState().toast(t('diary.retro.none'));
+      } else {
+        setRetro({ month: monthLabel, text: result.reflection });
+      }
+    } catch {
+      useUiStore.getState().toast(t('toast.batchFailed'));
+    } finally {
+      setLooking(false);
+    }
+  };
 
   const save = async () => {
     const content = draft.trim();
@@ -167,9 +190,35 @@ export function DiaryView() {
             ),
           )}
         </div>
+        {/* The look back — only where a model can do it honestly. */}
+        {canRetro && (
+          <button
+            className="diary__retro-btn"
+            data-testid="diary-retro"
+            disabled={looking}
+            onClick={() => void lookBack()}
+          >
+            {looking ? t('diary.retro.looking') : t('diary.retro.cta')}
+          </button>
+        )}
       </div>
 
       <div className="diary__page">
+        {retro && (
+          <div className="diary__retro" data-testid="diary-retro-card">
+            <div className="diary__retro-head">
+              <span className="diary__eyebrow">{t('diary.retro.title', { month: retro.month })}</span>
+              <button
+                className="diary__retro-close"
+                aria-label={t('review.skip')}
+                onClick={() => setRetro(null)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="diary__retro-text">{retro.text}</p>
+          </div>
+        )}
         <h2 className="diary__date">
           {formatDay(day, locale)}
           {day === today && <span className="diary__today"> · {t('diary.today')}</span>}

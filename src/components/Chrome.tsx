@@ -79,6 +79,15 @@ export function LeftRail() {
         M
       </button>
       <button
+        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.diary.tip')}
+        aria-label={t('rail.diary')}
+        data-testid="rail-diary"
+        onClick={() => setView('diary')}
+      >
+        <span aria-hidden="true">✎</span>
+      </button>
+      <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.map.tip')}
         aria-label={t('rail.map')}
@@ -107,15 +116,6 @@ export function LeftRail() {
         onClick={() => setView('sources')}
       >
         <span aria-hidden="true">▤</span>
-      </button>
-      <button
-        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.diary.tip')}
-        aria-label={t('rail.diary')}
-        data-testid="rail-diary"
-        onClick={() => setView('diary')}
-      >
-        <span aria-hidden="true">✎</span>
       </button>
       <button
         className="rail__btn"
