@@ -461,3 +461,22 @@ test('the logo is the way home — pressed on instinct, and the instinct is righ
   await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 });
+
+test('recent memories hang in the sky — hover whispers, click opens', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  const stars = page.locator('.recentstar');
+  await expect(page.getByTestId('recent-stars')).toBeVisible();
+  expect(await stars.count()).toBeGreaterThan(5);
+
+  // Click a star: the memory opens in the inspector…
+  await stars.first().click();
+  await expect(page.getByTestId('inspector')).toContainText('Memory');
+
+  // …and the recent sky steps back while a category list is open.
+  await page.keyboard.press('Escape');
+  await page.locator('.arc__node').filter({ hasText: 'AI Tooling' }).first().click();
+  await expect(page.getByTestId('reading-list')).toBeVisible();
+  await expect(page.getByTestId('recent-stars')).toHaveCount(0);
+});
