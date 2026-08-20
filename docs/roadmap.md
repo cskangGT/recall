@@ -24,7 +24,7 @@
 
 원칙: 상황이 모델을 고른다 · 한국어 1급 시민 · 로컬-퍼스트 · 임베딩 공간은 하나.
 
-- **Phase 1 텍스트 품질 (지금)**: 임베딩 ko 벤치마크(voyage-3.5 vs text-embedding-3-small vs bge-m3) → reranker 도입 → 모델 티어 분리(추출=Haiku급, 명명·Ask=Sonnet급)
+- **Phase 1 텍스트 품질 (지금)**: **시맨틱 검색** — 지도·커맨드바 검색이 서버의 하이브리드 검색(FTS+벡터 융합, Ask가 쓰는 것)을 타게 노출. 현재 검색 UI는 키워드 매칭뿐이라 "빵 굽기"로 "사워도우"를 못 찾는다 → 임베딩 ko 벤치마크(voyage-3.5 vs text-embedding-3-small vs bge-m3) → reranker 도입(검색·관련성 공용) → 모델 티어 분리(추출=Haiku급, 명명·Ask=Sonnet급)
 - **Phase 2 이미지**: Apple Vision OCR 로컬 게이트 → VLM scene_description → IG 썸네일 이해
 - **Phase 3 음성·영상**: 온디바이스 STT(whisper.cpp) → 릴스(Gemini 평가)
 - **Phase 4 온디바이스 티어 + MCP**: 로컬 모델 스택(Qwen3-4B/bge-m3), AI 대화 로그 수집
