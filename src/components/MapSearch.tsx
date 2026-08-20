@@ -37,6 +37,7 @@ const FILTERS: { id: SourceType | 'all'; label: string }[] = [
 export function MapSearch() {
   const payload = useWorkspaceStore((s) => s.payload);
   const setHighlight = useUiStore((s) => s.setHighlight);
+  const historyDepth = useUiStore((s) => s.cameraHistory.length);
   const select = useUiStore((s) => s.select);
 
   const [query, setQuery] = useState('');
@@ -109,6 +110,17 @@ export function MapSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
+            /*
+             * Enter gathers the results: the camera fits everything that lit
+             * up — memories and the labels themselves — so "search, then see
+             * them together" is one keystroke. ← walks back out.
+             */
+            if (e.key === 'Enter' && searching && results.length + labelIds.length > 0) {
+              useUiStore
+                .getState()
+                .requestZoomTo([...results.map((r) => r.memory.id), ...labelIds]);
+              return;
+            }
             if (e.key !== 'Escape') return;
             // Same ladder as the composer: the first Escape hands the keyboard
             // back, so the single-key view shortcuts start working again.
@@ -123,6 +135,16 @@ export function MapSearch() {
           </span>
         )}
       </div>
+
+      {historyDepth > 0 && (
+        <button
+          className="mapsearch__back"
+          data-testid="map-back"
+          onClick={() => useUiStore.getState().requestCameraPop()}
+        >
+          ← {t('map.back')}
+        </button>
+      )}
 
       <div className="mapsearch__filters" role="group" aria-label="Filter by source type">
         {FILTERS.map((f) => (

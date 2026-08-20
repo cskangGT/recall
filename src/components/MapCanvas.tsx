@@ -136,6 +136,32 @@ export function MapCanvas({
 
       let camera = ui.camera ?? cameraRef.current ?? target;
 
+      /*
+       * ---- a zoom request from search (지도 검색 UX): fit the matched
+       * nodes, remember where the camera stood so ← can walk back, and ride
+       * the same pan tween every other camera move uses. The zoom is capped —
+       * a single result should arrive close, not fill the screen with it.
+       */
+      const zoomIds = ui.consumeZoomTo();
+      if (zoomIds && zoomIds.length > 0) {
+        const targets = current.nodes.filter((n) => zoomIds.includes(n.id));
+        if (targets.length > 0) {
+          ui.pushCameraHistory(camera);
+          const fit = fitToBounds(targets, viewport, 0.35);
+          panFrom.current = camera;
+          panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.2) };
+          panStart.current = now;
+        }
+      }
+
+      // ---- ← pressed: pop the trail and ride back on the same tween.
+      const popped = ui.consumeCameraPop();
+      if (popped) {
+        panFrom.current = camera;
+        panTo.current = popped;
+        panStart.current = now;
+      }
+
       // ---- the tree handed us a selection: centre on it
       const centerId = ui.consumeCenterOn();
       if (centerId) {
@@ -376,8 +402,12 @@ export function MapCanvas({
         if (start && Math.hypot(p.sx - start.sx, p.sy - start.sy) > 4) return;
         const hit = hitTest(nodes, camera(), viewportOf(), p);
         const ui = useUiStore.getState();
-        if (hit) ui.select(hit.id);
-        else ui.clearSelection();
+        if (hit) {
+          ui.select(hit.id);
+          // A lit search hit pulls you in when clicked — the word you found
+          // becomes the place you are (뒤로가기 is a frame away).
+          if (ui.highlightedIds.includes(hit.id)) ui.requestZoomTo([hit.id]);
+        } else ui.clearSelection();
       }}
       onWheel={(e) => {
         const cam = camera();

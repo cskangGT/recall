@@ -123,3 +123,25 @@ test('Escape clears the query, then hands the keyboard back', async ({ page }) =
   await page.keyboard.press('t');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 });
+
+test('Enter gathers the results into a zoom, and ← walks back out', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+
+  await page.getByTestId('map-search-input').fill('eval');
+  await expect(page.getByTestId('map-search-count')).toBeVisible();
+
+  // No trail yet — nothing to walk back from.
+  await expect(page.getByTestId('map-back')).toHaveCount(0);
+
+  await page.getByTestId('map-search-input').press('Enter');
+  await expect(page.getByTestId('map-back')).toBeVisible();
+
+  // The highlight survives the zoom — the found things stay lit.
+  await expect(page.getByTestId('map-search-count')).toBeVisible();
+
+  await page.getByTestId('map-back').click();
+  await expect(page.getByTestId('map-back')).toHaveCount(0);
+});

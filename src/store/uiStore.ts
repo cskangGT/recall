@@ -85,6 +85,15 @@ interface UiState {
   selectedId: string | null;
   highlightedIds: string[];
   camera: Camera | null;
+  /**
+   * A zoom request from search: fit these nodes and remember where the camera
+   * stood, so ← can walk back. Consumed by the canvas on its next frame.
+   */
+  zoomToIds: string[] | null;
+  /** Cameras to walk back to, newest last. Capped — a trail, not a log. */
+  cameraHistory: Camera[];
+  /** True when ← was pressed; the canvas consumes it and pops the trail. */
+  cameraPopRequested: boolean;
   captureOpen: boolean;
   askOpen: boolean;
   settingsOpen: boolean;
@@ -141,6 +150,12 @@ interface UiState {
   clearSelection: () => void;
   setHighlight: (ids: string[]) => void;
   setCamera: (c: Camera) => void;
+  requestZoomTo: (ids: string[]) => void;
+  consumeZoomTo: () => string[] | null;
+  pushCameraHistory: (c: Camera) => void;
+  requestCameraPop: () => void;
+  /** Pops the trail if a ← was requested; null otherwise. */
+  consumeCameraPop: () => Camera | null;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -182,6 +197,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   selectedId: null,
   highlightedIds: [],
   camera: null,
+  zoomToIds: null,
+  cameraHistory: [],
+  cameraPopRequested: false,
   captureOpen: false,
   askOpen: false,
   settingsOpen: false,
@@ -231,6 +249,22 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearSelection: () => set({ selectedId: null, highlightedIds: [] }),
   setHighlight: (highlightedIds) => set({ highlightedIds }),
   setCamera: (camera) => set({ camera }),
+  requestZoomTo: (ids) => set(ids.length > 0 ? { zoomToIds: ids } : {}),
+  consumeZoomTo: () => {
+    const ids = get().zoomToIds;
+    if (ids) set({ zoomToIds: null });
+    return ids;
+  },
+  pushCameraHistory: (c) =>
+    set((s) => ({ cameraHistory: [...s.cameraHistory, c].slice(-8) })),
+  requestCameraPop: () => set({ cameraPopRequested: true }),
+  consumeCameraPop: () => {
+    const s = get();
+    if (!s.cameraPopRequested) return null;
+    const prev = s.cameraHistory.at(-1) ?? null;
+    set({ cameraPopRequested: false, cameraHistory: s.cameraHistory.slice(0, -1) });
+    return prev;
+  },
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

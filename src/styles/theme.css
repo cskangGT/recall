@@ -3478,3 +3478,20 @@ body:lang(ko) {
   gap: 6px;
   padding: 0 10px 10px;
 }
+
+/* The way back out of a search zoom — a trail, one step at a time. */
+.mapsearch__back {
+  margin: 6px 0 2px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.mapsearch__back:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}

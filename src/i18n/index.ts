@@ -147,6 +147,7 @@ const en = {
 
   // ---------------------------------------------------------------- map
   'map.search.label': 'Search your memories',
+  'map.back': 'Back',
   'map.search.placeholder': 'Find something on the map',
   'map.empty.title': 'Nothing saved yet.',
   'map.empty.sub': `Add a note, a link, or a screenshot and ${PRODUCT} will start building your map.`,
@@ -417,6 +418,7 @@ const ko: Record<StringKey, string> = {
   'ask.startFresh': '새로 시작',
 
   'map.search.label': '기억 검색',
+  'map.back': '이전 화면',
   'map.search.placeholder': '지도에서 찾아보세요',
   'map.empty.title': '아직 저장된 것이 없어요.',
   'map.empty.sub': `메모, 링크, 스크린샷을 추가하면 ${PRODUCT}가 지도를 만들기 시작해요.`,
