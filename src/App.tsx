@@ -3,6 +3,7 @@ import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
+import { DiaryView } from './components/DiaryView';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -222,6 +223,10 @@ export function App() {
         ui.setView('sources');
         return;
       }
+      if (e.key === 'd' || e.key === 'D') {
+        ui.setView('diary');
+        return;
+      }
       /*
        * Backspace deletes what is selected (spec 6.1). It was bound only inside
        * the arc, where it climbs a level, and nowhere else — so the keyboard
@@ -342,6 +347,8 @@ export function App() {
           <ArcBrowser />
         ) : view === 'sources' ? (
           <SourcesView />
+        ) : view === 'diary' ? (
+          <DiaryView />
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}

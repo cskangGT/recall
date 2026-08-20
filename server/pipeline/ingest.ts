@@ -40,6 +40,8 @@ export interface IngestInput {
   referencedUrls?: string[];
   /** The viewer's language — category names are UI, not content. */
   locale?: 'en' | 'ko';
+  /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
+  diaryDate?: string;
 }
 
 export interface IngestResult {
@@ -258,6 +260,7 @@ export class IngestPipeline {
       raw_content: input.content ?? '',
       scene_description: null,
       url: input.url ?? null,
+      diary_date: input.diaryDate ?? null,
       image_path: input.imagePath ?? null,
       referenced_urls: input.referencedUrls ?? [],
       status: 'processing',

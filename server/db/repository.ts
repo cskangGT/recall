@@ -18,6 +18,8 @@ export interface SourceRow extends Source {
   processed_at: string | null;
   /** When the user reviewed this source's extractions — null means not yet. */
   reviewed_at?: string | null;
+  /** The day a diary entry belongs to (YYYY-MM-DD); null for everything else. */
+  diary_date?: string | null;
 }
 
 /** One review verdict, recorded verbatim — the curation signal (spec §21). */

@@ -30,6 +30,8 @@ export interface Source {
   error_message?: string | null;
   /** When the user reviewed this source's extractions — absent/null means not yet. */
   reviewed_at?: string | null;
+  /** The day a diary entry belongs to (YYYY-MM-DD); absent for everything else. */
+  diary_date?: string | null;
 }
 
 /**

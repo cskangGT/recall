@@ -3656,3 +3656,206 @@ body:lang(ko) {
   right: 0;
   transform: none;
 }
+
+/* ------------------------------------------------------------------ diary
+   A room for days: the month on the left, the day's page on the right. */
+.diary {
+  display: flex;
+  gap: 28px;
+  padding: 18px 28px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.diary__calendar {
+  flex: none;
+  width: 300px;
+}
+
+.diary__monthbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.diary__month {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 550;
+}
+
+.diary__nav {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.diary__nav:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.diary__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.diary__weekday {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  padding: 4px 0 6px;
+}
+
+.diary__day {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.diary__day:hover {
+  background: rgba(240, 232, 250, 0.06);
+}
+
+.diary__day--on {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.diary__day--today {
+  color: var(--accent);
+}
+
+.diary__marks {
+  height: 8px;
+  line-height: 8px;
+  font-size: 8px;
+}
+
+.diary__mark-entry {
+  color: var(--accent);
+}
+
+.diary__mark-mem {
+  color: var(--text-faint);
+  font-size: 14px;
+}
+
+.diary__page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-bottom: 120px;
+}
+
+.diary__date {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 550;
+  margin: 2px 0 14px;
+}
+
+.diary__today {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.diary__entry {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.diary__editor {
+  width: 100%;
+  min-height: 96px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  resize: vertical;
+}
+
+.diary__editor:focus {
+  border-color: var(--accent-dim);
+  outline: none;
+}
+
+.diary__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0 18px;
+}
+
+.diary__save {
+  padding: 6px 18px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: #141414;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.diary__save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.diary__eyebrow {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 14px 0 6px;
+}
+
+.diary__memory {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--edge);
+  background: none;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.diary__memory:hover {
+  color: var(--text);
+}
+
+.diary__empty {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}

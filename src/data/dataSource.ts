@@ -20,6 +20,8 @@ export interface CaptureInput {
   url?: string;
   imagePath?: string;
   referencedUrls?: string[];
+  /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
+  diaryDate?: string;
 }
 
 export interface CaptureResult {

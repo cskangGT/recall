@@ -47,7 +47,11 @@ CREATE TABLE IF NOT EXISTS sources (
   processed_at       TEXT,
   -- When the user reviewed this source's extractions (spec §21). NULL means
   -- unreviewed. Also added by ensureColumn for databases created before it.
-  reviewed_at        TEXT
+  reviewed_at        TEXT,
+  -- The day a diary entry belongs to (YYYY-MM-DD) — set only for diary
+  -- captures, so yesterday's entry written today still lands on yesterday.
+  -- Also added by ensureColumn for databases created before it.
+  diary_date         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS sources_workspace_created

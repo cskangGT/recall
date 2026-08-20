@@ -109,6 +109,15 @@ export function LeftRail() {
         <span aria-hidden="true">▤</span>
       </button>
       <button
+        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.diary.tip')}
+        aria-label={t('rail.diary')}
+        data-testid="rail-diary"
+        onClick={() => setView('diary')}
+      >
+        <span aria-hidden="true">✎</span>
+      </button>
+      <button
         className="rail__btn"
         data-tip={t('rail.ask.tip')}
         aria-label={t('rail.ask')}

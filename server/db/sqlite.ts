@@ -60,6 +60,7 @@ export class SqliteRepository implements Repository {
     this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
     this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
     this.ensureColumn('sources', 'reviewed_at', 'TEXT');
+    this.ensureColumn('sources', 'diary_date', 'TEXT');
   }
 
   /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
@@ -146,6 +147,7 @@ export class SqliteRepository implements Repository {
         status: s.status, error_message: s.error_message,
         // Null means "not yet" — the review door in Sources reads this.
         reviewed_at: s.reviewed_at ?? null,
+        diary_date: (s as { diary_date?: string | null }).diary_date ?? null,
       })),
       memories: memories.map((m) => ({
         ...m,
@@ -164,8 +166,8 @@ export class SqliteRepository implements Repository {
       .prepare(
         `INSERT INTO sources (id, workspace_id, type, title, raw_content, scene_description,
                               url, image_path, referenced_urls, detected_context, summary,
-                              status, error_message, created_at, processed_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                              status, error_message, created_at, processed_at, diary_date)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id, workspaceId, s.type, s.title, s.raw_content, s.scene_description,
@@ -173,6 +175,7 @@ export class SqliteRepository implements Repository {
         (s as { detected_context?: string | null }).detected_context ?? null,
         (s as { summary?: string | null }).summary ?? null,
         s.status, s.error_message, s.created_at, s.processed_at,
+        (s as { diary_date?: string | null }).diary_date ?? null,
       );
   }
 

@@ -252,6 +252,11 @@ async function handleWorkspace(
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
       locale: body.locale === 'ko' || body.locale === 'en' ? body.locale : undefined,
+      // A diary entry names its day; anything else leaves it unset.
+      diaryDate:
+        typeof body.diaryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.diaryDate)
+          ? body.diaryDate
+          : undefined,
     });
 
     /*
