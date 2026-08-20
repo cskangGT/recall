@@ -31,6 +31,19 @@
 - **검수 신호 확장**: v2 discard 용어의 키워드 렌즈 가중 ↓ / edit 표현 가중 ↑ → v3 워크스페이스 취향 프로파일(카테고리 입도·명명)
 - 각 Phase 산출물: ko 포함 벤치마크 + 기능당 원가($/1,000 기억) + 게이트웨이 미터링 단위
 
+### 저비용·로컬 대안 표 (검토 대상 — 벤치마크로 판정)
+
+| Task | Current | Alternatives | Mado 메모 | Ref |
+|---|---|---|---|---|
+| Read screenshots | gpt-4.1 | PaddleOCR | Apple Vision(맥 온디바이스)과 비교 필요; PaddleOCR은 서버측 후보 | [1] |
+| Extract memories | gpt-4.1 | Small LLM + rules | 검수 신호 few-shot과 결합 시 소형 모델 품질 상승 여지 | [2] |
+| Embed text | voyage / text-embedding-3-small | text-embedding-3-small or local MiniLM (all-MiniLM-L6-v2) | ⚠ MiniLM-L6은 영어 중심 — ko는 bge-m3가 로컬 후보 | [3] |
+| Name categories | gpt-4.1 / claude-opus-5 | KeyBERT / RAKE / YAKE | 이미 TF-IDF 폴백(nameTokens) 구현됨 — 같은 계열, ko 조사 처리 포함 | [4] |
+| Answer questions | gpt-4.1 / claude-opus-5 | Small LLM or extractive answer | 인용 계약(검증된 [n]만) 유지가 전제 — extractive는 거부율 상승 예상 | [5] |
+
+**Ref**
+[1] Li et al. (2022), PP-OCRv3, arXiv. · [2] Busta & Oyler (2025), small language models for structured extraction, Quantitative Plant Biology. · [3] Pavlyshenko & Stasiuk (2025), transformer sentence embeddings, Electronics and Information Technologies. · [4] Nadim, Akopian & Matamoros (2023), unsupervised keyword extraction tools, IEEE Access. · [5] Qian et al. (2025), VeriCite for citation-aware RAG, ACM SIGIR Asia Pacific.
+
 ## 장기 베팅
 
 - **Meta TYI(정보 전송) 목적지 등록** — 성사 시 인스타 "진짜 연동". 파트너 심사 필요, 요건 조사부터
