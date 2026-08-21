@@ -57,7 +57,10 @@ export function RecentStars() {
         top: 4 + hashToUnit(m.id, 2) * 9,
         // Newest brightest; a returning thought grows.
         brightness: 1 - (rank / STAR_COUNT) * 0.65,
-        size: 4 + Math.min(3, ((m.times_seen ?? 1) - 1) * 1.5) + (rank < 3 ? 1 : 0),
+        size: 3.5 + Math.min(3, ((m.times_seen ?? 1) - 1) * 1.4) + (rank < 3 ? 1.2 : 0),
+        tilt: Math.round(hashToUnit(m.id, 3) * 90),
+        // Staggered twinkle, so the sky breathes instead of blinking in unison.
+        delay: Math.round(hashToUnit(m.id, 4) * 5200),
       }));
   }, [payload]);
 
@@ -67,7 +70,7 @@ export function RecentStars() {
 
   return (
     <div className="recentsky" data-testid="recent-stars" aria-label={t('recent.aria')}>
-      {stars.map(({ memory, left, top, brightness, size }) => (
+      {stars.map(({ memory, left, top, brightness, size, tilt, delay }) => (
         <button
           key={memory.id}
           className={`recentstar${left < 18 ? ' recentstar--left' : left > 82 ? ' recentstar--right' : ''}`}
@@ -76,13 +79,26 @@ export function RecentStars() {
             {
               left: `${left}%`,
               top: `${top}%`,
-              '--star-size': `${size}px`,
               '--star-brightness': brightness,
+              '--twinkle-delay': `${delay}ms`,
             } as React.CSSProperties
           }
           onClick={() => select(memory.id)}
         >
-          <span className="recentstar__dot" aria-hidden="true" />
+          {/* The same star the arc's categories wear — core, glow, spikes —
+              scaled down to a memory's size. One sky, one kind of light. */}
+          <span
+            className="arc__star recentstar__glint"
+            aria-hidden="true"
+            style={
+              {
+                '--star-core': `${size}px`,
+                '--star-glow': `${size * 4.4}px`,
+                '--star-spikes': `${size * 3.4}px`,
+                '--star-tilt': `${tilt}deg`,
+              } as React.CSSProperties
+            }
+          />
           <span className="recentstar__whisper" role="tooltip">
             {memory.text}
             {(memory.times_seen ?? 1) > 1 && (

@@ -3609,20 +3609,33 @@ body:lang(ko) {
   cursor: pointer;
 }
 
-.recentstar__dot {
-  width: var(--star-size);
-  height: var(--star-size);
-  border-radius: 50%;
-  background: #efeaf6;
-  opacity: calc(0.35 + var(--star-brightness) * 0.6);
-  box-shadow: 0 0 calc(var(--star-size) * 2.2) rgba(232, 163, 61, calc(var(--star-brightness) * 0.55));
-  transition: transform 160ms ease, opacity 160ms ease;
+/* The same four-pointed star the arc wears, dimmed by age and breathing
+   slowly out of phase — a sky, not a scatter of LEDs. */
+.recentstar__glint {
+  display: block;
+  opacity: calc(0.38 + var(--star-brightness) * 0.62);
+  transition: transform 180ms ease, opacity 180ms ease;
+  animation: recentstar-breathe 5.2s ease-in-out infinite;
+  animation-delay: var(--twinkle-delay);
 }
 
-.recentstar:hover .recentstar__dot,
-.recentstar:focus-visible .recentstar__dot {
-  transform: scale(1.6);
+@keyframes recentstar-breathe {
+  0%, 100% { filter: brightness(0.82); }
+  50% { filter: brightness(1.3); }
+}
+
+.recentstar:hover .recentstar__glint,
+.recentstar:focus-visible .recentstar__glint {
+  transform: scale(1.35);
   opacity: 1;
+  animation-play-state: paused;
+  filter: brightness(1.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recentstar__glint {
+    animation: none;
+  }
 }
 
 /* The whisper: the memory's own words, near the star that holds them. */
