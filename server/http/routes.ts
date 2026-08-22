@@ -191,6 +191,22 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
   }
 
   /*
+   * GET /api/capabilities — which doors this server can actually open.
+   *
+   * The client used to assume every server could do what the local Mac server
+   * does, and drew an Apple Notes chip that a hosted Ubuntu box could only
+   * answer with a 501. A button that produces a refusal is worse than no
+   * button — so the server says what it can reach, and the client draws only
+   * those doors.
+   */
+  if (req.method === 'GET' && segments[1] === 'capabilities' && !segments[2]) {
+    return ok({
+      appleNotes: Boolean(deps.readNotes),
+      notion: Boolean(deps.readNotionPages),
+    });
+  }
+
+  /*
    * POST /api/workspaces — a copy of the corpus, for one visitor.
    *
    * Everyone shared `ws_demo` before this, which is fine until the first person

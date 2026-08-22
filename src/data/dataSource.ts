@@ -252,7 +252,29 @@ export class ApiDataSource implements DataSource {
     // Validated on arrival, with the same validator the seed goes through. A
     // backend that starts returning a malformed payload should fail here, not
     // three layers up in the renderer.
-    return validateSeed(await this.request<GraphPayload>('/graph'));
+    const [graph] = await Promise.all([this.request<GraphPayload>('/graph'), this.probe()]);
+    return validateSeed(graph);
+  }
+
+  /**
+   * Asks the server which import doors it can open, once, before the first
+   * paint that could draw them. Doors default to open: only a server that
+   * answers "no" closes one, so a failed probe never hides a working door.
+   */
+  private probed = false;
+
+  private async probe(): Promise<void> {
+    if (this.probed) return;
+    this.probed = true;
+    try {
+      const response = await fetch(`${this.base}/capabilities`);
+      if (!response.ok) return;
+      const caps = (await response.json()) as { appleNotes?: boolean; notion?: boolean };
+      if (!caps.appleNotes) this.importAppleNotes = undefined;
+      if (!caps.notion) this.importNotionPages = undefined;
+    } catch {
+      // Leave the doors as they are.
+    }
   }
 
   async capture(input: CaptureInput): Promise<CaptureResult> {
@@ -270,21 +292,21 @@ export class ApiDataSource implements DataSource {
     return { ...result, graph: validateSeed(result.graph) };
   }
 
-  async importAppleNotes(days = 14): Promise<NotesImportResult> {
+  importAppleNotes?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/apple-notes', {
       days,
       locale: currentLocale(),
     });
     return { ...result, graph: validateSeed(result.graph) };
-  }
+  };
 
-  async importNotionPages(days = 14): Promise<NotesImportResult> {
+  importNotionPages?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/notion', {
       days,
       locale: currentLocale(),
     });
     return { ...result, graph: validateSeed(result.graph) };
-  }
+  };
 
   upgrade(returnUrl: string): Promise<{ url: string }> {
     return this.post<{ url: string }>('/billing/checkout', { returnUrl });
