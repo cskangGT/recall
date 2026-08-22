@@ -132,7 +132,7 @@ const en = {
   'welcome.diary': 'Write today',
   'welcome.diaryHint': 'One page a day — your future self will ask about it',
   'arc.diaryLink': 'Write about today',
-  'arc.importLink': 'Bring in files & notes',
+  'arc.importLink': 'Bring in memories from outside',
   'welcome.prompt': 'Where would you like to look?',
   'welcome.emptyTitle': 'Nothing up here yet.',
   'welcome.emptyAside':
@@ -435,7 +435,7 @@ const ko: Record<StringKey, string> = {
   'welcome.diary': '오늘 일기 쓰기',
   'welcome.diaryHint': '하루 한 페이지 — 나중의 내가 물어볼 거예요',
   'arc.diaryLink': '오늘 하루 기록하기',
-  'arc.importLink': '파일·메모 가져오기',
+  'arc.importLink': '외부에서 내 기억 가져오기',
   'welcome.prompt': '어디를 들여다볼까요?',
   'welcome.emptyTitle': '아직 아무것도 없어요.',
   'welcome.emptyAside': `아래에 메모, 링크, 스크린샷을 붙여넣으면 ${PRODUCT}가 읽고 자리를 찾아줘요. 지도는 거기서부터 자라나요.`,

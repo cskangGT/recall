@@ -498,8 +498,11 @@ export function ArcBrowser() {
 
   const fillSources = fillOpen && hasSourceChoices && (
     <div className="arc__sources" data-testid="fill-sources">
+      {/* Each chip blooms a beat after the last — the menu unfolds from the
+          link instead of popping in beside it. */}
       <button
         className="arc__source"
+        style={{ '--i': 0 } as React.CSSProperties}
         data-testid="source-files"
         onClick={() => fileInputRef.current?.click()}
       >
@@ -508,6 +511,7 @@ export function ArcBrowser() {
       {canImportNotes && (
         <button
           className="arc__source"
+          style={{ '--i': 1 } as React.CSSProperties}
           data-testid="source-notes"
           onClick={() => void importAppleNotesFlow()}
         >
@@ -517,6 +521,7 @@ export function ArcBrowser() {
       {canImportNotion && (
         <button
           className="arc__source"
+          style={{ '--i': canImportNotes ? 2 : 1 } as React.CSSProperties}
           data-testid="source-notion"
           onClick={() => void importNotionFlow()}
         >
@@ -765,7 +770,7 @@ export function ArcBrowser() {
               {/* The import door must outlive the welcome — 'bring in my Mac
                   notes' is a mid-session thought, not a first-visit one. */}
               <button
-                className="arc__diarylink"
+                className={`arc__diarylink${fillOpen ? ' arc__diarylink--open' : ''}`}
                 data-testid="home-import-link"
                 onClick={() => {
                   if (hasSourceChoices) setFillOpen((v) => !v);
