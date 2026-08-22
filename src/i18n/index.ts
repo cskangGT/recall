@@ -127,7 +127,7 @@ const en = {
     '{memories} memories from {sources} sources, already sorted. Ask me anything about them.',
   'welcome.lookAround': 'Look around',
   'welcome.fill': 'Fill your memory',
-  'welcome.fillHint': 'Drop files or notes — {product} reads and files them',
+  'welcome.fillHint': 'Drop screenshots, PDFs, or notes — {product} reads and files them',
   'welcome.browse': 'Look around first',
   'welcome.diary': 'Write today',
   'welcome.diaryHint': 'One page a day — your future self will ask about it',
@@ -381,10 +381,10 @@ const en = {
   'toast.notesEmpty': 'No notes from the last two weeks to bring in.',
   'welcome.notes': "This Mac's notes",
   'welcome.notion': 'Notion pages',
-  'welcome.sourceFiles': 'Choose files',
-  'welcome.instagram': 'Instagram saves',
+  'welcome.sourceFiles': 'Screenshots · PDFs · notes',
+  'welcome.instagram': 'Instagram Saved',
   'welcome.comingSoon': 'coming soon',
-  'toast.igSoon': 'Instagram saves are almost ready — a guided import is on its way.',
+  'toast.igSoon': 'Bringing in your Instagram Saved is almost ready — it will open with a guide.',
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -433,7 +433,7 @@ const ko: Record<StringKey, string> = {
     '{sources}개의 원본에서 나온 {memories}개의 기억이 이미 정리되어 있어요. 무엇이든 물어보세요.',
   'welcome.lookAround': '둘러보기',
   'welcome.fill': '내 기억 채우기',
-  'welcome.fillHint': '파일이나 메모를 놓으면 {product}가 읽고 정리해요',
+  'welcome.fillHint': '스크린샷, PDF, 메모를 놓으면 {product}가 읽고 정리해요',
   'welcome.browse': '먼저 둘러볼래요',
   'welcome.diary': '오늘 일기 쓰기',
   'welcome.diaryHint': '하루 한 페이지 — 나중의 내가 물어볼 거예요',
@@ -670,10 +670,10 @@ const ko: Record<StringKey, string> = {
   'toast.notesEmpty': '최근 2주 안에 가져올 메모가 없어요.',
   'welcome.notes': '이 Mac의 메모',
   'welcome.notion': 'Notion 페이지',
-  'welcome.sourceFiles': '파일 선택',
-  'welcome.instagram': 'Instagram 저장물',
+  'welcome.sourceFiles': '스크린샷 · PDF · 메모 파일',
+  'welcome.instagram': 'Instagram Saved',
   'welcome.comingSoon': '준비중',
-  'toast.igSoon': 'Instagram 저장물 가져오기는 준비 중이에요 — 안내와 함께 곧 열릴 거예요.',
+  'toast.igSoon': 'Instagram Saved 가져오기는 준비 중이에요 — 안내와 함께 곧 열릴 거예요.',
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = { en, ko };

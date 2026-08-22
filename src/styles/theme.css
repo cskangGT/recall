@@ -1321,7 +1321,7 @@ button {
   position: absolute;
   left: 0;
   right: 0;
-  top: 26%;
+  top: 15%;
   margin: 0;
   text-align: center;
   color: var(--text-dim);
@@ -3831,7 +3831,7 @@ body:lang(ko) {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(26% + 44px);
+  top: calc(15% + 46px);
   border: none;
   background: none;
   color: var(--text-faint);
@@ -3951,7 +3951,7 @@ body:lang(ko) {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(26% + 44px);
+  top: calc(15% + 46px);
   display: flex;
   gap: 22px;
   z-index: 3;
@@ -3969,7 +3969,7 @@ body:lang(ko) {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(26% + 76px);
+  top: calc(15% + 84px);
   z-index: 3;
   animation: none;
 }
