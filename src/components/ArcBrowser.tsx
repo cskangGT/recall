@@ -81,7 +81,9 @@ export function ArcBrowser() {
   const [fillOpen, setFillOpen] = useState(false);
   const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
   const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
-  const hasSourceChoices = canImportNotes || canImportNotion;
+  // Always at least two: the file picker and the Instagram door — the latter
+  // marked 준비중, but standing where testers can see it's coming.
+  const hasSourceChoices = true;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -508,10 +510,23 @@ export function ArcBrowser() {
       >
         {t('welcome.sourceFiles')}
       </button>
+      {/* Named but not yet open: the parser works, the guidance doesn't, and
+          a chip that opens a bare file picker loses people. The wizard ships;
+          until then the door says so honestly. */}
+      <button
+        className="arc__source arc__source--soon"
+        style={{ '--i': 1 } as React.CSSProperties}
+        data-testid="source-instagram"
+        aria-disabled="true"
+        onClick={() => useUiStore.getState().toast(t('toast.igSoon'))}
+      >
+        {t('welcome.instagram')}
+        <span className="arc__source-soon">{t('welcome.comingSoon')}</span>
+      </button>
       {canImportNotes && (
         <button
           className="arc__source"
-          style={{ '--i': 1 } as React.CSSProperties}
+          style={{ '--i': 2 } as React.CSSProperties}
           data-testid="source-notes"
           onClick={() => void importAppleNotesFlow()}
         >
@@ -521,7 +536,7 @@ export function ArcBrowser() {
       {canImportNotion && (
         <button
           className="arc__source"
-          style={{ '--i': canImportNotes ? 2 : 1 } as React.CSSProperties}
+          style={{ '--i': canImportNotes ? 3 : 2 } as React.CSSProperties}
           data-testid="source-notion"
           onClick={() => void importNotionFlow()}
         >
