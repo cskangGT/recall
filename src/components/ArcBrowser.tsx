@@ -754,13 +754,29 @@ export function ArcBrowser() {
             <p className="arc__prompt">{heading}</p>
             {/* The quiet door to today's page — home should always know the
                 way to the diary. */}
-            <button
-              className="arc__diarylink"
-              data-testid="home-diary-link"
-              onClick={() => useUiStore.getState().setView('diary')}
-            >
-              ✎ {t('arc.diaryLink')}
-            </button>
+            <span className="arc__homelinks">
+              <button
+                className="arc__diarylink"
+                data-testid="home-diary-link"
+                onClick={() => useUiStore.getState().setView('diary')}
+              >
+                ✎ {t('arc.diaryLink')}
+              </button>
+              {/* The import door must outlive the welcome — 'bring in my Mac
+                  notes' is a mid-session thought, not a first-visit one. */}
+              <button
+                className="arc__diarylink"
+                data-testid="home-import-link"
+                onClick={() => {
+                  if (hasSourceChoices) setFillOpen((v) => !v);
+                  else fileInputRef.current?.click();
+                }}
+              >
+                ⤓ {t('arc.importLink')}
+              </button>
+            </span>
+            {fillSources}
+            {fileInput}
           </>
         ) : (
           <div className="arc__greeting" data-testid="welcome">

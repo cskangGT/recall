@@ -3945,3 +3945,34 @@ body:lang(ko) {
   line-height: 1.8;
   text-wrap: pretty;
 }
+
+/* Home's quiet links sit side by side under the prompt. */
+.arc__homelinks {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(26% + 44px);
+  display: flex;
+  gap: 22px;
+  z-index: 3;
+  white-space: nowrap;
+}
+
+.arc__homelinks .arc__diarylink {
+  position: static;
+  transform: none;
+}
+
+/* The chips opened from home's import link — pinned under the links, since
+   the resting state has no greeting container to flow inside. */
+.arc > .arc__sources {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(26% + 82px);
+  z-index: 3;
+}
+
+.arc > .arc__sources .arc__source {
+  white-space: nowrap;
+}
