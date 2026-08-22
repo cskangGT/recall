@@ -9,7 +9,6 @@ import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
-import { RecentStars } from './RecentStars';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
 import { startUpgrade } from '../billing/upgrade';
@@ -590,7 +589,6 @@ export function ArcBrowser() {
       ref={shellRef}
     >
       <CaptureStoryPanel />
-      <RecentStars />
 
       {/*
         Always mounted, shown with CSS. Anything that mounts or unmounts while an

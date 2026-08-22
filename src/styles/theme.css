@@ -3586,100 +3586,6 @@ body:lang(ko) {
   color: var(--text-faint);
 }
 
-/* ------------------------------------------------------------- recent sky
-   Recent memories as stars in the upper sky: newest brightest, returning
-   thoughts larger, a hover whispers the text. The emotional half of browse. */
-.recentsky {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.recentstar {
-  position: absolute;
-  pointer-events: auto;
-  width: 22px;
-  height: 22px;
-  margin: -11px;
-  display: grid;
-  place-items: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-/* The same four-pointed star the arc wears, dimmed by age and breathing
-   slowly out of phase — a sky, not a scatter of LEDs. */
-.recentstar__glint {
-  display: block;
-  opacity: calc(0.38 + var(--star-brightness) * 0.62);
-  transition: transform 180ms ease, opacity 180ms ease;
-  animation: recentstar-breathe 5.2s ease-in-out infinite;
-  animation-delay: var(--twinkle-delay);
-}
-
-@keyframes recentstar-breathe {
-  0%, 100% { filter: brightness(0.82); }
-  50% { filter: brightness(1.3); }
-}
-
-.recentstar:hover .recentstar__glint,
-.recentstar:focus-visible .recentstar__glint {
-  transform: scale(1.35);
-  opacity: 1;
-  animation-play-state: paused;
-  filter: brightness(1.35);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .recentstar__glint {
-    animation: none;
-  }
-}
-
-/* The whisper: the memory's own words, near the star that holds them. */
-.recentstar__whisper {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 61;
-  width: max-content;
-  max-width: 300px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--edge);
-  background: var(--bg-raised);
-  color: var(--text);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  text-align: left;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 140ms ease 120ms;
-}
-
-.recentstar:hover .recentstar__whisper,
-.recentstar:focus-visible .recentstar__whisper {
-  opacity: 1;
-}
-
-.recentstar__times {
-  color: var(--accent);
-}
-
-/* Whispers near the edges hug them instead of clipping off-screen. */
-.recentstar--left .recentstar__whisper {
-  left: 0;
-  transform: none;
-}
-
-.recentstar--right .recentstar__whisper {
-  left: auto;
-  right: 0;
-  transform: none;
-}
 
 /* ------------------------------------------------------------------ diary
    A page under the dusk sky. The calendar floats translucent on the left;
@@ -3942,11 +3848,6 @@ body:lang(ko) {
 
 /* ---------------------------------------------------------- diary ceremony
    Saving a day is a star being born: light lifts from the button, drifts
-   skyward and dissolves — the same glow the recent sky wears, because it is
-   genuinely about to appear there. */
-.diary__actions {
-  position: relative;
-}
 
 .diary__risingstar {
   position: absolute;

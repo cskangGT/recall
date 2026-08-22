@@ -133,7 +133,6 @@ const en = {
   'welcome.diaryHint': 'One page a day — your future self will ask about it',
   'arc.diaryLink': 'Write about today',
   'welcome.prompt': 'Where would you like to look?',
-  'recent.aria': 'Your recent memories, as stars — newest brightest',
   'welcome.emptyTitle': 'Nothing up here yet.',
   'welcome.emptyAside':
     `Paste a note, a link, or a screenshot below and ${PRODUCT} will read it and find it a place. The map builds itself from there.`,
@@ -436,7 +435,6 @@ const ko: Record<StringKey, string> = {
   'welcome.diaryHint': '하루 한 페이지 — 나중의 내가 물어볼 거예요',
   'arc.diaryLink': '오늘 하루 기록하기',
   'welcome.prompt': '어디를 들여다볼까요?',
-  'recent.aria': '최근의 기억들 — 새것일수록 밝아요',
   'welcome.emptyTitle': '아직 아무것도 없어요.',
   'welcome.emptyAside': `아래에 메모, 링크, 스크린샷을 붙여넣으면 ${PRODUCT}가 읽고 자리를 찾아줘요. 지도는 거기서부터 자라나요.`,
   'answer.heading': `${PRODUCT}가 꺼내온 것`,
