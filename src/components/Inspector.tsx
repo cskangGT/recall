@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { mergeCandidates, relatedMemories } from '../core/related';
+import { effectivePlan, freeCutoff, sleepingCountOf, trialDaysLeft } from '../core/plan';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
@@ -523,6 +524,32 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
           categories: payload.categories.length,
         })}
       </div>
+      {/* The plan, where the scale already is: a trial counts down, and on
+          free the sleeping count is the quiet standing door to waking. */}
+      {(() => {
+        const tDays = trialDaysLeft(payload.workspace);
+        if (tDays !== null) {
+          return (
+            <div className="stats stats--trial" data-testid="trial-countdown">
+              {t('inspector.trial', { days: tDays })}
+            </div>
+          );
+        }
+        const sleeping = sleepingCountOf(
+          payload.memories,
+          freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace)),
+        );
+        if (sleeping === 0) return null;
+        return (
+          <button
+            className="stats stats--sleeping"
+            data-testid="sleeping-count"
+            onClick={() => useUiStore.getState().setUpgradeSheet(true)}
+          >
+            {t('inspector.sleeping', { count: sleeping })}
+          </button>
+        );
+      })()}
 
       {/*
         A legend, on the one screen that needs one.

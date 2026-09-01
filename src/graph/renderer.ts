@@ -155,11 +155,13 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     if (!visible(n)) continue;
     const { sx, sy } = worldToScreen(n, camera, viewport);
     const hovered = s.hoveredId === n.id;
-    const scale = (s.scaleOverrides?.get(n.id) ?? 1) * (hovered ? 1.15 : 1);
+    const scale = (s.scaleOverrides?.get(n.id) ?? 1) * (hovered ? 1.15 : 1) * (n.sleeping ? 0.75 : 1);
     const r = screenRadius(n.kind, n.radius, camera.zoom) * scale;
     if (r <= 0) continue;
 
-    const nodeAlpha = alphaFor(n.id) * (n.kind === 'entity' && !hovered ? entityFade : 1);
+    // A sleeping memory is present but dim — visibly kept, visibly not shining.
+    const sleepFade = n.sleeping ? 0.3 : 1;
+    const nodeAlpha = alphaFor(n.id) * (n.kind === 'entity' && !hovered ? entityFade : 1) * sleepFade;
     const base = colorFor(n.kind);
     if (desaturated.has(n.id)) {
       ctx.fillStyle = desaturate(base);

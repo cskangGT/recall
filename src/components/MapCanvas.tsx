@@ -17,6 +17,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
 import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
 import type { GraphNode } from '../core/types';
+import { t } from '../i18n';
 import type { ReorgEvent } from '../core/applyReorg';
 
 export interface RunningAnimation {
@@ -456,6 +457,12 @@ export function MapCanvas({
         if (start && Math.hypot(p.sx - start.sx, p.sy - start.sy) > 4) return;
         const hit = hitTest(nodes, camera(), viewportOf(), p);
         const ui = useUiStore.getState();
+        if (hit?.sleeping) {
+          // A sleeping star answers with why it is dim, and the door to wake it.
+          ui.toast(t('toast.sleepingTap'));
+          ui.setUpgradeSheet(true);
+          return;
+        }
         if (hit) {
           ui.select(hit.id);
           // A lit search hit pulls you in when clicked — the word you found

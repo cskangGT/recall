@@ -3,6 +3,7 @@ import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { FolderView } from './FolderView';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { effectivePlan, freeCutoff, isArchivedByPlan } from '../core/plan';
 import type { GraphPayload, Source, SourceType } from '../core/types';
 
 /**
@@ -130,6 +131,21 @@ export function SourcesView() {
       setRetrying(null);
     }
   };
+
+  /* Which of each source's memories the free plan has put to sleep — shown
+     beside the count, so the loss has an address, not just a number. */
+  const sleepingBySource = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!payload) return map;
+    const cutoff = freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace));
+    if (cutoff === null) return map;
+    for (const m of payload.memories) {
+      if (isArchivedByPlan(m.created_at, cutoff)) {
+        map.set(m.source_id, (map.get(m.source_id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [payload]);
 
   const rows = useMemo(
     () => (payload ? buildSourceRows(payload, filter) : []),
@@ -278,7 +294,15 @@ export function SourcesView() {
               {retrying === source.id ? t('sources.retrying') : t('sources.retry')}
             </button>
           ) : (
-            <span className="source-row__count">{memoryCount}</span>
+            <span className="source-row__count">
+              {memoryCount}
+              {sleepingBySource.get(source.id) ? (
+                <span className="source-row__sleeping">
+                  {' · '}
+                  {t('sources.sleeping', { count: sleepingBySource.get(source.id)! })}
+                </span>
+              ) : null}
+            </span>
           )}
         </div>
       ))}

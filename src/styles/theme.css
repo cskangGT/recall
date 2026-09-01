@@ -4095,17 +4095,23 @@ body:lang(ko) {
 
 /* The morning card — the day-after proof that time makes this better.
    One raised surface under the greeting cluster; the fan stays clear. */
+/* Centered by a flex wrapper, not translateX — the rise animation's fill
+   would clobber a transform-based centering. */
 .arc__morning {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   top: calc(15% + 84px);
   display: flex;
+  justify-content: center;
   align-items: flex-start;
   gap: 4px;
-  max-width: 440px;
   z-index: 3;
   animation: rise 0.3s ease both;
+}
+
+.arc__morning-body {
+  max-width: 440px;
 }
 
 .arc__morning-body {
@@ -4189,4 +4195,167 @@ body:lang(ko) {
 .arc__profile-chip--on {
   border-color: var(--accent-dim);
   color: var(--accent);
+}
+
+/* ---- the wake economy: sleeping stars, the sleep card, the sheet, the
+   awakening. Loss is shown as fact; the ask is one raised surface. ---- */
+
+.stats--trial {
+  margin-top: 2px;
+  color: var(--accent-dim);
+}
+
+.stats--sleeping {
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-dim);
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.stats--sleeping:hover {
+  color: var(--accent);
+}
+
+.source-row__sleeping {
+  color: var(--text-faint);
+}
+
+.arc__morning-body--static {
+  cursor: default;
+}
+
+.arc__sleep-mem {
+  filter: blur(4px);
+  user-select: none;
+}
+
+.arc__sleep-wake {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #171310;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.arc__sleep-wake:hover {
+  background: var(--accent-dim);
+}
+
+/* The awakening — every star pulses back to full, once, then stillness. */
+.arc--awaken .arc__node {
+  animation: awaken-pulse 1.6s ease both;
+}
+
+@keyframes awaken-pulse {
+  0% { filter: brightness(0.6); }
+  45% { filter: brightness(1.5); }
+  100% { filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc--awaken .arc__node {
+    animation: none;
+  }
+}
+
+/* The sheet: the one door to payment. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 11, 0.72);
+  z-index: 40;
+}
+
+.sheet__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(400px, calc(100vw - 48px));
+  padding: 26px 28px;
+  background: var(--bg-panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  animation: rise 0.25s ease both;
+}
+
+.sheet__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.sheet__body {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.sheet__price {
+  margin: 4px 0 0;
+  font-size: var(--text-lg);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet__terms {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+.sheet__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.sheet__cta {
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #171310;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet__cta:hover {
+  background: var(--accent-dim);
+}
+
+.sheet__later {
+  padding: 9px 4px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.sheet__later:hover {
+  color: var(--text-dim);
+}
+
+.sheet__trust {
+  margin: 6px 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
 }

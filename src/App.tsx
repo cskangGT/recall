@@ -17,6 +17,7 @@ import { importFiles, isTextLike, isZip } from './capture/importFiles';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
 import { ReviewPanel } from './components/ReviewPanel';
+import { UpgradeSheet } from './components/UpgradeSheet';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
 import { reorgMotion } from './capture/reorgMotion';
@@ -79,10 +80,28 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('upgraded') !== '1') return;
-    useUiStore.getState().toast(t('toast.upgraded'));
     params.delete('upgraded');
     const query = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    // The webhook that flips the plan often lands after this redirect. Ask
+    // again for a few beats rather than showing a stale free sky; when Pro is
+    // confirmed, the awakening plays — once.
+    let tries = 0;
+    const confirm = async () => {
+      const plan = useWorkspaceStore.getState().payload?.workspace.plan;
+      if (plan === 'pro' || plan === undefined) {
+        useUiStore.getState().setAwaken(true);
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      if (++tries > 5) {
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      await useWorkspaceStore.getState().load().catch(() => {});
+      setTimeout(() => void confirm(), 2000);
+    };
+    setTimeout(() => void confirm(), 400);
   }, []);
 
   useEffect(() => {
@@ -392,6 +411,7 @@ export function App() {
       <Inspector />
       <BatchReveal />
       <ReviewPanel />
+      <UpgradeSheet />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
       {settingsOpen && <Settings />}

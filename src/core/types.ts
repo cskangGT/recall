@@ -99,7 +99,14 @@ export interface RelatesToEdge {
 
 export interface GraphPayload {
   /** `plan` is optional because seed payloads predate it; absent means 'pro'. */
-  workspace: { id: string; name: string; auto_reorganize: boolean; plan?: 'free' | 'pro' };
+  workspace: {
+    id: string;
+    name: string;
+    auto_reorganize: boolean;
+    plan?: 'free' | 'pro';
+    /** The Pro trial's last instant on a hosted free workspace; null/absent after it ends or off-plan. */
+    trial_until?: string | null;
+  };
   sources: Source[];
   memories: Memory[];
   categories: Category[];
@@ -121,6 +128,8 @@ export interface GraphNode {
   parentId: string | null;
   /** Member count for category nodes — drawn into the label so size never has to carry it alone. */
   count?: number;
+  /** A memory the free plan has put to sleep — drawn dim, woken by upgrading. */
+  sleeping?: boolean;
 }
 
 export type EdgeKind = 'contains' | 'mentions' | 'relates_to';

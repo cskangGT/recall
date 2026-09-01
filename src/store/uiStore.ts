@@ -141,6 +141,10 @@ interface UiState {
    * by ArcBrowser after the reveal closes, then cleared.
    */
   skyCeremony: { categoryIds: string[] } | null;
+  /** The pre-checkout sheet — every wake CTA passes through it. */
+  upgradeSheet: boolean;
+  /** The post-payment moment: every sleeping star brightens, once. */
+  awaken: boolean;
   /**
    * The review stepper — one source's original against what Mado made of it,
    * with the user's verdicts (spec §21). Non-null while reviewing; `index`
@@ -186,6 +190,8 @@ interface UiState {
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
   setSkyCeremony: (state: { categoryIds: string[] } | null) => void;
+  setUpgradeSheet: (open: boolean) => void;
+  setAwaken: (on: boolean) => void;
   openReview: (sourceIds: string[]) => void;
   /** Steps to the next source, or closes after the last one. */
   advanceReview: () => void;
@@ -230,6 +236,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   dropActive: false,
   batchReveal: null,
   skyCeremony: null,
+  upgradeSheet: false,
+  awaken: false,
   review: null,
   toasts: [],
 
@@ -349,6 +357,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
   setSkyCeremony: (skyCeremony) => set({ skyCeremony }),
+  setUpgradeSheet: (upgradeSheet) => set({ upgradeSheet }),
+  setAwaken: (awaken) => set({ awaken }),
   // Opening the review dismisses the reveal — they occupy the same attention.
   openReview: (sourceIds) =>
     set(sourceIds.length > 0 ? { review: { sourceIds, index: 0 }, batchReveal: null } : {}),
@@ -366,6 +376,10 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   escape: () => {
     const s = get();
+    if (s.upgradeSheet) {
+      set({ upgradeSheet: false });
+      return;
+    }
     // The declaration is dismissable like any modal; the reading and organizing
     // phases are not — an Escape mid-pipeline would hide work that is still
     // happening, not cancel it.

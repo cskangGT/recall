@@ -136,6 +136,9 @@ const server = createApiServer(
       // two weeks, and billing is the way up. A self-hosted instance never
       // takes this path and stays 'pro' — it owns its keys and pays nobody.
       repo.setPlan(id, 'free');
+      // Two honest weeks of Pro first — the trial is as long as the free
+      // window, so the day it ends is the day the first drop starts to sleep.
+      repo.setTrialUntil(id, new Date(Date.now() + 14 * 86400_000).toISOString());
       return id;
     },
     inviteToken: INVITE,

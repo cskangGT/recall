@@ -10,8 +10,7 @@ import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
-import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
-import { startUpgrade } from '../billing/upgrade';
+import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { importFiles } from '../capture/importFiles';
 import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
 import { runAsk } from '../ask/runAsk';
@@ -289,13 +288,22 @@ export function ArcBrowser() {
   const planCutoff = useMemo(
     () =>
       payload
-        ? freeCutoff(payload.memories, currentPlan(undefined, payload.workspace.plan))
+        ? freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace))
         : null,
     [payload],
   );
   const archivedCount = showingAnswer
     ? 0
     : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
+
+  /*
+   * The answer as Pro's demo: citations are never redacted (above), so when
+   * an answer leaned on sleeping memories, one line under it says so. The
+   * moment a question touches the locked past is the moment the lock matters.
+   */
+  const sleepingCited = showingAnswer
+    ? answerMemories.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length
+    : 0;
 
   /*
    * The keyword lens. Sentences have to be read; keywords can be scanned — so
@@ -313,6 +321,12 @@ export function ArcBrowser() {
    * clears and every star returns.
    */
   const ceremony = useUiStore((s) => s.skyCeremony);
+  const awaken = useUiStore((s) => s.awaken);
+  useEffect(() => {
+    if (!awaken) return;
+    const id = setTimeout(() => useUiStore.getState().setAwaken(false), 4200);
+    return () => clearTimeout(id);
+  }, [awaken]);
   const revealOpen = useUiStore((s) => Boolean(s.batchReveal));
   const ceremonyActive = Boolean(ceremony) && !revealOpen;
   /*
@@ -352,6 +366,46 @@ export function ArcBrowser() {
   const closeMorning = () => {
     localStorage.setItem('mado.ob.morning', localDay(new Date()));
     setMorning(null);
+  };
+
+  /*
+   * The sleep card: the week's honest loss report, or — in a trial's last
+   * days — what is about to be lost. Value first (never before this person's
+   * own first drop), never beside the morning card, and rate-limited by the
+   * calendar, not by sessions.
+   */
+  const [sleepCard, setSleepCard] = useState<'week' | 'trial' | null | undefined>(undefined);
+  useEffect(() => {
+    if (sleepCard !== undefined || morning === undefined || !payload) return;
+    if (morning !== null || !localStorage.getItem('mado.ob.firstDrop')) {
+      setSleepCard(null);
+      return;
+    }
+    const tDays = trialDaysLeft(payload.workspace);
+    if (tDays !== null && tDays <= 3) {
+      if (localStorage.getItem('mado.ob.trialCard') !== localDay(new Date())) {
+        setSleepCard('trial');
+        return;
+      }
+    } else if (tDays === null && effectivePlan(undefined, payload.workspace) === 'free') {
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      if (
+        sleepingCountOf(payload.memories, planCutoff) > 0 &&
+        localStorage.getItem('mado.ob.sleepCard') !== localDay(monday)
+      ) {
+        setSleepCard('week');
+        return;
+      }
+    }
+    setSleepCard(null);
+  }, [payload, morning, sleepCard, planCutoff]);
+  const closeSleepCard = () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (sleepCard === 'trial') localStorage.setItem('mado.ob.trialCard', localDay(new Date()));
+    else localStorage.setItem('mado.ob.sleepCard', localDay(monday));
+    setSleepCard(null);
   };
 
   useEffect(() => {
@@ -685,7 +739,7 @@ export function ArcBrowser() {
      * said so, and you cannot aim at a box you cannot see.
      */
     <div
-      className={`arc${dragId !== null ? ' arc--dragging' : ''}${ceremonyActive ? ' arc--ceremony' : ''}`}
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}${ceremonyActive ? ' arc--ceremony' : ''}${awaken ? ' arc--awaken' : ''}`}
       data-testid="arc-browser"
       ref={shellRef}
     >
@@ -858,6 +912,12 @@ export function ArcBrowser() {
         </p>
       )}
 
+      {awaken && (
+        <p className="arc__ceremony" data-testid="awaken-line">
+          {t('awaken.line')}
+        </p>
+      )}
+
       {!isOpen &&
         (welcomeDismissed ? (
           <>
@@ -915,6 +975,57 @@ export function ArcBrowser() {
                   className="arc__morning-close"
                   aria-label={t('morning.dismiss')}
                   onClick={closeMorning}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {!morning && (sleepCard === 'week' || sleepCard === 'trial') && payload && (
+              <div className="arc__morning arc__morning--sleep" data-testid="sleep-card">
+                <div className="arc__morning-body arc__morning-body--static">
+                  <span className="arc__morning-line">
+                    {sleepCard === 'trial'
+                      ? t('sleepcard.trial', {
+                          days: trialDaysLeft(payload.workspace) ?? 0,
+                          count: sleepingCountOf(
+                            payload.memories,
+                            freeCutoff(payload.memories, 'free'),
+                          ),
+                        })
+                      : t('sleepcard.title', {
+                          count: sleepingCountOf(payload.memories, planCutoff),
+                        })}
+                  </span>
+                  {/* Two real sleeping memories, blurred — the loss is a fact,
+                      shown as one, never a mock. */}
+                  {payload.memories
+                    .filter((m) =>
+                      isArchivedByPlan(
+                        m.created_at,
+                        sleepCard === 'trial' ? freeCutoff(payload.memories, 'free') : planCutoff,
+                      ),
+                    )
+                    .slice(0, 2)
+                    .map((m) => (
+                      <span key={m.id} className="arc__morning-mem arc__sleep-mem" aria-hidden="true">
+                        {m.text}
+                      </span>
+                    ))}
+                  <button
+                    className="arc__sleep-wake"
+                    data-testid="sleep-card-wake"
+                    onClick={() => {
+                      closeSleepCard();
+                      useUiStore.getState().setUpgradeSheet(true);
+                    }}
+                  >
+                    {t('paywall.cta')}
+                  </button>
+                </div>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('sleepcard.dismiss')}
+                  onClick={closeSleepCard}
                 >
                   ×
                 </button>
@@ -1204,7 +1315,19 @@ export function ArcBrowser() {
             <button
               className="reading__upgrade"
               data-testid="plan-upgrade"
-              onClick={() => void startUpgrade()}
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
+            >
+              {t('paywall.cta')}
+            </button>
+          </div>
+        )}
+        {sleepingCited > 0 && (
+          <div className="reading__paywall" data-testid="answer-sleeping">
+            <span>{t('answer.sleeping', { count: sleepingCited })}</span>
+            <button
+              className="reading__upgrade"
+              data-testid="answer-wake"
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
             >
               {t('paywall.cta')}
             </button>

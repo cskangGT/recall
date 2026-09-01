@@ -66,6 +66,7 @@ export interface Repository {
   ): { id: string; name: string; auto_reorganize: boolean; plan: 'free' | 'pro' } | null;
   /** Billing writes this; nothing else does. */
   setPlan(id: string, plan: 'free' | 'pro'): void;
+  setTrialUntil(id: string, until: string): void;
   setAutoReorganize(id: string, enabled: boolean): void;
 
   /**

@@ -58,6 +58,7 @@ export class SqliteRepository implements Repository {
      * appear here, guarded, so an existing corpus catches up on next start.
      */
     this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
+    this.ensureColumn('workspaces', 'trial_until', 'TEXT');
     this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
     this.ensureColumn('sources', 'reviewed_at', 'TEXT');
     this.ensureColumn('sources', 'diary_date', 'TEXT');
@@ -110,6 +111,11 @@ export class SqliteRepository implements Repository {
     this.db.prepare('UPDATE workspaces SET plan = ? WHERE id = ?').run(plan, id);
   }
 
+  /** The Pro trial's last instant. Presentation only — the plan stays 'free'. */
+  setTrialUntil(id: string, until: string): void {
+    this.db.prepare('UPDATE workspaces SET trial_until = ? WHERE id = ?').run(until, id);
+  }
+
   // ---------------------------------------------------------------- graph read
 
   /**
@@ -137,7 +143,10 @@ export class SqliteRepository implements Repository {
     }
 
     return {
-      workspace: { id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan },
+      workspace: {
+        id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan,
+        trial_until: (ws as { trial_until?: string | null }).trial_until ?? null,
+      },
       sources: this.listSources(workspaceId).map(({ workspace_id: _w, ...s }) => ({
         id: s.id, type: s.type, title: s.title, raw_content: s.raw_content,
         scene_description: s.scene_description, url: s.url,
