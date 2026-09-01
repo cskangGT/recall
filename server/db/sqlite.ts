@@ -100,9 +100,9 @@ export class SqliteRepository implements Repository {
 
   getWorkspace(id: string) {
     const row = this.db
-      .prepare('SELECT id, name, auto_reorganize, plan FROM workspaces WHERE id = ?')
+      .prepare('SELECT id, name, auto_reorganize, plan, trial_until FROM workspaces WHERE id = ?')
       .get(id) as
-      | { id: string; name: string; auto_reorganize: number; plan: 'free' | 'pro' }
+      | { id: string; name: string; auto_reorganize: number; plan: 'free' | 'pro'; trial_until: string | null }
       | undefined;
     return row ? { ...row, auto_reorganize: bool(row.auto_reorganize) } : null;
   }
@@ -145,7 +145,7 @@ export class SqliteRepository implements Repository {
     return {
       workspace: {
         id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan,
-        trial_until: (ws as { trial_until?: string | null }).trial_until ?? null,
+        trial_until: ws.trial_until ?? null,
       },
       sources: this.listSources(workspaceId).map(({ workspace_id: _w, ...s }) => ({
         id: s.id, type: s.type, title: s.title, raw_content: s.raw_content,

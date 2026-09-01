@@ -44,3 +44,15 @@ describe('GET /api/capabilities', () => {
     expect(res.body).toEqual({ appleNotes: true, notion: false });
   });
 });
+
+describe('the trial rides the payload', () => {
+  it('setTrialUntil reaches the graph workspace', () => {
+    repo.createWorkspace({ id: 'ws_t', name: 't' });
+    repo.setPlan('ws_t', 'free');
+    repo.setTrialUntil('ws_t', '2027-01-01T00:00:00Z');
+    expect(repo.getGraphPayload('ws_t').workspace).toMatchObject({
+      plan: 'free',
+      trial_until: '2027-01-01T00:00:00Z',
+    });
+  });
+});
