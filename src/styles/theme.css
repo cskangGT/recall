@@ -2955,6 +2955,31 @@ button {
   color: var(--text-faint);
 }
 
+/* The observation — one quiet sentence on a raised surface, the batch's
+   retroactive insight. The name carries the amber; nothing else does. */
+.reveal__observe {
+  margin: 10px 0 0;
+  padding: 12px 18px;
+  max-width: 460px;
+  background: var(--bg-raised);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--text-dim);
+  animation: rise 0.3s ease both;
+  animation-delay: 0.15s;
+}
+
+.reveal__observe strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.reveal__observe strong:last-of-type {
+  color: var(--accent);
+}
+
 .reveal__chips {
   margin: 6px 0 0;
   padding: 0;
@@ -4020,4 +4045,148 @@ body:lang(ko) {
   font-size: var(--text-xs);
   color: var(--accent);
   letter-spacing: 0.04em;
+}
+
+/* The first-drop ceremony: the seeded sky steps back, this person's own
+   categories hold the light, one sentence hands the sky over. A single
+   staged moment, then everything returns — no lingering ambient motion. */
+.arc--ceremony .arc__node {
+  transition: opacity 0.9s ease;
+  opacity: 0.14;
+}
+
+.arc--ceremony .arc__node--ceremony-new {
+  opacity: 1;
+}
+
+.arc__ceremony {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  margin: 0;
+  text-align: center;
+  color: var(--text);
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 10px rgba(22, 13, 30, 0.85), 0 0 3px rgba(22, 13, 30, 0.7);
+  z-index: 4;
+  animation: ceremony-line 4.2s ease both;
+  pointer-events: none;
+}
+
+@keyframes ceremony-line {
+  0% { opacity: 0; transform: translateY(6px); }
+  12% { opacity: 1; transform: translateY(0); }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc--ceremony .arc__node {
+    transition: none;
+    opacity: 1;
+  }
+
+  .arc__ceremony {
+    animation: none;
+  }
+}
+
+/* The morning card — the day-after proof that time makes this better.
+   One raised surface under the greeting cluster; the fan stays clear. */
+.arc__morning {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(15% + 84px);
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 440px;
+  z-index: 3;
+  animation: rise 0.3s ease both;
+}
+
+.arc__morning-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+
+.arc__morning-body:hover {
+  border-color: var(--accent-dim);
+}
+
+.arc__morning-line {
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.arc__morning-mem {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+.arc__morning-mem--old {
+  color: var(--text-faint);
+}
+
+.arc__morning-close {
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  color: var(--text-faint);
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.arc__morning-close:hover {
+  color: var(--text-dim);
+}
+
+/* The sixty-second question — one quiet inline row above the doors.
+   Answering tailors the fill door's promise; ignoring it costs nothing. */
+.arc__profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 0 2px;
+}
+
+.arc__profile-q {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.arc__profile-chip {
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.arc__profile-chip:hover {
+  border-color: var(--accent-dim);
+}
+
+.arc__profile-chip--on {
+  border-color: var(--accent-dim);
+  color: var(--accent);
 }

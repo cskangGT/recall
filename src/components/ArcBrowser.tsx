@@ -15,6 +15,7 @@ import { startUpgrade } from '../billing/upgrade';
 import { importFiles } from '../capture/importFiles';
 import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
 import { runAsk } from '../ask/runAsk';
+import { morningCardOf, localDay, type MorningCard } from '../core/morning';
 import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
@@ -306,6 +307,61 @@ export function ArcBrowser() {
   const [lensKeywords, setLensKeywords] = useState<string[]>([]);
   useEffect(() => setLensKeywords([]), [openCategoryId]);
 
+  /*
+   * The first-drop ceremony plays only once the reveal is out of the way —
+   * the sky it narrates has to be visible. A few seconds, then the store
+   * clears and every star returns.
+   */
+  const ceremony = useUiStore((s) => s.skyCeremony);
+  const revealOpen = useUiStore((s) => Boolean(s.batchReveal));
+  const ceremonyActive = Boolean(ceremony) && !revealOpen;
+  /*
+   * The morning card: computed once against the first payload of the session,
+   * shown at most once per calendar day, and only when something new actually
+   * found something old overnight (morningCardOf's rules).
+   */
+  /*
+   * The sixty-second question (Duolingo-style, inline, ignorable): what has
+   * been piling up. The answer tailors the fill door's promise and survives
+   * reloads; skipping it costs nothing and is never asked again louder.
+   */
+  const [profile, setProfile] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('mado.ob.profile') ?? '[]');
+      return Array.isArray(stored) ? stored.filter((v): v is string => typeof v === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggleProfile = (kind: string) => {
+    const next = profile.includes(kind) ? profile.filter((k) => k !== kind) : [...profile, kind];
+    setProfile(next);
+    localStorage.setItem('mado.ob.profile', JSON.stringify(next));
+  };
+
+  const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
+  useEffect(() => {
+    if (morning !== undefined || !payload) return;
+    const today = localDay(new Date());
+    if (localStorage.getItem('mado.ob.morning') === today) {
+      setMorning(null);
+      return;
+    }
+    setMorning(morningCardOf(payload, new Date()));
+  }, [payload, morning]);
+  const closeMorning = () => {
+    localStorage.setItem('mado.ob.morning', localDay(new Date()));
+    setMorning(null);
+  };
+
+  useEffect(() => {
+    if (!ceremonyActive) return;
+    const reduced =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const id = setTimeout(() => useUiStore.getState().setSkyCeremony(null), reduced ? 2600 : 4200);
+    return () => clearTimeout(id);
+  }, [ceremonyActive]);
+
   // Derived from readable rows only: an archived memory's text is behind the
   // paywall, and a chip that quotes it would be reading it out loud.
   const readable = useMemo(
@@ -493,9 +549,34 @@ export function ArcBrowser() {
         }}
       >
         <span className="arc__door-name">{t('welcome.fill')}</span>
-        <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
+        <span className="arc__door-hint">
+          {t(
+            profile[0] === 'shots' ? 'welcome.fillHint.shots'
+            : profile[0] === 'links' ? 'welcome.fillHint.links'
+            : profile[0] === 'notes' ? 'welcome.fillHint.notes'
+            : 'welcome.fillHint',
+            { product: PRODUCT },
+          )}
+        </span>
       </button>
     </>
+  );
+
+  const profileRow = (
+    <div className="arc__profile" data-testid="welcome-profile">
+      <span className="arc__profile-q">{t('welcome.profileQ')}</span>
+      {(['shots', 'links', 'notes'] as const).map((kind) => (
+        <button
+          key={kind}
+          className={`arc__profile-chip${profile.includes(kind) ? ' arc__profile-chip--on' : ''}`}
+          data-testid={`profile-${kind}`}
+          aria-pressed={profile.includes(kind)}
+          onClick={() => toggleProfile(kind)}
+        >
+          {t(`welcome.profile.${kind}`)}
+        </button>
+      ))}
+    </div>
   );
 
   const fillSources = fillOpen && hasSourceChoices && (
@@ -604,7 +685,7 @@ export function ArcBrowser() {
      * said so, and you cannot aim at a box you cannot see.
      */
     <div
-      className={`arc${dragId !== null ? ' arc--dragging' : ''}`}
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}${ceremonyActive ? ' arc--ceremony' : ''}`}
       data-testid="arc-browser"
       ref={shellRef}
     >
@@ -704,6 +785,9 @@ export function ArcBrowser() {
                 // The category the last capture landed in, so the account in the
                 // panel and the thing on the arc are visibly the same category.
                 lastCapture?.destination === node.label ? 'arc__node--landed' : '',
+                ceremonyActive && ceremony!.categoryIds.includes(node.id)
+                  ? 'arc__node--ceremony-new'
+                  : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -768,6 +852,12 @@ export function ArcBrowser() {
         <Thinker size={(isOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
+      {ceremonyActive && (
+        <p className="arc__ceremony" data-testid="sky-ceremony">
+          {t('ceremony.line')}
+        </p>
+      )}
+
       {!isOpen &&
         (welcomeDismissed ? (
           <>
@@ -796,6 +886,40 @@ export function ArcBrowser() {
               </button>
             </span>
             {fillSources}
+            {morning && !fillOpen && (
+              <div className="arc__morning" data-testid="morning-card">
+                <button
+                  className="arc__morning-body"
+                  onClick={() => {
+                    closeMorning();
+                    const ui = useUiStore.getState();
+                    if (morning.kind === 'diary') {
+                      ui.setView('diary');
+                    } else {
+                      ui.openCategory(morning.recent.category_id);
+                      ui.select(morning.recent.id);
+                    }
+                  }}
+                >
+                  {morning.kind === 'diary' ? (
+                    <span className="arc__morning-line">{t('morning.diary')}</span>
+                  ) : (
+                    <>
+                      <span className="arc__morning-line">{t('morning.link')}</span>
+                      <span className="arc__morning-mem">{morning.recent.text}</span>
+                      <span className="arc__morning-mem arc__morning-mem--old">{morning.older.text}</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('morning.dismiss')}
+                  onClick={closeMorning}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {fileInput}
           </>
         ) : (
@@ -813,6 +937,7 @@ export function ArcBrowser() {
               <>
                 <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
                 <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
+                {profileRow}
                 <div className="arc__doors">{fillDoor}</div>
                 {fillSources}
                 {fileInput}
@@ -834,6 +959,7 @@ export function ArcBrowser() {
                   what the tool even is before feeding it anything. The second
                   door is the old Enter-to-look-around, given a surface.
                 */}
+                {profileRow}
                 <div className="arc__doors">
                   {fillDoor}
                   <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>

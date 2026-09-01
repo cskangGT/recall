@@ -64,9 +64,23 @@ export async function ingestBatch(
       await wait(ORGANIZE_MS);
     }
 
+    // Whether this was the first thing this person ever handed Mado, decided
+    // before the payload swap so "the sky that was already there" means the
+    // seed, not their own fresh stars.
+    const firstDrop = !localStorage.getItem('mado.ob.firstDrop');
+    const skyWasSeeded = ws.payload.memories.length > 0;
+
     useWorkspaceStore.getState().applyPayload(result.payload);
     // Putting something in is looking around — same rule as single capture.
     useUiStore.getState().dismissWelcome();
+    if (firstDrop && result.addedMemoryIds.length > 0) {
+      localStorage.setItem('mado.ob.firstDrop', '1');
+      // Only a seeded sky has something to step back — an empty one has no
+      // "someone else's stars" to hand over.
+      if (skyWasSeeded) {
+        useUiStore.getState().setSkyCeremony({ categoryIds: result.categories.map((c) => c.id) });
+      }
+    }
     // Oldest first, so the banner (history[0]) ends on the latest change.
     for (const event of result.events) useUiStore.getState().pushReorg(event);
 

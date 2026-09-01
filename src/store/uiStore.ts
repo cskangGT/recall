@@ -136,6 +136,12 @@ interface UiState {
   /** Non-null while a bulk drop is being read, organized, or declared. */
   batchReveal: BatchRevealState | null;
   /**
+   * The first-drop ceremony: the seeded sky steps back and this person's own
+   * categories hold the light for a few seconds. Set once by batchRun, played
+   * by ArcBrowser after the reveal closes, then cleared.
+   */
+  skyCeremony: { categoryIds: string[] } | null;
+  /**
    * The review stepper — one source's original against what Mado made of it,
    * with the user's verdicts (spec §21). Non-null while reviewing; `index`
    * walks `sourceIds` so a batch reviews as a sequence, a single source as a
@@ -179,6 +185,7 @@ interface UiState {
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
+  setSkyCeremony: (state: { categoryIds: string[] } | null) => void;
   openReview: (sourceIds: string[]) => void;
   /** Steps to the next source, or closes after the last one. */
   advanceReview: () => void;
@@ -222,6 +229,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
+  skyCeremony: null,
   review: null,
   toasts: [],
 
@@ -340,6 +348,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
+  setSkyCeremony: (skyCeremony) => set({ skyCeremony }),
   // Opening the review dismisses the reveal — they occupy the same attention.
   openReview: (sourceIds) =>
     set(sourceIds.length > 0 ? { review: { sourceIds, index: 0 }, batchReveal: null } : {}),
