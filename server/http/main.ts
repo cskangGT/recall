@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SqliteRepository } from '../db/sqlite.ts';
-import { importSeed, namespaceSeed, seedFor } from '../seed/import.ts';
+import { importSeed } from '../seed/import.ts';
 import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
@@ -129,15 +129,14 @@ const server = createApiServer(
      */
     createWorkspace: (locale?: 'en' | 'ko') => {
       const id = `ws_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-      // Namespaced, because the seed's primary keys are fixed and a second
-      // import of them collides — see `namespaceSeed`. The seed follows the
-      // visitor's language: a Korean tester's first map reads like their own
-      // life, not a founder's in English.
-      importSeed(repo, id, namespaceSeed(seedFor(locale), id));
+      // A first sky is empty. The seed is the founder's demo, not this
+      // person's memory — starting them inside someone else's stars made the
+      // first minutes a tour instead of an arrival. Everything they see from
+      // here on, they put there. (ws_demo keeps the seed for development.)
       // A visitor's workspace is the hosted consumer product: free remembers
       // two weeks, and billing is the way up. A self-hosted instance never
       // takes this path and stays 'pro' — it owns its keys and pays nobody.
-      repo.setPlan(id, 'free');
+      repo.createWorkspace({ id, name: locale === 'ko' ? '내 기억' : 'My memory', plan: 'free' });
       // Two honest weeks of Pro first — the trial is as long as the free
       // window, so the day it ends is the day the first drop starts to sleep.
       repo.setTrialUntil(id, new Date(Date.now() + 14 * 86400_000).toISOString());

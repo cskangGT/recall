@@ -707,7 +707,9 @@ export function ArcBrowser() {
     ? t('answer.heading')
     : openRow
       ? openRow.label
-      : t('welcome.prompt');
+      : payload && payload.memories.length === 0
+        ? t('welcome.emptyPrompt')
+        : t('welcome.prompt');
 
   /*
    * The composer's placeholder is the one place a question can be recommended
@@ -1065,7 +1067,17 @@ export function ArcBrowser() {
                 <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
                 <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
                 {profileRow}
-                <div className="arc__doors">{fillDoor}</div>
+                <div className="arc__doors">
+                  {fillDoor}
+                  <button
+                    className="arc__door"
+                    data-testid="door-diary"
+                    onClick={() => useUiStore.getState().setView('diary')}
+                  >
+                    <span className="arc__door-name">{t('welcome.diary')}</span>
+                    <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
+                  </button>
+                </div>
                 {fillSources}
                 {fileInput}
               </>
