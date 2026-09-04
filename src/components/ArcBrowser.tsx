@@ -12,7 +12,7 @@ import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { importFiles } from '../capture/importFiles';
-import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
+import { importAppleNotesFlow, importNotionFlow, lastSyncOf } from '../capture/batchRun';
 import { runAsk } from '../ask/runAsk';
 import { morningCardOf, localDay, type MorningCard } from '../core/morning';
 import { t, PRODUCT } from '../i18n';
@@ -663,9 +663,15 @@ export function ArcBrowser() {
           className="arc__source"
           style={{ '--i': 2 } as React.CSSProperties}
           data-testid="source-notes"
+          title={
+            lastSyncOf('notes')
+              ? t('welcome.syncTitle', { date: lastSyncOf('notes')!.slice(0, 10) })
+              : undefined
+          }
           onClick={() => void importAppleNotesFlow()}
         >
           {t('welcome.notes')}
+          {lastSyncOf('notes') && <span className="arc__source-sync">{t('welcome.syncBadge')}</span>}
         </button>
       )}
       {canImportNotion && (
@@ -943,6 +949,16 @@ export function ArcBrowser() {
                 }}
               >
                 ⤓ {t('arc.importLink')}
+              </button>
+              {/* The third door: not a record of the day, not an import —
+                  a thought that needs a place. Opens the memory-add bar,
+                  where Mado reads and files what gets poured in. */}
+              <button
+                className="arc__diarylink"
+                data-testid="home-think-link"
+                onClick={() => useUiStore.getState().setCaptureOpen(true)}
+              >
+                ✦ {t('arc.thinkLink')}
               </button>
             </span>
             {fillSources}

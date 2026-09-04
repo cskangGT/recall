@@ -14,14 +14,62 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
   const [hasImage, setHasImage] = useState(false);
+  /*
+   * The look-before-keeping step for links. A pasted URL is not yet a memory:
+   * the server reads the page, this card shows what it found, and the person
+   * decides. What was fetched then rides into capture as the content, so a
+   * kept link's memories come from the page, not from its address.
+   */
+  const [preview, setPreview] = useState<
+    | { loading: true; url: string }
+    | { loading: false; url: string; title: string | null; description: string | null; excerpt: string | null; failed?: boolean }
+    | null
+  >(null);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => ref.current?.focus(), []);
 
   const detected = detectCaptureType({ text, hasImage });
 
+  const keepLink = () => {
+    if (!preview || preview.loading) return;
+    const enriched = [preview.title, preview.description, preview.excerpt]
+      .filter(Boolean)
+      .join('\n');
+    setCaptureOpen(false);
+    onSubmit({
+      type: 'link',
+      content: enriched || preview.url,
+      url: preview.url,
+      referencedUrls: detected.referencedUrls,
+    });
+  };
+
   const submit = () => {
     if (!text.trim() && !hasImage) return;
+    if (preview && !preview.loading) {
+      keepLink();
+      return;
+    }
+    // A link goes through the look first — where the server can look at all.
+    const reader = useWorkspaceStore.getState().source.previewLink;
+    if (detected.type === 'link' && !hasImage && reader && !preview) {
+      const url = text.trim();
+      setPreview({ loading: true, url });
+      reader(url).then(
+        (p) => setPreview({ loading: false, ...p }),
+        () =>
+          setPreview({
+            loading: false,
+            url,
+            title: null,
+            description: null,
+            excerpt: null,
+            failed: true,
+          }),
+      );
+      return;
+    }
     setCaptureOpen(false);
     /*
      * What you typed, sent on.
@@ -79,7 +127,10 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
           rows={3}
           placeholder={t('capture.placeholder')}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setPreview(null);
+          }}
           onPaste={(e) => {
             if (Array.from(e.clipboardData.items).some((i) => i.type.startsWith('image/'))) {
               setHasImage(true);
@@ -92,6 +143,42 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             }
           }}
         />
+        {preview && (
+          <div className="bar__preview" data-testid="link-preview">
+            {preview.loading ? (
+              <span className="bar__preview-reading">{t('capture.linkReading')}</span>
+            ) : (
+              <>
+                <span className="bar__preview-title">
+                  {preview.failed ? t('capture.linkFailed') : (preview.title ?? preview.url)}
+                </span>
+                {!preview.failed && (preview.description ?? preview.excerpt) && (
+                  <span className="bar__preview-desc">
+                    {preview.description ?? preview.excerpt}
+                  </span>
+                )}
+                <span className="bar__preview-ask">{t('capture.linkAsk')}</span>
+                <span className="bar__preview-actions">
+                  <button
+                    className="bar__preview-keep"
+                    data-testid="link-preview-keep"
+                    autoFocus
+                    onClick={keepLink}
+                  >
+                    {t('capture.linkKeep')}
+                  </button>
+                  <button
+                    className="bar__preview-skip"
+                    data-testid="link-preview-skip"
+                    onClick={() => setPreview(null)}
+                  >
+                    {t('capture.linkSkip')}
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
+        )}
         <div className="bar__foot">
           <div className="bar__types">
             {(['text', 'link', 'screenshot'] as SourceType[]).map((t) => (

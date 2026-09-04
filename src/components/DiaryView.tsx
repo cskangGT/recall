@@ -3,6 +3,7 @@ import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
+import { firstFlight } from '../capture/firstFlight';
 import type { GraphPayload, Source } from '../core/types';
 
 /**
@@ -102,6 +103,7 @@ export function DiaryView() {
     try {
       const store = useWorkspaceStore.getState();
       const title = t('diary.entryTitle', { date: formatDay(day, locale) });
+      let addedIds: string[] = [];
       if (store.source.capture) {
         const result = await store.source.capture({
           type: 'text',
@@ -110,6 +112,7 @@ export function DiaryView() {
           diaryDate: day,
         });
         store.applyPayload(result.graph);
+        addedIds = result.addedMemoryIds ?? [];
       } else {
         /*
          * Seed mode: the same entry through the local pipeline, quietly — a
@@ -124,6 +127,7 @@ export function DiaryView() {
           ),
         };
         store.applyPayload(stamped);
+        addedIds = result.addedMemoryIds;
       }
       setDraft('');
       /*
@@ -136,6 +140,9 @@ export function DiaryView() {
        */
       setRising((n) => n + 1);
       useUiStore.getState().toast(t('diary.saved'));
+      // First-ever kept thought: after the star has risen, the map shows
+      // where it joined the big picture. Later saves stay on this page.
+      firstFlight(addedIds, 2600);
     } catch {
       useUiStore.getState().toast(t('toast.batchFailed'));
     } finally {

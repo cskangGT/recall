@@ -20,6 +20,7 @@ import { ReviewPanel } from './components/ReviewPanel';
 import { UpgradeSheet } from './components/UpgradeSheet';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
+import { firstFlight } from './capture/firstFlight';
 import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
@@ -157,6 +158,10 @@ export function App() {
     // The ghost sits where the processing indicator was: right edge, mid-height.
     const camera = ui.camera ?? fitToBounds(ws.nodes, { w: 1200, h: 800 });
     const ghost = { x: camera.x + 520 / camera.zoom, y: camera.y };
+
+    // The onboarding beat: the very first kept thought ends on the map,
+    // where its star visibly joins the big picture.
+    firstFlight(result.addedMemoryIds);
 
     const motion = ws.payload
       ? reorgMotion(result.event, ws.payload)

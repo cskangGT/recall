@@ -115,18 +115,37 @@ export async function ingestBatch(
  * file drop gets. One round trip; the dots pour on the answer because there
  * is no honest per-item progress to show.
  */
+/**
+ * A connected reader is remembered, and the next visit offers *sync* instead
+ * of a fresh full import — only the days since the last one are read.
+ */
+export function lastSyncOf(reader: 'notes' | 'notion'): string | null {
+  return localStorage.getItem(`mado.ob.sync.${reader}`);
+}
+
+/** Days to ask the reader for: since the last sync (plus a day of overlap), or the default window. */
+function syncDays(reader: 'notes' | 'notion'): number | undefined {
+  const last = lastSyncOf(reader);
+  if (!last) return undefined;
+  const days = Math.ceil((Date.now() - Date.parse(last)) / 86400_000) + 1;
+  return Math.max(1, Math.min(days, 3650));
+}
+
 export async function importAppleNotesFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
-  return runReaderImport(source.importAppleNotes?.bind(source));
+  const read = source.importAppleNotes?.bind(source);
+  return runReaderImport(read && (() => read(syncDays('notes'))), 'notes');
 }
 
 export async function importNotionFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
-  return runReaderImport(source.importNotionPages?.bind(source));
+  const read = source.importNotionPages?.bind(source);
+  return runReaderImport(read && (() => read(syncDays('notion'))), 'notion');
 }
 
 async function runReaderImport(
   read: (() => Promise<import('../data/dataSource').NotesImportResult>) | undefined,
+  reader?: 'notes' | 'notion',
 ): Promise<void> {
   const ws = useWorkspaceStore.getState();
   const ui = useUiStore.getState();
@@ -145,6 +164,9 @@ async function runReaderImport(
     const before = ws.payload;
     const knownCategoryIds = new Set(before.categories.map((c) => c.id));
     const response = await read();
+    // The read succeeded — the connection holds, and the next visit syncs
+    // from here instead of importing the window again.
+    if (reader) localStorage.setItem(`mado.ob.sync.${reader}`, new Date().toISOString());
 
     if (response.notes.droppedSecretLines > 0) {
       useUiStore

@@ -39,6 +39,13 @@ export interface CaptureResult {
   note?: string;
 }
 
+export interface LinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  excerpt: string | null;
+}
+
 export interface CaptureBatchResult {
   /** One per item, in item order. */
   results: {
@@ -80,6 +87,8 @@ export interface DataSource {
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
   /** Reads the Mac's Notes.app — only a local darwin server can. */
   importAppleNotes?(days?: number): Promise<NotesImportResult>;
+  /** Reads a pasted link's title and excerpt so the person can decide to keep it. */
+  previewLink?(url: string): Promise<LinkPreview>;
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
   ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
@@ -291,6 +300,9 @@ export class ApiDataSource implements DataSource {
     });
     return { ...result, graph: validateSeed(result.graph) };
   }
+
+  previewLink?: (url: string) => Promise<LinkPreview> = (url) =>
+    this.post<LinkPreview>('/link/preview', { url });
 
   importAppleNotes?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/apple-notes', {

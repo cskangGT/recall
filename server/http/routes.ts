@@ -74,6 +74,8 @@ export interface Deps {
    * deployment simply lacks it.
    */
   readNotes?: (days: number) => Promise<NotesReadResult>;
+  /** Fetches a pasted link's title and excerpt, for the keep-or-not question. */
+  previewLink?: (url: string) => Promise<import('../link/preview.ts').LinkPreview>;
   /** Reads Notion pages via the official API — present when a token is configured. */
   readNotionPages?: (days: number) => Promise<NotesReadResult>;
 }
@@ -456,6 +458,24 @@ async function handleWorkspace(
    * configured — and everything a reader returns takes the exact same batch
    * path a file drop takes, so no two ways in can behave differently.
    */
+  /*
+   * POST /api/workspaces/:id/link/preview — read a link before keeping it.
+   * The client shows what came back and asks; nothing is written here.
+   */
+  if (req.method === 'POST' && resource === 'link' && resourceId === 'preview' && !action) {
+    if (!deps.previewLink) return { status: 501, body: { error: 'this server cannot read links' } };
+    const body = asRecord(req.body);
+    if (typeof body.url !== 'string' || !body.url.trim()) return badRequest('url is required');
+    try {
+      return ok(await deps.previewLink(body.url.trim()));
+    } catch (err) {
+      return {
+        status: 502,
+        body: { error: err instanceof Error ? err.message : 'could not read the link' },
+      };
+    }
+  }
+
   if (req.method === 'POST' && resource === 'import' && resourceId && !action) {
     const reader =
       resourceId === 'apple-notes' ? deps.readNotes
