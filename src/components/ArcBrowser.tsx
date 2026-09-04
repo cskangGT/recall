@@ -602,6 +602,7 @@ export function ArcBrowser() {
           else fileInputRef.current?.click();
         }}
       >
+        <span className="arc__door-star" aria-hidden="true" />
         <span className="arc__door-name">{t('welcome.fill')}</span>
         <span className="arc__door-hint">
           {t(
@@ -1074,6 +1075,7 @@ export function ArcBrowser() {
                     data-testid="door-diary"
                     onClick={() => useUiStore.getState().setView('diary')}
                   >
+                    <span className="arc__door-star" aria-hidden="true" />
                     <span className="arc__door-name">{t('welcome.diary')}</span>
                     <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
                   </button>
@@ -1102,6 +1104,7 @@ export function ArcBrowser() {
                 <div className="arc__doors">
                   {fillDoor}
                   <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
+                    <span className="arc__door-star" aria-hidden="true" />
                     <span className="arc__door-name">{t('welcome.browse')}</span>
                   </button>
                   <button
@@ -1109,6 +1112,7 @@ export function ArcBrowser() {
                     data-testid="door-diary"
                     onClick={() => useUiStore.getState().setView('diary')}
                   >
+                    <span className="arc__door-star" aria-hidden="true" />
                     <span className="arc__door-name">{t('welcome.diary')}</span>
                     <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
                   </button>
