@@ -19,6 +19,8 @@ export interface CaptureInput {
   title?: string;
   url?: string;
   imagePath?: string;
+  /** The photo itself, as a data URL — the server stores it and reads it back. */
+  imageData?: string;
   referencedUrls?: string[];
   /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
   diaryDate?: string;

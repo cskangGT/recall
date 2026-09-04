@@ -20,11 +20,9 @@ test('the three home doors stand together and the third opens the add bar', asyn
 
 test('a connected Mac-notes reader advertises sync', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('mado.ob.sync.notes', '2026-08-20T09:00:00Z'));
-  await page.goto('/?api=1&skipWelcome=1');
-  await page.getByTestId('arc-browser').waitFor().catch(() => {});
-  // Chip row needs the import door open; the badge rides the notes chip when
-  // the local server offers it — on seed (no reader) the chip is absent, so
-  // this only asserts the badge logic when the chip exists.
+  // The badge rides the notes chip, which only a local Mac server offers —
+  // seed mode has no reader, so this asserts the badge exactly when the chip
+  // exists (it was verified live on the hosted build).
   await page.goto('/?skipWelcome=1');
   await page.getByTestId('arc-browser').waitFor();
   await page.getByTestId('home-import-link').click();

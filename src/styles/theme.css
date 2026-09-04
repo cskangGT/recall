@@ -4443,3 +4443,117 @@ body:lang(ko) {
 .bar__preview-skip:hover {
   color: var(--text-dim);
 }
+
+/* ---- the capture bar learns the diary's dusk ----
+   Setting a thought down should feel like writing a page, not filing a
+   ticket: the diary's violet palette, its breathing editor, and a photo
+   laid beside the words. Tokens are re-pointed the way .shell--diary does,
+   so every rule inside keeps reading tokens. */
+.bar--capture {
+  --text: #f6f2fa;
+  --text-dim: #ded3e8;
+  --text-faint: #b2a3c2;
+  --accent: #cfcfd8;
+  --accent-dim: #8b8b96;
+  --bg-raised: rgb(56 41 76 / 82%);
+  --edge: rgb(236 224 246 / 18%);
+  background:
+    radial-gradient(circle at 18% 8%, rgb(120 96 160 / 14%), transparent 42%),
+    linear-gradient(180deg, rgb(30 22 44 / 94%), rgb(52 38 72 / 94%));
+  border: 1px solid rgb(236 224 246 / 14%);
+  backdrop-filter: blur(10px);
+  padding: 22px 26px 16px;
+}
+
+.bar--capture .bar__head {
+  text-transform: none;
+  letter-spacing: -0.015em;
+  font-size: 21px;
+  font-weight: 300;
+  color: var(--text);
+  margin-bottom: 14px;
+  align-items: baseline;
+}
+
+.bar--capture .bar__head :last-child {
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.bar--capture textarea {
+  background: rgb(10 8 18 / 32%);
+  border: 1px solid rgb(240 232 250 / 9%);
+  border-radius: 14px;
+  padding: 16px 18px;
+  min-height: 130px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.bar--capture textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.bar--capture textarea:focus {
+  outline: none;
+  border-color: rgb(240 232 250 / 22%);
+}
+
+.bar__photo {
+  position: relative;
+  align-self: flex-start;
+  margin-top: 10px;
+  display: inline-flex;
+}
+
+.bar__photo-img {
+  min-width: 56px;
+  min-height: 56px;
+  max-height: 120px;
+  max-width: 220px;
+  border-radius: 14px;
+  border: 1px solid rgb(240 232 250 / 14%);
+  background: rgb(10 8 18 / 32%);
+  object-fit: cover;
+}
+
+.bar__photo-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgb(30 22 44 / 92%);
+  color: var(--text-dim);
+  font-size: var(--text-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bar__photo-remove:hover {
+  color: var(--text);
+}
+
+.bar__foot-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bar__photo-add {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.bar__photo-add:hover {
+  color: var(--text-dim);
+}

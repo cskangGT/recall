@@ -7,6 +7,7 @@ import { selectAi } from '../ai/select.ts';
 import { selectBilling, StripeBilling } from '../billing/stripe.ts';
 import { readAppleNotes } from '../notes/appleNotes.ts';
 import { previewLink } from '../link/preview.ts';
+import { imageSaver } from '../link/saveImage.ts';
 import { readNotionPages } from '../notion/notionPages.ts';
 import { createApiServer } from './server.ts';
 
@@ -147,6 +148,10 @@ const server = createApiServer(
     // Only a Mac can press the Notes button — a hosted box answers 501.
     readNotes: process.platform === 'darwin' ? readAppleNotes : undefined,
     previewLink,
+    // Images land beside the database — a :memory: dev run keeps them in cwd.
+    saveImage: imageSaver(
+      DB_PATH === ':memory:' ? 'uploads' : `${DB_PATH}.uploads`,
+    ),
     readNotionPages: NOTION_TOKEN ? (days) => readNotionPages(NOTION_TOKEN, days) : undefined,
   },
   STATIC_ROOT,

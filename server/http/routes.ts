@@ -74,6 +74,8 @@ export interface Deps {
    * deployment simply lacks it.
    */
   readNotes?: (days: number) => Promise<NotesReadResult>;
+  /** Where uploaded capture images land; absent means images cannot be kept. */
+  saveImage?: (dataUrl: string) => Promise<string>;
   /** Fetches a pasted link's title and excerpt, for the keep-or-not question. */
   previewLink?: (url: string) => Promise<import('../link/preview.ts').LinkPreview>;
   /** Reads Notion pages via the official API — present when a token is configured. */
@@ -259,13 +261,25 @@ async function handleWorkspace(
     if (type !== 'text' && type !== 'link' && type !== 'screenshot') {
       return badRequest('type must be one of text, link, screenshot');
     }
+    // A photo written alongside the words: the client sends the image itself
+    // as a data URL, the server keeps it on disk, and from there the existing
+    // imagePath pipeline (normalize reads the file) carries it.
+    let uploadedPath: string | undefined;
+    if (typeof body.imageData === 'string' && body.imageData) {
+      if (!deps.saveImage) return badRequest('this server cannot store images');
+      try {
+        uploadedPath = await deps.saveImage(body.imageData);
+      } catch (err) {
+        return badRequest(err instanceof Error ? err.message : 'could not store the image');
+      }
+    }
     const result = await deps.ingest.ingest({
       workspaceId,
       type,
       content: typeof body.content === 'string' ? body.content : undefined,
       title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
-      imagePath: typeof body.imagePath === 'string' ? body.imagePath : undefined,
+      imagePath: uploadedPath ?? (typeof body.imagePath === 'string' ? body.imagePath : undefined),
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,

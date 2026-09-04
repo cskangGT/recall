@@ -13,7 +13,15 @@ import type { SourceType } from '../core/types';
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
-  const [hasImage, setHasImage] = useState(false);
+  /** The photo laid beside the words — kept as a data URL until submit. */
+  const [image, setImage] = useState<string | null>(null);
+  const hasImage = image !== null;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const readImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' && setImage(reader.result);
+    reader.readAsDataURL(file);
+  };
   /*
    * The look-before-keeping step for links. A pasted URL is not yet a memory:
    * the server reads the page, this card shows what it found, and the person
@@ -86,7 +94,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     onSubmit(
       hasImage
-        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+        ? {
+            type: 'screenshot',
+            content: text.trim(),
+            // The API stores the photo itself; the seed pipeline has no
+            // storage and falls back to its demo file as before.
+            imageData: image ?? undefined,
+            imagePath: '/seed/demo-screenshot.png',
+          }
         : {
             type: detected.type,
             content: text.trim(),
@@ -111,7 +126,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     <div className="overlay" {...useDismissable(() => setCaptureOpen(false))}>
       <div
-        className="bar"
+        className="bar bar--capture"
         data-testid="capture-bar"
         role="dialog"
         aria-modal="true"
@@ -132,15 +147,42 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             setPreview(null);
           }}
           onPaste={(e) => {
-            if (Array.from(e.clipboardData.items).some((i) => i.type.startsWith('image/'))) {
-              setHasImage(true);
-            }
+            const item = Array.from(e.clipboardData.items).find((i) =>
+              i.type.startsWith('image/'),
+            );
+            const file = item?.getAsFile();
+            if (file) readImage(file);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               submit();
             }
+          }}
+        />
+        {image && (
+          <div className="bar__photo" data-testid="capture-photo">
+            <img className="bar__photo-img" src={image} alt="" />
+            <button
+              className="bar__photo-remove"
+              data-testid="capture-photo-remove"
+              aria-label={t('capture.photoRemove')}
+              onClick={() => setImage(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          hidden
+          data-testid="capture-photo-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) readImage(file);
+            e.target.value = '';
           }}
         />
         {preview && (
@@ -185,13 +227,26 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
               <button
                 key={t}
                 className={`bar__type${detected.type === t ? ' bar__type--on' : ''}`}
-                onClick={() => t === 'screenshot' && setHasImage(!hasImage)}
+                onClick={() => {
+                  if (t !== 'screenshot') return;
+                  if (hasImage) setImage(null);
+                  else fileRef.current?.click();
+                }}
               >
                 {TYPE_LABEL[t]}
               </button>
             ))}
           </div>
-          <span>{t('capture.submit')}</span>
+          <span className="bar__foot-right">
+            <button
+              className="bar__photo-add"
+              data-testid="capture-photo-add"
+              onClick={() => fileRef.current?.click()}
+            >
+              {t('capture.photoAdd')}
+            </button>
+            <span>{t('capture.submit')}</span>
+          </span>
         </div>
       </div>
     </div>

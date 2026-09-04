@@ -160,8 +160,10 @@ const en = {
   'composer.askAction': 'Ask',
 
   // ---------------------------------------------------------------- capture bar
-  'capture.title': `Add to ${PRODUCT}`,
-  'capture.placeholder': 'Paste text, a link, or an image',
+  'capture.title': 'Set it down here',
+  'capture.placeholder': 'Write the thought as it is — a link or a photo can come along',
+  'capture.photoAdd': 'Add a photo',
+  'capture.photoRemove': 'Take the photo out',
   'capture.linkReading': 'Reading the link',
   'capture.linkAsk': 'Put this in your memory?',
   'capture.linkKeep': 'Keep it',
@@ -504,8 +506,10 @@ const ko: Record<StringKey, string> = {
   'composer.thinkingAria': '생각 중',
   'composer.askAction': '질문',
 
-  'capture.title': `${PRODUCT}에 추가`,
-  'capture.placeholder': '텍스트, 링크, 이미지를 붙여넣으세요',
+  'capture.title': '여기, 놓아두세요',
+  'capture.placeholder': '머무는 생각을 그대로 적어보세요 — 링크나 사진도 함께요',
+  'capture.photoAdd': '사진 넣기',
+  'capture.photoRemove': '사진 빼기',
   'capture.linkReading': '링크를 읽어보고 있어요',
   'capture.linkAsk': '이 링크, 기억에 넣을까요?',
   'capture.linkKeep': '기억에 넣기',
