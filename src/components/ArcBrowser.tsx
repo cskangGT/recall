@@ -10,11 +10,11 @@ import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
-import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
-import { startUpgrade } from '../billing/upgrade';
+import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { importFiles } from '../capture/importFiles';
-import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
+import { importAppleNotesFlow, importNotionFlow, lastSyncOf } from '../capture/batchRun';
 import { runAsk } from '../ask/runAsk';
+import { morningCardOf, localDay, type MorningCard } from '../core/morning';
 import { t, PRODUCT } from '../i18n';
 import type { SourceType } from '../core/types';
 
@@ -81,7 +81,9 @@ export function ArcBrowser() {
   const [fillOpen, setFillOpen] = useState(false);
   const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
   const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
-  const hasSourceChoices = canImportNotes || canImportNotion;
+  // Always at least two: the file picker and the Instagram door — the latter
+  // marked 준비중, but standing where testers can see it's coming.
+  const hasSourceChoices = true;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -286,13 +288,22 @@ export function ArcBrowser() {
   const planCutoff = useMemo(
     () =>
       payload
-        ? freeCutoff(payload.memories, currentPlan(undefined, payload.workspace.plan))
+        ? freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace))
         : null,
     [payload],
   );
   const archivedCount = showingAnswer
     ? 0
     : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
+
+  /*
+   * The answer as Pro's demo: citations are never redacted (above), so when
+   * an answer leaned on sleeping memories, one line under it says so. The
+   * moment a question touches the locked past is the moment the lock matters.
+   */
+  const sleepingCited = showingAnswer
+    ? answerMemories.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length
+    : 0;
 
   /*
    * The keyword lens. Sentences have to be read; keywords can be scanned — so
@@ -303,6 +314,120 @@ export function ArcBrowser() {
    */
   const [lensKeywords, setLensKeywords] = useState<string[]>([]);
   useEffect(() => setLensKeywords([]), [openCategoryId]);
+
+  /*
+   * The first-drop ceremony plays only once the reveal is out of the way —
+   * the sky it narrates has to be visible. A few seconds, then the store
+   * clears and every star returns.
+   */
+  const ceremony = useUiStore((s) => s.skyCeremony);
+  const awaken = useUiStore((s) => s.awaken);
+  useEffect(() => {
+    if (!awaken) return;
+    const id = setTimeout(() => useUiStore.getState().setAwaken(false), 4200);
+    return () => clearTimeout(id);
+  }, [awaken]);
+  const revealOpen = useUiStore((s) => Boolean(s.batchReveal));
+  const ceremonyActive = Boolean(ceremony) && !revealOpen;
+  /*
+   * The morning card: computed once against the first payload of the session,
+   * shown at most once per calendar day, and only when something new actually
+   * found something old overnight (morningCardOf's rules).
+   */
+  /*
+   * The sixty-second question (Duolingo-style, inline, ignorable): what has
+   * been piling up. The answer tailors the fill door's promise and survives
+   * reloads; skipping it costs nothing and is never asked again louder.
+   */
+  const [profile, setProfile] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('mado.ob.profile') ?? '[]');
+      return Array.isArray(stored) ? stored.filter((v): v is string => typeof v === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggleProfile = (kind: string) => {
+    const next = profile.includes(kind) ? profile.filter((k) => k !== kind) : [...profile, kind];
+    setProfile(next);
+    localStorage.setItem('mado.ob.profile', JSON.stringify(next));
+  };
+  /*
+   * The question is answered with a press, and the doors — the stars —
+   * rise only after it. Picking chips alone changed one hint, which read as
+   * nothing happening; an answer should visibly open the next step. Once
+   * answered (even with nothing picked), the stars are simply there.
+   */
+  const [profileDone, setProfileDone] = useState(
+    () => localStorage.getItem('mado.ob.profileDone') === '1',
+  );
+  const confirmProfile = () => {
+    localStorage.setItem('mado.ob.profileDone', '1');
+    setProfileDone(true);
+  };
+
+  const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
+  useEffect(() => {
+    if (morning !== undefined || !payload) return;
+    const today = localDay(new Date());
+    if (localStorage.getItem('mado.ob.morning') === today) {
+      setMorning(null);
+      return;
+    }
+    setMorning(morningCardOf(payload, new Date()));
+  }, [payload, morning]);
+  const closeMorning = () => {
+    localStorage.setItem('mado.ob.morning', localDay(new Date()));
+    setMorning(null);
+  };
+
+  /*
+   * The sleep card: the week's honest loss report, or — in a trial's last
+   * days — what is about to be lost. Value first (never before this person's
+   * own first drop), never beside the morning card, and rate-limited by the
+   * calendar, not by sessions.
+   */
+  const [sleepCard, setSleepCard] = useState<'week' | 'trial' | null | undefined>(undefined);
+  useEffect(() => {
+    if (sleepCard !== undefined || morning === undefined || !payload) return;
+    if (morning !== null || !localStorage.getItem('mado.ob.firstDrop')) {
+      setSleepCard(null);
+      return;
+    }
+    const tDays = trialDaysLeft(payload.workspace);
+    if (tDays !== null && tDays <= 3) {
+      if (localStorage.getItem('mado.ob.trialCard') !== localDay(new Date())) {
+        setSleepCard('trial');
+        return;
+      }
+    } else if (tDays === null && effectivePlan(undefined, payload.workspace) === 'free') {
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      if (
+        sleepingCountOf(payload.memories, planCutoff) > 0 &&
+        localStorage.getItem('mado.ob.sleepCard') !== localDay(monday)
+      ) {
+        setSleepCard('week');
+        return;
+      }
+    }
+    setSleepCard(null);
+  }, [payload, morning, sleepCard, planCutoff]);
+  const closeSleepCard = () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (sleepCard === 'trial') localStorage.setItem('mado.ob.trialCard', localDay(new Date()));
+    else localStorage.setItem('mado.ob.sleepCard', localDay(monday));
+    setSleepCard(null);
+  };
+
+  useEffect(() => {
+    if (!ceremonyActive) return;
+    const reduced =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const id = setTimeout(() => useUiStore.getState().setSkyCeremony(null), reduced ? 2600 : 4200);
+    return () => clearTimeout(id);
+  }, [ceremonyActive]);
 
   // Derived from readable rows only: an archived memory's text is behind the
   // paywall, and a chip that quotes it would be reading it out loud.
@@ -483,6 +608,7 @@ export function ArcBrowser() {
     <>
       <button
         className="arc__door arc__door--fill"
+        style={{ '--i': 0 } as React.CSSProperties}
         data-testid="door-fill"
         aria-expanded={hasSourceChoices ? fillOpen : undefined}
         onClick={() => {
@@ -490,33 +616,92 @@ export function ArcBrowser() {
           else fileInputRef.current?.click();
         }}
       >
+        <span className="arc__door-star" aria-hidden="true" />
         <span className="arc__door-name">{t('welcome.fill')}</span>
-        <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
+        <span className="arc__door-hint">
+          {t(
+            profile[0] === 'shots' ? 'welcome.fillHint.shots'
+            : profile[0] === 'links' ? 'welcome.fillHint.links'
+            : profile[0] === 'notes' ? 'welcome.fillHint.notes'
+            : 'welcome.fillHint',
+            { product: PRODUCT },
+          )}
+        </span>
       </button>
     </>
   );
 
+  const profileRow = (
+    <div className="arc__profile" data-testid="welcome-profile">
+      <span className="arc__profile-q">{t('welcome.profileQ')}</span>
+      {(['shots', 'links', 'notes'] as const).map((kind) => (
+        <button
+          key={kind}
+          className={`arc__profile-chip${profile.includes(kind) ? ' arc__profile-chip--on' : ''}`}
+          data-testid={`profile-${kind}`}
+          aria-pressed={profile.includes(kind)}
+          onClick={() => toggleProfile(kind)}
+        >
+          {t(`welcome.profile.${kind}`)}
+        </button>
+      ))}
+      {!profileDone && (
+        <button
+          className="arc__profile-confirm"
+          data-testid="profile-confirm"
+          onClick={confirmProfile}
+        >
+          {t('welcome.profileConfirm')}
+        </button>
+      )}
+    </div>
+  );
+
   const fillSources = fillOpen && hasSourceChoices && (
     <div className="arc__sources" data-testid="fill-sources">
+      {/* Each chip blooms a beat after the last — the menu unfolds from the
+          link instead of popping in beside it. */}
       <button
         className="arc__source"
+        style={{ '--i': 0 } as React.CSSProperties}
         data-testid="source-files"
         onClick={() => fileInputRef.current?.click()}
       >
         {t('welcome.sourceFiles')}
       </button>
+      {/* Named but not yet open: the parser works, the guidance doesn't, and
+          a chip that opens a bare file picker loses people. The wizard ships;
+          until then the door says so honestly. */}
+      <button
+        className="arc__source arc__source--soon"
+        style={{ '--i': 1 } as React.CSSProperties}
+        data-testid="source-instagram"
+        aria-disabled="true"
+        onClick={() => useUiStore.getState().toast(t('toast.igSoon'))}
+      >
+        {t('welcome.instagram')}
+        <span className="arc__source-soon">{t('welcome.comingSoon')}</span>
+      </button>
       {canImportNotes && (
         <button
           className="arc__source"
+          style={{ '--i': 2 } as React.CSSProperties}
           data-testid="source-notes"
+          title={
+            lastSyncOf('notes')
+              ? t('welcome.syncTitle', { date: lastSyncOf('notes')!.slice(0, 10) })
+              : undefined
+          }
           onClick={() => void importAppleNotesFlow()}
         >
           {t('welcome.notes')}
+          {lastSyncOf('notes') && <span className="arc__source-sync">{t('welcome.syncBadge')}</span>}
         </button>
       )}
       {canImportNotion && (
         <button
           className="arc__source"
+          style={{ '--i': canImportNotes ? 3 : 2 } as React.CSSProperties}
           data-testid="source-notion"
           onClick={() => void importNotionFlow()}
         >
@@ -546,7 +731,9 @@ export function ArcBrowser() {
     ? t('answer.heading')
     : openRow
       ? openRow.label
-      : t('welcome.prompt');
+      : payload && payload.memories.length === 0
+        ? t('welcome.emptyPrompt')
+        : t('welcome.prompt');
 
   /*
    * The composer's placeholder is the one place a question can be recommended
@@ -584,7 +771,7 @@ export function ArcBrowser() {
      * said so, and you cannot aim at a box you cannot see.
      */
     <div
-      className={`arc${dragId !== null ? ' arc--dragging' : ''}`}
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}${ceremonyActive ? ' arc--ceremony' : ''}${awaken ? ' arc--awaken' : ''}`}
       data-testid="arc-browser"
       ref={shellRef}
     >
@@ -684,6 +871,9 @@ export function ArcBrowser() {
                 // The category the last capture landed in, so the account in the
                 // panel and the thing on the arc are visibly the same category.
                 lastCapture?.destination === node.label ? 'arc__node--landed' : '',
+                ceremonyActive && ceremony!.categoryIds.includes(node.id)
+                  ? 'arc__node--ceremony-new'
+                  : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -748,9 +938,143 @@ export function ArcBrowser() {
         <Thinker size={(isOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
+      {ceremonyActive && (
+        <p className="arc__ceremony" data-testid="sky-ceremony">
+          {t('ceremony.line')}
+        </p>
+      )}
+
+      {awaken && (
+        <p className="arc__ceremony" data-testid="awaken-line">
+          {t('awaken.line')}
+        </p>
+      )}
+
       {!isOpen &&
         (welcomeDismissed ? (
-          <p className="arc__prompt">{heading}</p>
+          <>
+            <p className="arc__prompt">{heading}</p>
+            {/* The quiet door to today's page — home should always know the
+                way to the diary. */}
+            <span className="arc__homelinks">
+              <button
+                className="arc__diarylink"
+                data-testid="home-diary-link"
+                onClick={() => useUiStore.getState().setView('diary')}
+              >
+                ✎ {t('arc.diaryLink')}
+              </button>
+              {/* The import door must outlive the welcome — 'bring in my Mac
+                  notes' is a mid-session thought, not a first-visit one. */}
+              <button
+                className={`arc__diarylink${fillOpen ? ' arc__diarylink--open' : ''}`}
+                data-testid="home-import-link"
+                onClick={() => {
+                  if (hasSourceChoices) setFillOpen((v) => !v);
+                  else fileInputRef.current?.click();
+                }}
+              >
+                ⤓ {t('arc.importLink')}
+              </button>
+              {/* The third door: not a record of the day, not an import —
+                  a thought that needs a place. Opens the memory-add bar,
+                  where Mado reads and files what gets poured in. */}
+              <button
+                className="arc__diarylink"
+                data-testid="home-think-link"
+                onClick={() => useUiStore.getState().setCaptureOpen(true)}
+              >
+                ✦ {t('arc.thinkLink')}
+              </button>
+            </span>
+            {fillSources}
+            {morning && !fillOpen && (
+              <div className="arc__morning" data-testid="morning-card">
+                <button
+                  className="arc__morning-body"
+                  onClick={() => {
+                    closeMorning();
+                    const ui = useUiStore.getState();
+                    if (morning.kind === 'diary') {
+                      ui.setView('diary');
+                    } else {
+                      ui.openCategory(morning.recent.category_id);
+                      ui.select(morning.recent.id);
+                    }
+                  }}
+                >
+                  {morning.kind === 'diary' ? (
+                    <span className="arc__morning-line">{t('morning.diary')}</span>
+                  ) : (
+                    <>
+                      <span className="arc__morning-line">{t('morning.link')}</span>
+                      <span className="arc__morning-mem">{morning.recent.text}</span>
+                      <span className="arc__morning-mem arc__morning-mem--old">{morning.older.text}</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('morning.dismiss')}
+                  onClick={closeMorning}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {!morning && (sleepCard === 'week' || sleepCard === 'trial') && payload && (
+              <div className="arc__morning arc__morning--sleep" data-testid="sleep-card">
+                <div className="arc__morning-body arc__morning-body--static">
+                  <span className="arc__morning-line">
+                    {sleepCard === 'trial'
+                      ? t('sleepcard.trial', {
+                          days: trialDaysLeft(payload.workspace) ?? 0,
+                          count: sleepingCountOf(
+                            payload.memories,
+                            freeCutoff(payload.memories, 'free'),
+                          ),
+                        })
+                      : t('sleepcard.title', {
+                          count: sleepingCountOf(payload.memories, planCutoff),
+                        })}
+                  </span>
+                  {/* Two real sleeping memories, blurred — the loss is a fact,
+                      shown as one, never a mock. */}
+                  {payload.memories
+                    .filter((m) =>
+                      isArchivedByPlan(
+                        m.created_at,
+                        sleepCard === 'trial' ? freeCutoff(payload.memories, 'free') : planCutoff,
+                      ),
+                    )
+                    .slice(0, 2)
+                    .map((m) => (
+                      <span key={m.id} className="arc__morning-mem arc__sleep-mem" aria-hidden="true">
+                        {m.text}
+                      </span>
+                    ))}
+                  <button
+                    className="arc__sleep-wake"
+                    data-testid="sleep-card-wake"
+                    onClick={() => {
+                      closeSleepCard();
+                      useUiStore.getState().setUpgradeSheet(true);
+                    }}
+                  >
+                    {t('paywall.cta')}
+                  </button>
+                </div>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('sleepcard.dismiss')}
+                  onClick={closeSleepCard}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {fileInput}
+          </>
         ) : (
           <div className="arc__greeting" data-testid="welcome">
             {/*
@@ -766,7 +1090,22 @@ export function ArcBrowser() {
               <>
                 <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
                 <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
-                <div className="arc__doors">{fillDoor}</div>
+                {profileRow}
+                {profileDone && (
+                  <div className="arc__doors" data-testid="welcome-doors">
+                    {fillDoor}
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 1 } as React.CSSProperties}
+                      data-testid="door-diary"
+                      onClick={() => useUiStore.getState().setView('diary')}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.diary')}</span>
+                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
+                    </button>
+                  </div>
+                )}
                 {fillSources}
                 {fileInput}
               </>
@@ -787,12 +1126,31 @@ export function ArcBrowser() {
                   what the tool even is before feeding it anything. The second
                   door is the old Enter-to-look-around, given a surface.
                 */}
-                <div className="arc__doors">
-                  {fillDoor}
-                  <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
-                    <span className="arc__door-name">{t('welcome.browse')}</span>
-                  </button>
-                </div>
+                {profileRow}
+                {profileDone && (
+                  <div className="arc__doors" data-testid="welcome-doors">
+                    {fillDoor}
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 1 } as React.CSSProperties}
+                      data-testid="door-browse"
+                      onClick={dismissWelcome}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.browse')}</span>
+                    </button>
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 2 } as React.CSSProperties}
+                      data-testid="door-diary"
+                      onClick={() => useUiStore.getState().setView('diary')}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.diary')}</span>
+                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
+                    </button>
+                  </div>
+                )}
                 {fillSources}
                 {fileInput}
               </>
@@ -1023,7 +1381,19 @@ export function ArcBrowser() {
             <button
               className="reading__upgrade"
               data-testid="plan-upgrade"
-              onClick={() => void startUpgrade()}
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
+            >
+              {t('paywall.cta')}
+            </button>
+          </div>
+        )}
+        {sleepingCited > 0 && (
+          <div className="reading__paywall" data-testid="answer-sleeping">
+            <span>{t('answer.sleeping', { count: sleepingCited })}</span>
+            <button
+              className="reading__upgrade"
+              data-testid="answer-wake"
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
             >
               {t('paywall.cta')}
             </button>

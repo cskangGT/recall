@@ -1350,3 +1350,39 @@ These are engineering choices, not product choices. The implementer decides.
 - Test framework
 
 Any decision in this list that turns out to have a product-visible consequence — particularly rendering performance and processing latency — escalates back to this spec rather than being absorbed silently.
+
+---
+
+## §21. Import review & the curation signal (2026-08-20)
+
+**Why.** The first user's ask: see the original next to what Mado made of it, choose
+(keep / drop / rewrite), and have that choice *count*. The visible feature is a review
+surface; the real feature is the signal — every verdict is recorded and teaches the
+next extraction.
+
+**Timing decision: review AFTER save.** Two needs coexist — "drop now, check later"
+and "check right now" — and both are served by keeping ingest instant (the reveal's
+immediacy is the product's first joy) and opening the review door twice:
+1. right after the reveal ("정리 결과 검수하기 →", a stepper over the batch's sources), and
+2. any time later from Sources, where an unreviewed source says so.
+A pre-save gate was rejected: it turns every import into homework and kills the reveal.
+
+**Flow.** Review shows one source: the original text (verbatim, from `raw_content`)
+above the memories extracted from it. Each memory is Keep (default) / Drop / Edit
+(inline rewrite). One confirm applies everything atomically.
+
+**Endpoint.** `POST /workspaces/:id/sources/:sourceId/review`
+`{ discard: [memoryId], edits: [{ memoryId, text }] }` — unlisted memories are kept.
+In one transaction: discards delete (charter: nothing is lost — the verdict row keeps
+the text), edits re-embed and lock the assignment (a user edit is a fact), keeps are
+recorded, `sources.reviewed_at` is stamped; relates_to edges rebuild once.
+
+**The signal.** Table `curation(workspace_id, source_id, memory_text, verdict, edited_text,
+created_at)`. Uses, staged:
+- **v1 (now):** the last few discards ride into `buildExtractPrompt` as negative
+  examples — "this person removed extractions like these; skip anything similar."
+- v2: discarded terms down-weight the keyword lens; edited phrasings up-weight.
+- v3: a per-workspace taste profile steers category granularity and naming.
+
+**Honesty rules.** Review is offered, never owed — the map is complete without it.
+Mado never edits or deletes on its own; verdicts are the user's hand, recorded verbatim.

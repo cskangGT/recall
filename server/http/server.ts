@@ -126,6 +126,9 @@ export function createApiServer(
             // A browser attaches this to every non-GET and a page cannot forge
             // it; `originAllowed` is what it is for.
             origin: typeof req.headers.origin === 'string' ? req.headers.origin : undefined,
+            // What same-origin means here: an Origin naming this same host is
+            // the deployment's own client, wherever it is hosted.
+            host: typeof req.headers.host === 'string' ? req.headers.host : undefined,
           },
           deps,
         );

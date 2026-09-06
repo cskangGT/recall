@@ -113,6 +113,7 @@ export function buildExtractPrompt(input: {
   content: string;
   sceneDescription?: string;
   type: string;
+  rejectedExamples?: string[];
 }): string {
   return [
     'Pull out the things worth remembering from this, as atomic memories.',
@@ -133,6 +134,19 @@ export function buildExtractPrompt(input: {
     `At most ${MAX_MEMORIES}. Returning none is a valid answer — plenty of things`,
     'are not worth remembering, and an empty list is better than padding.',
     '',
+    /*
+     * The curation signal (spec §21): what this person cut in review teaches
+     * what not to extract. Negative examples, verbatim — the strongest
+     * personalization a prompt can carry without a fine-tune.
+     */
+    ...(input.rejectedExamples && input.rejectedExamples.length > 0
+      ? [
+          'This person reviewed past extractions and REMOVED ones like these.',
+          'Do not extract anything similar in kind:',
+          ...input.rejectedExamples.map((t) => `- ${t}`),
+          '',
+        ]
+      : []),
     'suggested_title: five words or fewer, naming the source, not the contents.',
     '',
     input.sceneDescription ? `What this capture is: ${input.sceneDescription}` : '',
@@ -545,4 +559,47 @@ export function answerSoFar(partialJson: string): string {
     } else out += next; // \" \\ \/ and anything else escaped literally
   }
   return out;
+}
+
+// ---------------------------------------------------------------- retrospect
+
+export const retroSchema = {
+  type: 'object',
+  properties: { reflection: { type: 'string' } },
+  required: ['reflection'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The look back. Same fixed voice as Ask — the remembering itself, never a
+ * report — but given room: a stretch of days wants a paragraph about how the
+ * thinking moved, not two cited sentences.
+ */
+export function buildRetroPrompt(input: {
+  entries: { date: string; text: string }[];
+  memories?: string[];
+  locale?: 'en' | 'ko';
+}): string {
+  return [
+    'Look back over these diary days as this person\'s own memory — you ARE',
+    'the remembering, not an assistant summarizing files. Say how the thinking',
+    'moved: what kept coming back, what shifted, what quietly resolved.',
+    'Four to seven sentences. Recall, never report — no "the entries show",',
+    'no "you wrote". In Korean use the soft recollective register (…였지,',
+    '…하고 있었잖아), never the formal report style. Answer in the language',
+    'the entries are written in. Mention days naturally ("8월 초에는…"),',
+    'not as a list.',
+    '',
+    'The days:',
+    ...input.entries.map((e) => `[${e.date}]\n${e.text}`),
+    ...(input.memories && input.memories.length > 0
+      ? ['', 'Also saved during these days (context, not the subject):',
+         ...input.memories.map((m) => `- ${m}`)]
+      : []),
+  ].join('\n');
+}
+
+export function coerceRetro(raw: unknown): { reflection: string } {
+  const o = (raw ?? {}) as { reflection?: unknown };
+  return { reflection: typeof o.reflection === 'string' ? o.reflection.trim() : '' };
 }

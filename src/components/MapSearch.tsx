@@ -37,6 +37,8 @@ const FILTERS: { id: SourceType | 'all'; label: string }[] = [
 export function MapSearch() {
   const payload = useWorkspaceStore((s) => s.payload);
   const setHighlight = useUiStore((s) => s.setHighlight);
+  const historyDepth = useUiStore((s) => s.cameraHistory.length);
+  const focusOn = useUiStore((s) => s.mapFocus !== null);
   const select = useUiStore((s) => s.select);
 
   const [query, setQuery] = useState('');
@@ -83,6 +85,12 @@ export function MapSearch() {
     } else if (owns.current) {
       owns.current = false;
       setHighlight([]);
+      // The regrouped view belongs to the query; it dissolves with it.
+      const ui = useUiStore.getState();
+      if (ui.mapFocus) {
+        ui.setMapFocus(null);
+        ui.requestCameraPop();
+      }
     }
   }, [searching, results, labelIds, setHighlight]);
 
@@ -109,6 +117,19 @@ export function MapSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
+            /*
+             * Enter gathers the results: the camera fits everything that lit
+             * up — memories and the labels themselves — so "search, then see
+             * them together" is one keystroke. ← walks back out.
+             */
+            if (e.key === 'Enter' && searching && results.length + labelIds.length > 0) {
+              // 2안: not a zoom to where they scattered — a regrouped view of
+              // just what matched, clustered fresh by category.
+              useUiStore
+                .getState()
+                .setMapFocus({ ids: [...results.map((r) => r.memory.id), ...labelIds] });
+              return;
+            }
             if (e.key !== 'Escape') return;
             // Same ladder as the composer: the first Escape hands the keyboard
             // back, so the single-key view shortcuts start working again.
@@ -123,6 +144,22 @@ export function MapSearch() {
           </span>
         )}
       </div>
+
+      {(historyDepth > 0 || focusOn) && (
+        <button
+          className="mapsearch__back"
+          data-testid="map-back"
+          onClick={() => {
+            const ui = useUiStore.getState();
+            // Leaving the regrouped view and stepping back the camera are one
+            // gesture: the constellation dissolves, the map returns as it was.
+            if (ui.mapFocus) ui.setMapFocus(null);
+            ui.requestCameraPop();
+          }}
+        >
+          ← {t('map.back')}
+        </button>
+      )}
 
       <div className="mapsearch__filters" role="group" aria-label="Filter by source type">
         {FILTERS.map((f) => (

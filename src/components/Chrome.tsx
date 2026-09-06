@@ -20,14 +20,27 @@ export function TopBar() {
   const setView = useUiStore((s) => s.setView);
   const payload = useWorkspaceStore((s) => s.payload);
 
+  /*
+   * The breadcrumb speaks only once there is a journey: at the top level it
+   * said '전체' — a location label for a walk not yet taken, which read as a
+   * mystery word (the user asked why it was there). Inside a category it
+   * names where you are, prefixed by the way back.
+   */
   const here =
     arcLevelId === null
-      ? t('topbar.everything')
-      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? t('topbar.everything'));
+      ? null
+      : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? null);
 
   return (
     <div className="topbar">
-      <span>{here}</span>
+      <span className="topbar__here">
+        {here !== null && (
+          <>
+            <span className="topbar__root">{t('topbar.everything')} › </span>
+            {here}
+          </>
+        )}
+      </span>
       <button className="topbar__link" data-testid="go-map" onClick={() => setView('map')}>
         {t('topbar.bigPicture')}
       </button>
@@ -54,12 +67,29 @@ export function LeftRail() {
      * that in a CSS class, which is invisible to everything but a monitor.
      */
     <nav className="rail" aria-label={t('rail.views')}>
-      <div className="rail__mark" aria-hidden="true">
+      {/* The logo is the way home — people press it on instinct, and the
+          instinct should be right. */}
+      <button
+        className="rail__mark"
+        data-testid="rail-home"
+        aria-label={t('rail.home')}
+        data-tip={t('rail.home.tip')}
+        onClick={() => useUiStore.getState().goHome()}
+      >
         M
-      </div>
+      </button>
+      <button
+        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.diary.tip')}
+        aria-label={t('rail.diary')}
+        data-testid="rail-diary"
+        onClick={() => setView('diary')}
+      >
+        <span aria-hidden="true">✎</span>
+      </button>
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
-        title={t('rail.map')}
+        data-tip={t('rail.map.tip')}
         aria-label={t('rail.map')}
         aria-current={view === 'map' ? 'page' : undefined}
         data-testid="rail-map"
@@ -69,7 +99,7 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
-        title={t('rail.browse')}
+        data-tip={t('rail.browse.tip')}
         aria-label={t('rail.browse')}
         aria-current={view === 'browse' ? 'page' : undefined}
         data-testid="rail-tree"
@@ -79,7 +109,7 @@ export function LeftRail() {
       </button>
       <button
         className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
-        title={t('rail.sources')}
+        data-tip={t('rail.sources.tip')}
         aria-label={t('rail.sources')}
         aria-current={view === 'sources' ? 'page' : undefined}
         data-testid="rail-sources"
@@ -89,7 +119,7 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title={t('rail.ask')}
+        data-tip={t('rail.ask.tip')}
         aria-label={t('rail.ask')}
         data-testid="rail-ask"
         onClick={() => setAskOpen(true)}
@@ -99,7 +129,7 @@ export function LeftRail() {
       <div className="rail__spacer" />
       <button
         className="rail__btn"
-        title={t('rail.settings')}
+        data-tip={t('rail.settings.tip')}
         aria-label={t('rail.settings')}
         data-testid="rail-settings"
         onClick={() => useUiStore.getState().setSettingsOpen(true)}
@@ -108,7 +138,7 @@ export function LeftRail() {
       </button>
       <button
         className="rail__btn"
-        title={t('rail.add')}
+        data-tip={t('rail.add.tip')}
         aria-label={t('rail.add')}
         data-testid="rail-capture"
         onClick={() => setCaptureOpen(true)}

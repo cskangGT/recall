@@ -3,6 +3,7 @@ import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
+import { DiaryView } from './components/DiaryView';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -15,8 +16,11 @@ import { ingestItem } from './capture/ingest';
 import { importFiles, isTextLike, isZip } from './capture/importFiles';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
+import { ReviewPanel } from './components/ReviewPanel';
+import { UpgradeSheet } from './components/UpgradeSheet';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
+import { firstFlight } from './capture/firstFlight';
 import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
@@ -77,10 +81,28 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('upgraded') !== '1') return;
-    useUiStore.getState().toast(t('toast.upgraded'));
     params.delete('upgraded');
     const query = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    // The webhook that flips the plan often lands after this redirect. Ask
+    // again for a few beats rather than showing a stale free sky; when Pro is
+    // confirmed, the awakening plays — once.
+    let tries = 0;
+    const confirm = async () => {
+      const plan = useWorkspaceStore.getState().payload?.workspace.plan;
+      if (plan === 'pro' || plan === undefined) {
+        useUiStore.getState().setAwaken(true);
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      if (++tries > 5) {
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      await useWorkspaceStore.getState().load().catch(() => {});
+      setTimeout(() => void confirm(), 2000);
+    };
+    setTimeout(() => void confirm(), 400);
   }, []);
 
   useEffect(() => {
@@ -136,6 +158,10 @@ export function App() {
     // The ghost sits where the processing indicator was: right edge, mid-height.
     const camera = ui.camera ?? fitToBounds(ws.nodes, { w: 1200, h: 800 });
     const ghost = { x: camera.x + 520 / camera.zoom, y: camera.y };
+
+    // The onboarding beat: the very first kept thought ends on the map,
+    // where its star visibly joins the big picture.
+    firstFlight(result.addedMemoryIds);
 
     const motion = ws.payload
       ? reorgMotion(result.event, ws.payload)
@@ -221,6 +247,10 @@ export function App() {
         ui.setView('sources');
         return;
       }
+      if (e.key === 'd' || e.key === 'D') {
+        ui.setView('diary');
+        return;
+      }
       /*
        * Backspace deletes what is selected (spec 6.1). It was bound only inside
        * the arc, where it climbs a level, and nowhere else — so the keyboard
@@ -279,7 +309,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' ? ' shell--diary sky sky--dusk' : ''}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.
@@ -341,6 +371,8 @@ export function App() {
           <ArcBrowser />
         ) : view === 'sources' ? (
           <SourcesView />
+        ) : view === 'diary' ? (
+          <DiaryView />
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}
@@ -383,6 +415,8 @@ export function App() {
       </div>
       <Inspector />
       <BatchReveal />
+      <ReviewPanel />
+      <UpgradeSheet />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
       {settingsOpen && <Settings />}

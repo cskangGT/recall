@@ -442,3 +442,23 @@ test('what you asked about is still there after a reload', async ({ page }) => {
 test('a workspace with no interaction history still ranks, on its saves', async ({ page }) => {
   expect((await arcRanking(page))[0]).toBe('Hiring=7');
 });
+
+test('the logo is the way home — pressed on instinct, and the instinct is right', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  // Walk somewhere: open a category, read its list.
+  await page.locator('.arc__node').filter({ hasText: 'AI Tooling' }).first().click();
+  await expect(page.getByTestId('reading-list')).toBeVisible();
+
+  await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('reading-list')).toHaveCount(0);
+  await expect(page.getByTestId('arc-browser')).toContainText('Where would you like to look?');
+
+  // From the map too — home means the browse start, wherever you were.
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+});
+

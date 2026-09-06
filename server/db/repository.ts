@@ -16,6 +16,21 @@ export interface SourceRow extends Source {
   status: 'pending' | 'processing' | 'complete' | 'failed' | 'no_memories';
   error_message: string | null;
   processed_at: string | null;
+  /** When the user reviewed this source's extractions — null means not yet. */
+  reviewed_at?: string | null;
+  /** The day a diary entry belongs to (YYYY-MM-DD); null for everything else. */
+  diary_date?: string | null;
+}
+
+/** One review verdict, recorded verbatim — the curation signal (spec §21). */
+export interface CurationRow {
+  id: string;
+  source_id: string | null;
+  /** The memory's text at the moment of the verdict — a discard keeps it. */
+  memory_text: string;
+  verdict: 'keep' | 'discard' | 'edit';
+  edited_text: string | null;
+  created_at: string;
 }
 
 export interface MemoryAssignment {
@@ -51,6 +66,7 @@ export interface Repository {
   ): { id: string; name: string; auto_reorganize: boolean; plan: 'free' | 'pro' } | null;
   /** Billing writes this; nothing else does. */
   setPlan(id: string, plan: 'free' | 'pro'): void;
+  setTrialUntil(id: string, until: string): void;
   setAutoReorganize(id: string, enabled: boolean): void;
 
   /**
@@ -130,6 +146,20 @@ export interface Repository {
 
   addTombstone(workspaceId: string, name: string): void;
   listTombstones(workspaceId: string): string[];
+
+  // ------------------------------------------------------------- curation
+  /** Records one review verdict. The signal that teaches the next extraction. */
+  insertCuration(workspaceId: string, row: CurationRow): void;
+  /** Most recent first. `verdict` filters; absent returns all. */
+  listCuration(workspaceId: string, verdict?: CurationRow['verdict'], limit?: number): CurationRow[];
+  /** Stamps the source as reviewed. */
+  setSourceReviewed(sourceId: string, reviewedAt: string): void;
+  /**
+   * Rewrites a memory's text and vector together — an edit moves the meaning,
+   * so the embedding must move with it or retrieval quietly rots. The FTS
+   * trigger keeps the keyword index in step on its own.
+   */
+  updateMemoryText(id: string, text: string, vector: number[]): void;
 
   recordAsk(workspaceId: string, input: {
     id: string; question: string; answer: string | null;

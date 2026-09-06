@@ -7,9 +7,9 @@ import type {
 } from './provider.ts';
 import {
   answerSchema, answerSoFar, buildAnswerPrompt, buildExtractPrompt, buildMergePrompt,
-  buildNamePrompt, buildNormalizePrompt, coerceExtract, coerceMerge, coerceNormalize,
-  extractSchema, mergeSchema, nameByFallback, nameSchema, normalizeSchema, resolveAnswer,
-  resolveNames,
+  buildNamePrompt, buildNormalizePrompt, buildRetroPrompt, coerceExtract, coerceMerge,
+  coerceNormalize, coerceRetro, extractSchema, mergeSchema, nameByFallback, nameSchema,
+  normalizeSchema, resolveAnswer, resolveNames, retroSchema,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
@@ -265,6 +265,7 @@ export class OpenAiProvider implements AiProvider {
     content: string;
     sceneDescription?: string;
     type: SourceType;
+    rejectedExamples?: string[];
   }): Promise<ExtractResult> {
     return coerceExtract(
       await this.json(buildExtractPrompt(input), 'extract', extractSchema, 4096),
@@ -312,6 +313,14 @@ export class OpenAiProvider implements AiProvider {
     history?: AskTurn[];
   }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
+  }
+
+  async retrospect(input: {
+    entries: { date: string; text: string }[];
+    memories?: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ reflection: string }> {
+    return coerceRetro(await this.json(buildRetroPrompt(input), 'retro', retroSchema, 2048));
   }
 
   async mergeMemories(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft> {

@@ -253,6 +253,25 @@ export function runBatchPipeline(
 }
 
 /**
+ * The first observation — the one sentence a batch earns, if it earns one.
+ *
+ * A pile where one interest quietly absorbed most of what was kept is a
+ * pattern its owner usually did not know they had; a pile spread thin is not
+ * a pattern, and forcing a sentence onto it reads as horoscope. So the report
+ * speaks only when the top category took at least two memories and at least
+ * 40% of everything the batch kept — otherwise the plain declaration stands.
+ */
+export function observationOf(summary: {
+  memories: number;
+  categories: BatchCategorySummary[];
+}): BatchCategorySummary | null {
+  const top = summary.categories[0];
+  if (!top || top.added < 2) return null;
+  if (summary.memories === 0 || top.added / summary.memories < 0.4) return null;
+  return top;
+}
+
+/**
  * Names for the one structural operation, when it needs any: a split names its
  * two halves from their member texts; a merge keeps the survivor's name
  * (applyMerge's default when no name is passed); a promote never renames.

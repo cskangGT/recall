@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { drawFrame } from '../graph/renderer';
 import {
   fitToBounds,
@@ -12,10 +12,12 @@ import {
   type Viewport,
 } from '../graph/camera';
 import { hitTest } from '../graph/hitTest';
+import { runLayout } from '../graph/layout';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
 import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
 import type { GraphNode } from '../core/types';
+import { t } from '../i18n';
 import type { ReorgEvent } from '../core/applyReorg';
 
 export interface RunningAnimation {
@@ -86,8 +88,48 @@ export function MapCanvas({
   const bannerFired = useRef(false);
   const [grabbing, setGrabbing] = useState(false);
 
-  const nodes = useWorkspaceStore((s) => s.nodes);
-  const edges = useWorkspaceStore((s) => s.edges);
+  const baseNodes = useWorkspaceStore((s) => s.nodes);
+  const baseEdges = useWorkspaceStore((s) => s.edges);
+  const mapFocus = useUiStore((s) => s.mapFocus);
+
+  /*
+   * The regrouped view (2안): only what matched, pulled out of its scattered
+   * territories and laid out fresh. Matched memories bring their category
+   * along as an anchor; positions are zeroed so `runLayout`'s own ring
+   * placement — the same code that seats a bulk import — re-clusters them by
+   * category, and matched entities settle at the centroid of their mentions.
+   * A temporary constellation; the full map is untouched underneath.
+   */
+  const focusScene = useMemo(() => {
+    if (!mapFocus) return null;
+    const byId = new Map(baseNodes.map((n) => [n.id, n]));
+
+    const keep = new Set<string>();
+    for (const id of mapFocus.ids) if (byId.has(id)) keep.add(id);
+    // Each matched memory's category rides along as the anchor it clusters to.
+    for (const id of [...keep]) {
+      const n = byId.get(id)!;
+      if (n.kind === 'memory' && n.parentId && byId.has(n.parentId)) keep.add(n.parentId);
+    }
+    if (keep.size === 0) return null;
+
+    const nodes = [...keep].map((id) => {
+      const n = byId.get(id)!;
+      // Zeroed positions force a fresh layout; categories become loose roots.
+      return { ...n, x: 0, y: 0, parentId: n.kind === 'memory' ? n.parentId : null };
+    });
+    const edges = baseEdges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    return { nodes: runLayout(nodes, edges, { ticks: 60 }), edges };
+  }, [mapFocus, baseNodes, baseEdges]);
+
+  const nodes = focusScene?.nodes ?? baseNodes;
+  const edges = focusScene?.edges ?? baseEdges;
+
+  // The scene the RAF loop draws — a ref, because the loop lives outside React.
+  const sceneRef = useRef<{ nodes: typeof baseNodes; edges: typeof baseEdges } | null>(null);
+  sceneRef.current = focusScene;
+  /** Detects focus entry inside the loop, to push history and fit the camera. */
+  const focusEnteredRef = useRef(false);
 
   // Reset the banner latch whenever a new animation starts.
   useEffect(() => {
@@ -115,7 +157,20 @@ export function MapCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const ui = useUiStore.getState();
-      const current = useWorkspaceStore.getState();
+      const store = useWorkspaceStore.getState();
+      const current = sceneRef.current ?? { nodes: store.nodes, edges: store.edges };
+
+      // ---- entering the regrouped view: remember where we stood, fit to it
+      if (sceneRef.current && !focusEnteredRef.current) {
+        focusEnteredRef.current = true;
+        if (cameraRef.current) ui.pushCameraHistory(cameraRef.current);
+        const fit = fitToBounds(current.nodes, viewport, 0.3);
+        panFrom.current = cameraRef.current ?? fit;
+        // A touch tighter than the search zoom: this view holds nothing else.
+        panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.6) };
+        panStart.current = now;
+      }
+      if (!sceneRef.current) focusEnteredRef.current = false;
 
       // ---- camera: entry animation on first paint, then user-controlled
       const target = fitToBounds(current.nodes, viewport, 0.1);
@@ -135,6 +190,32 @@ export function MapCanvas({
       }
 
       let camera = ui.camera ?? cameraRef.current ?? target;
+
+      /*
+       * ---- a zoom request from search (지도 검색 UX): fit the matched
+       * nodes, remember where the camera stood so ← can walk back, and ride
+       * the same pan tween every other camera move uses. The zoom is capped —
+       * a single result should arrive close, not fill the screen with it.
+       */
+      const zoomIds = ui.consumeZoomTo();
+      if (zoomIds && zoomIds.length > 0) {
+        const targets = current.nodes.filter((n) => zoomIds.includes(n.id));
+        if (targets.length > 0) {
+          ui.pushCameraHistory(camera);
+          const fit = fitToBounds(targets, viewport, 0.35);
+          panFrom.current = camera;
+          panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.2) };
+          panStart.current = now;
+        }
+      }
+
+      // ---- ← pressed: pop the trail and ride back on the same tween.
+      const popped = ui.consumeCameraPop();
+      if (popped) {
+        panFrom.current = camera;
+        panTo.current = popped;
+        panStart.current = now;
+      }
 
       // ---- the tree handed us a selection: centre on it
       const centerId = ui.consumeCenterOn();
@@ -376,8 +457,18 @@ export function MapCanvas({
         if (start && Math.hypot(p.sx - start.sx, p.sy - start.sy) > 4) return;
         const hit = hitTest(nodes, camera(), viewportOf(), p);
         const ui = useUiStore.getState();
-        if (hit) ui.select(hit.id);
-        else ui.clearSelection();
+        if (hit?.sleeping) {
+          // A sleeping star answers with why it is dim, and the door to wake it.
+          ui.toast(t('toast.sleepingTap'));
+          ui.setUpgradeSheet(true);
+          return;
+        }
+        if (hit) {
+          ui.select(hit.id);
+          // A lit search hit pulls you in when clicked — the word you found
+          // becomes the place you are (뒤로가기 is a frame away).
+          if (ui.highlightedIds.includes(hit.id)) ui.requestZoomTo([hit.id]);
+        } else ui.clearSelection();
       }}
       onWheel={(e) => {
         const cam = camera();

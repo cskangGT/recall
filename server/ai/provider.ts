@@ -122,7 +122,16 @@ export interface AiProvider {
   readonly name: string;
   /** Screenshots only; text and link sources skip it (spec §10.1). */
   normalize(input: NormalizeInput): Promise<NormalizeResult>;
-  extract(input: { content: string; sceneDescription?: string; type: SourceType }): Promise<ExtractResult>;
+  extract(input: {
+    content: string;
+    sceneDescription?: string;
+    type: SourceType;
+    /**
+     * Extractions this person removed in review — the curation signal (spec
+     * §21). Negative few-shot: the extractor is told to skip anything similar.
+     */
+    rejectedExamples?: string[];
+  }): Promise<ExtractResult>;
   /**
    * Names the result of a structural change. Receives the operation and the
    * clusters, and has **no** say in whether the change happens (spec §10.4).
@@ -156,6 +165,17 @@ export interface AiProvider {
     },
     onDelta: (text: string) => void,
   ): Promise<AnswerResult>;
+  /**
+   * Optional: looks back over a stretch of diary days and says, in the
+   * memory's own voice, how this person's thinking moved through them.
+   * Providers that cannot do it honestly simply do not have it.
+   */
+  retrospect?(input: {
+    entries: { date: string; text: string }[];
+    /** Non-diary memories from the same days — context, capped by the caller. */
+    memories?: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ reflection: string }>;
   /**
    * Optional: says why these memories overlap and writes the one memory that
    * holds every distinct fact from all of them. The user decides whether the

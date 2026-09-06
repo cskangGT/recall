@@ -13,15 +13,71 @@ import type { SourceType } from '../core/types';
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
-  const [hasImage, setHasImage] = useState(false);
+  /** The photo laid beside the words — kept as a data URL until submit. */
+  const [image, setImage] = useState<string | null>(null);
+  const hasImage = image !== null;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const readImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' && setImage(reader.result);
+    reader.readAsDataURL(file);
+  };
+  /*
+   * The look-before-keeping step for links. A pasted URL is not yet a memory:
+   * the server reads the page, this card shows what it found, and the person
+   * decides. What was fetched then rides into capture as the content, so a
+   * kept link's memories come from the page, not from its address.
+   */
+  const [preview, setPreview] = useState<
+    | { loading: true; url: string }
+    | { loading: false; url: string; title: string | null; description: string | null; excerpt: string | null; failed?: boolean }
+    | null
+  >(null);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => ref.current?.focus(), []);
 
   const detected = detectCaptureType({ text, hasImage });
 
+  const keepLink = () => {
+    if (!preview || preview.loading) return;
+    const enriched = [preview.title, preview.description, preview.excerpt]
+      .filter(Boolean)
+      .join('\n');
+    setCaptureOpen(false);
+    onSubmit({
+      type: 'link',
+      content: enriched || preview.url,
+      url: preview.url,
+      referencedUrls: detected.referencedUrls,
+    });
+  };
+
   const submit = () => {
     if (!text.trim() && !hasImage) return;
+    if (preview && !preview.loading) {
+      keepLink();
+      return;
+    }
+    // A link goes through the look first — where the server can look at all.
+    const reader = useWorkspaceStore.getState().source.previewLink;
+    if (detected.type === 'link' && !hasImage && reader && !preview) {
+      const url = text.trim();
+      setPreview({ loading: true, url });
+      reader(url).then(
+        (p) => setPreview({ loading: false, ...p }),
+        () =>
+          setPreview({
+            loading: false,
+            url,
+            title: null,
+            description: null,
+            excerpt: null,
+            failed: true,
+          }),
+      );
+      return;
+    }
     setCaptureOpen(false);
     /*
      * What you typed, sent on.
@@ -38,7 +94,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     onSubmit(
       hasImage
-        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+        ? {
+            type: 'screenshot',
+            content: text.trim(),
+            // The API stores the photo itself; the seed pipeline has no
+            // storage and falls back to its demo file as before.
+            imageData: image ?? undefined,
+            imagePath: '/seed/demo-screenshot.png',
+          }
         : {
             type: detected.type,
             content: text.trim(),
@@ -63,7 +126,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     <div className="overlay" {...useDismissable(() => setCaptureOpen(false))}>
       <div
-        className="bar"
+        className="bar bar--capture"
         data-testid="capture-bar"
         role="dialog"
         aria-modal="true"
@@ -79,11 +142,16 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
           rows={3}
           placeholder={t('capture.placeholder')}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setPreview(null);
+          }}
           onPaste={(e) => {
-            if (Array.from(e.clipboardData.items).some((i) => i.type.startsWith('image/'))) {
-              setHasImage(true);
-            }
+            const item = Array.from(e.clipboardData.items).find((i) =>
+              i.type.startsWith('image/'),
+            );
+            const file = item?.getAsFile();
+            if (file) readImage(file);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -92,19 +160,93 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             }
           }}
         />
+        {image && (
+          <div className="bar__photo" data-testid="capture-photo">
+            <img className="bar__photo-img" src={image} alt="" />
+            <button
+              className="bar__photo-remove"
+              data-testid="capture-photo-remove"
+              aria-label={t('capture.photoRemove')}
+              onClick={() => setImage(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          hidden
+          data-testid="capture-photo-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) readImage(file);
+            e.target.value = '';
+          }}
+        />
+        {preview && (
+          <div className="bar__preview" data-testid="link-preview">
+            {preview.loading ? (
+              <span className="bar__preview-reading">{t('capture.linkReading')}</span>
+            ) : (
+              <>
+                <span className="bar__preview-title">
+                  {preview.failed ? t('capture.linkFailed') : (preview.title ?? preview.url)}
+                </span>
+                {!preview.failed && (preview.description ?? preview.excerpt) && (
+                  <span className="bar__preview-desc">
+                    {preview.description ?? preview.excerpt}
+                  </span>
+                )}
+                <span className="bar__preview-ask">{t('capture.linkAsk')}</span>
+                <span className="bar__preview-actions">
+                  <button
+                    className="bar__preview-keep"
+                    data-testid="link-preview-keep"
+                    autoFocus
+                    onClick={keepLink}
+                  >
+                    {t('capture.linkKeep')}
+                  </button>
+                  <button
+                    className="bar__preview-skip"
+                    data-testid="link-preview-skip"
+                    onClick={() => setPreview(null)}
+                  >
+                    {t('capture.linkSkip')}
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
+        )}
         <div className="bar__foot">
           <div className="bar__types">
             {(['text', 'link', 'screenshot'] as SourceType[]).map((t) => (
               <button
                 key={t}
                 className={`bar__type${detected.type === t ? ' bar__type--on' : ''}`}
-                onClick={() => t === 'screenshot' && setHasImage(!hasImage)}
+                onClick={() => {
+                  if (t !== 'screenshot') return;
+                  if (hasImage) setImage(null);
+                  else fileRef.current?.click();
+                }}
               >
                 {TYPE_LABEL[t]}
               </button>
             ))}
           </div>
-          <span>{t('capture.submit')}</span>
+          <span className="bar__foot-right">
+            <button
+              className="bar__photo-add"
+              data-testid="capture-photo-add"
+              onClick={() => fileRef.current?.click()}
+            >
+              {t('capture.photoAdd')}
+            </button>
+            <span>{t('capture.submit')}</span>
+          </span>
         </div>
       </div>
     </div>

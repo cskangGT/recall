@@ -2,8 +2,7 @@ import { useUiStore } from '../store/uiStore';
 import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
-import { currentPlan, FREE_WINDOW_DAYS } from '../core/plan';
-import { startUpgrade } from '../billing/upgrade';
+import { effectivePlan, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { t, currentLocale, chooseLocale } from '../i18n';
 
 /**
@@ -106,16 +105,18 @@ export function Settings() {
           <span className="settings__body">
             <span className="settings__label">{t('settings.plan.label')}</span>
             <span className="settings__hint" data-testid="settings-plan">
-              {currentPlan(undefined, payload?.workspace.plan) === 'free'
-                ? t('settings.plan.free', { days: FREE_WINDOW_DAYS })
-                : t('settings.plan.pro')}
+              {trialDaysLeft(payload?.workspace) !== null
+                ? t('settings.plan.trial', { days: trialDaysLeft(payload?.workspace)! })
+                : effectivePlan(undefined, payload?.workspace) === 'free'
+                  ? t('settings.plan.free', { days: FREE_WINDOW_DAYS })
+                  : t('settings.plan.pro')}
             </span>
           </span>
-          {currentPlan(undefined, payload?.workspace.plan) === 'free' && (
+          {effectivePlan(undefined, payload?.workspace) === 'free' && (
             <button
               className="settings__action"
               data-testid="settings-upgrade"
-              onClick={() => void startUpgrade()}
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
             >
               {t('settings.plan.upgrade')}
             </button>

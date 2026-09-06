@@ -1,6 +1,7 @@
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runAsk } from '../ask/runAsk';
+import { observationOf } from '../capture/batch';
 import { t } from '../i18n';
 
 /**
@@ -84,6 +85,8 @@ export function BatchReveal() {
 
       {phase === 'declare' && summary && (
         <div className="reveal__declare" data-testid="batch-reveal-declare">
+          {/* The retroactive wow: the pattern this pile was hiding, said once,
+              and only when it is actually there (observationOf's thresholds). */}
           {summary.memories === 0 ? (
             <h2>{t('reveal.nothingNew')}</h2>
           ) : (
@@ -110,6 +113,23 @@ export function BatchReveal() {
               {summary.skipped === 1 ? t('reveal.skipped.one') : t('reveal.skipped.many', { count: summary.skipped })}
             </p>
           )}
+          {(() => {
+            const top = observationOf(summary);
+            if (!top) return null;
+            return (
+              <p
+                className="reveal__observe"
+                data-testid="batch-reveal-observe"
+                dangerouslySetInnerHTML={{
+                  __html: t('reveal.observe', {
+                    memories: summary.memories,
+                    added: top.added,
+                    name: top.name,
+                  }).replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>'),
+                }}
+              />
+            );
+          })()}
           {/* Biggest interests first and biggest on screen — "this is what
               your mind has been on" should be readable before it is read. */}
           <ul className="reveal__chips">
@@ -162,6 +182,18 @@ export function BatchReveal() {
                 </button>
               ))}
             </div>
+          )}
+          {/* The second door out of the reveal: walk the batch's sources with
+              the original beside what Mado kept. Offered, never owed — the
+              map is already complete (spec §21). */}
+          {(summary.sourceIds?.length ?? 0) > 0 && (
+            <button
+              className="reveal__review"
+              data-testid="batch-reveal-review"
+              onClick={() => useUiStore.getState().openReview(summary.sourceIds!)}
+            >
+              {t('reveal.review')}
+            </button>
           )}
           <button
             className="reveal__dismiss"

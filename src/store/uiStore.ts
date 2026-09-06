@@ -27,6 +27,8 @@ export interface BatchRevealState {
     categories: BatchCategorySummary[];
     /** The stretch of time this batch rescued, when the import knows it. */
     period?: { from: string; to: string } | null;
+    /** The batch's sources, in order — what "검수하기" walks through. */
+    sourceIds?: string[];
   } | null;
 }
 
@@ -42,7 +44,7 @@ export interface Toast {
   text: string;
 }
 
-export type View = 'map' | 'browse' | 'sources';
+export type View = 'map' | 'browse' | 'sources' | 'diary';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
 /**
@@ -58,6 +60,8 @@ export const ANSWER_FOLDER_ID = '__answer__';
 interface UiState {
   view: View;
   sourceFilter: SourceFilter;
+  /** Sources view mode: the ledger list, or the desktop-window folder grid. */
+  sourcesMode: 'list' | 'folders';
   /**
    * Which folder's memories the reading list is showing. Separate from
    * `selectedId` because clicking a memory in the list must not close the
@@ -81,6 +85,21 @@ interface UiState {
   selectedId: string | null;
   highlightedIds: string[];
   camera: Camera | null;
+  /**
+   * A zoom request from search: fit these nodes and remember where the camera
+   * stood, so ← can walk back. Consumed by the canvas on its next frame.
+   */
+  zoomToIds: string[] | null;
+  /** Cameras to walk back to, newest last. Capped — a trail, not a log. */
+  cameraHistory: Camera[];
+  /** True when ← was pressed; the canvas consumes it and pops the trail. */
+  cameraPopRequested: boolean;
+  /**
+   * The regrouped view (2안): search results pulled out of their scattered
+   * territories and re-laid-out together — a temporary constellation of just
+   * what matched, clustered by category. Null shows the full map.
+   */
+  mapFocus: { ids: string[] } | null;
   captureOpen: boolean;
   askOpen: boolean;
   settingsOpen: boolean;
@@ -116,10 +135,28 @@ interface UiState {
   dropActive: boolean;
   /** Non-null while a bulk drop is being read, organized, or declared. */
   batchReveal: BatchRevealState | null;
+  /**
+   * The first-drop ceremony: the seeded sky steps back and this person's own
+   * categories hold the light for a few seconds. Set once by batchRun, played
+   * by ArcBrowser after the reveal closes, then cleared.
+   */
+  skyCeremony: { categoryIds: string[] } | null;
+  /** The pre-checkout sheet — every wake CTA passes through it. */
+  upgradeSheet: boolean;
+  /** The post-payment moment: every sleeping star brightens, once. */
+  awaken: boolean;
+  /**
+   * The review stepper — one source's original against what Mado made of it,
+   * with the user's verdicts (spec §21). Non-null while reviewing; `index`
+   * walks `sourceIds` so a batch reviews as a sequence, a single source as a
+   * sequence of one.
+   */
+  review: { sourceIds: string[]; index: number } | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
   setSourceFilter: (filter: SourceFilter) => void;
+  setSourcesMode: (mode: 'list' | 'folders') => void;
   openCategory: (id: string | null) => void;
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
@@ -129,6 +166,15 @@ interface UiState {
   clearSelection: () => void;
   setHighlight: (ids: string[]) => void;
   setCamera: (c: Camera) => void;
+  requestZoomTo: (ids: string[]) => void;
+  consumeZoomTo: () => string[] | null;
+  pushCameraHistory: (c: Camera) => void;
+  requestCameraPop: () => void;
+  /** Pops the trail if a ← was requested; null otherwise. */
+  consumeCameraPop: () => Camera | null;
+  setMapFocus: (focus: { ids: string[] } | null) => void;
+  /** The logo's promise: back to the start, everything closed, nothing lost. */
+  goHome: () => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -143,6 +189,13 @@ interface UiState {
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
+  setSkyCeremony: (state: { categoryIds: string[] } | null) => void;
+  setUpgradeSheet: (open: boolean) => void;
+  setAwaken: (on: boolean) => void;
+  openReview: (sourceIds: string[]) => void;
+  /** Steps to the next source, or closes after the last one. */
+  advanceReview: () => void;
+  closeReview: () => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -154,6 +207,10 @@ let toastId = 0;
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'browse',
   sourceFilter: 'all',
+  sourcesMode:
+    (typeof localStorage !== 'undefined' && localStorage.getItem('mado.sourcesMode')) === 'folders'
+      ? 'folders'
+      : 'list',
   openCategoryId: null,
   arcLevelId: null,
   welcomeDismissed: false,
@@ -162,6 +219,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   selectedId: null,
   highlightedIds: [],
   camera: null,
+  zoomToIds: null,
+  cameraHistory: [],
+  cameraPopRequested: false,
+  mapFocus: null,
   captureOpen: false,
   askOpen: false,
   settingsOpen: false,
@@ -174,6 +235,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
+  skyCeremony: null,
+  upgradeSheet: false,
+  awaken: false,
+  review: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -190,6 +255,10 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
 
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+  setSourcesMode: (sourcesMode) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('mado.sourcesMode', sourcesMode);
+    set({ sourcesMode });
+  },
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
   setArcLevel: (arcLevelId) => set({ arcLevelId }),
@@ -206,6 +275,37 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearSelection: () => set({ selectedId: null, highlightedIds: [] }),
   setHighlight: (highlightedIds) => set({ highlightedIds }),
   setCamera: (camera) => set({ camera }),
+  requestZoomTo: (ids) => set(ids.length > 0 ? { zoomToIds: ids } : {}),
+  consumeZoomTo: () => {
+    const ids = get().zoomToIds;
+    if (ids) set({ zoomToIds: null });
+    return ids;
+  },
+  pushCameraHistory: (c) =>
+    set((s) => ({ cameraHistory: [...s.cameraHistory, c].slice(-8) })),
+  requestCameraPop: () => set({ cameraPopRequested: true }),
+  consumeCameraPop: () => {
+    const s = get();
+    if (!s.cameraPopRequested) return null;
+    const prev = s.cameraHistory.at(-1) ?? null;
+    set({ cameraPopRequested: false, cameraHistory: s.cameraHistory.slice(0, -1) });
+    return prev;
+  },
+  setMapFocus: (mapFocus) => set({ mapFocus }),
+  goHome: () =>
+    set({
+      view: 'browse',
+      openCategoryId: null,
+      arcLevelId: null,
+      selectedId: null,
+      highlightedIds: [],
+      answer: null,
+      answerDraft: null,
+      askThread: [],
+      mapFocus: null,
+      review: null,
+      cameraHistory: [],
+    }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
@@ -256,16 +356,41 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
+  setSkyCeremony: (skyCeremony) => set({ skyCeremony }),
+  setUpgradeSheet: (upgradeSheet) => set({ upgradeSheet }),
+  setAwaken: (awaken) => set({ awaken }),
+  // Opening the review dismisses the reveal — they occupy the same attention.
+  openReview: (sourceIds) =>
+    set(sourceIds.length > 0 ? { review: { sourceIds, index: 0 }, batchReveal: null } : {}),
+  advanceReview: () =>
+    set((s) => {
+      if (!s.review) return {};
+      const index = s.review.index + 1;
+      return index >= s.review.sourceIds.length
+        ? { review: null }
+        : { review: { ...s.review, index } };
+    }),
+  closeReview: () => set({ review: null }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   escape: () => {
     const s = get();
+    if (s.upgradeSheet) {
+      set({ upgradeSheet: false });
+      return;
+    }
     // The declaration is dismissable like any modal; the reading and organizing
     // phases are not — an Escape mid-pipeline would hide work that is still
     // happening, not cancel it.
     if (s.batchReveal?.phase === 'declare') {
       set({ batchReveal: null });
+      return;
+    }
+    // The review is a modal too — Escape leaves it before touching anything
+    // else. Verdicts not yet confirmed are simply not applied.
+    if (s.review !== null) {
+      set({ review: null });
       return;
     }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {

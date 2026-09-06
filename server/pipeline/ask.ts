@@ -119,6 +119,46 @@ export class AskPipeline {
     yield { event: 'done', data: result };
   }
 
+  /** Whether the wired model can look back at all. */
+  canRetrospect(): boolean {
+    return typeof this.ai.retrospect === 'function';
+  }
+
+  /**
+   * The look back (일기 회고): every diary entry whose day falls in [from, to],
+   * oldest first, plus a capped sample of what else arrived those days, given
+   * to the model to say how the thinking moved. Reads only; records nothing.
+   */
+  async retrospect(
+    workspaceId: string,
+    from: string,
+    to: string,
+    locale?: 'en' | 'ko',
+  ): Promise<{ reflection: string; days: number }> {
+    if (!this.ai.retrospect) throw new Error('this model cannot look back');
+    const payload = this.repo.getGraphPayload(workspaceId);
+
+    const entries = payload.sources
+      .filter((s) => s.diary_date && s.diary_date >= from && s.diary_date <= to)
+      .sort((a, b) => a.diary_date!.localeCompare(b.diary_date!) || a.created_at.localeCompare(b.created_at))
+      .map((s) => ({ date: s.diary_date!, text: s.raw_content }));
+    if (entries.length === 0) return { reflection: '', days: 0 };
+
+    const diarySourceIds = new Set(
+      payload.sources.filter((s) => s.diary_date).map((s) => s.id),
+    );
+    const memories = payload.memories
+      .filter((m) => {
+        const day = m.created_at.slice(0, 10);
+        return day >= from && day <= to && !diarySourceIds.has(m.source_id);
+      })
+      .slice(0, 12)
+      .map((m) => m.text);
+
+    const { reflection } = await this.ai.retrospect({ entries, memories, locale });
+    return { reflection, days: new Set(entries.map((e) => e.date)).size };
+  }
+
   async ask(workspaceId: string, question: string, history: AskTurn[] = []): Promise<AskResult> {
     const prepared = await this.prepare(workspaceId, question, history);
     if ('refusal' in prepared) {

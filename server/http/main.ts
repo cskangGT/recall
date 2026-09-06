@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { SqliteRepository } from '../db/sqlite.ts';
-import { importSeed, namespaceSeed } from '../seed/import.ts';
-import seedJson from '../../seed/workspace.json' with { type: 'json' };
-import type { GraphPayload } from '../../src/core/types.ts';
+import { importSeed } from '../seed/import.ts';
 import { IngestPipeline } from '../pipeline/ingest.ts';
 import { AskPipeline } from '../pipeline/ask.ts';
 import { selectAi } from '../ai/select.ts';
 import { selectBilling, StripeBilling } from '../billing/stripe.ts';
 import { readAppleNotes } from '../notes/appleNotes.ts';
+import { previewLink } from '../link/preview.ts';
+import { imageSaver } from '../link/saveImage.ts';
 import { readNotionPages } from '../notion/notionPages.ts';
 import { createApiServer } from './server.ts';
 
@@ -127,21 +127,30 @@ const server = createApiServer(
      * multi-tenant, so this is a seed import under a new id — no migration,
      * and no way for one visitor's deletions to reach another's screen.
      */
-    createWorkspace: () => {
+    createWorkspace: (locale?: 'en' | 'ko') => {
       const id = `ws_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-      // Namespaced, because the seed's primary keys are fixed and a second
-      // import of them collides — see `namespaceSeed`.
-      importSeed(repo, id, namespaceSeed(seedJson as unknown as GraphPayload, id));
+      // A first sky is empty. The seed is the founder's demo, not this
+      // person's memory — starting them inside someone else's stars made the
+      // first minutes a tour instead of an arrival. Everything they see from
+      // here on, they put there. (ws_demo keeps the seed for development.)
       // A visitor's workspace is the hosted consumer product: free remembers
       // two weeks, and billing is the way up. A self-hosted instance never
       // takes this path and stays 'pro' — it owns its keys and pays nobody.
-      repo.setPlan(id, 'free');
+      repo.createWorkspace({ id, name: locale === 'ko' ? '내 기억' : 'My memory', plan: 'free' });
+      // Two honest weeks of Pro first — the trial is as long as the free
+      // window, so the day it ends is the day the first drop starts to sleep.
+      repo.setTrialUntil(id, new Date(Date.now() + 14 * 86400_000).toISOString());
       return id;
     },
     inviteToken: INVITE,
     billing,
     // Only a Mac can press the Notes button — a hosted box answers 501.
     readNotes: process.platform === 'darwin' ? readAppleNotes : undefined,
+    previewLink,
+    // Images land beside the database — a :memory: dev run keeps them in cwd.
+    saveImage: imageSaver(
+      DB_PATH === ':memory:' ? 'uploads' : `${DB_PATH}.uploads`,
+    ),
     readNotionPages: NOTION_TOKEN ? (days) => readNotionPages(NOTION_TOKEN, days) : undefined,
   },
   STATIC_ROOT,

@@ -30,6 +30,8 @@ export interface ApiRequest {
   invite?: string;
   /** The browser's `Origin` header, if the caller was a browser. See `originAllowed`. */
   origin?: string;
+  /** The request's own `Host` header — what `originAllowed` compares against. */
+  host?: string;
 }
 
 export interface ApiResponse {
@@ -55,8 +57,9 @@ export interface Deps {
   ask: AskPipeline;
   /** Restores a workspace to the seed corpus. */
   reset: (workspaceId: string) => void;
-  /** Mints a fresh workspace seeded from the demo corpus, returning its id. */
-  createWorkspace?: () => string;
+  /** Mints a fresh workspace seeded from the demo corpus, returning its id.
+   *  The locale picks which corpus — a Korean visitor starts in Korean. */
+  createWorkspace?: (locale?: 'en' | 'ko') => string;
   /**
    * The token a request must carry to change anything, or undefined to let
    * every request through — which is what local development and the test suite
@@ -71,6 +74,10 @@ export interface Deps {
    * deployment simply lacks it.
    */
   readNotes?: (days: number) => Promise<NotesReadResult>;
+  /** Where uploaded capture images land; absent means images cannot be kept. */
+  saveImage?: (dataUrl: string) => Promise<string>;
+  /** Fetches a pasted link's title and excerpt, for the keep-or-not question. */
+  previewLink?: (url: string) => Promise<import('../link/preview.ts').LinkPreview>;
   /** Reads Notion pages via the official API — present when a token is configured. */
   readNotionPages?: (days: number) => Promise<NotesReadResult>;
 }
@@ -134,6 +141,21 @@ function originAllowed(req: ApiRequest): boolean {
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.origin)) return true;
 
   /*
+   * Same-origin, by comparison rather than by list. A hosted deployment's own
+   * client sends `Origin: http://<its address>` on every POST — a browser
+   * attaches it to all non-GETs, same-origin or not — and the localhost list
+   * above refused the server's own pages. The page a stranger's site serves
+   * still loses: their Origin names their host, not this one.
+   */
+  if (req.host) {
+    try {
+      if (new URL(req.origin).host === req.host) return true;
+    } catch {
+      // An unparseable Origin ("null", garbage) falls through to refusal.
+    }
+  }
+
+  /*
    * Any extension, not a pinned id. An extension that can reach 127.0.0.1 holds
    * host permissions the user granted it at install time; the boundary that
    * means something here is webpage-versus-extension, not extension-versus-
@@ -173,6 +195,22 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
   }
 
   /*
+   * GET /api/capabilities — which doors this server can actually open.
+   *
+   * The client used to assume every server could do what the local Mac server
+   * does, and drew an Apple Notes chip that a hosted Ubuntu box could only
+   * answer with a 501. A button that produces a refusal is worse than no
+   * button — so the server says what it can reach, and the client draws only
+   * those doors.
+   */
+  if (req.method === 'GET' && segments[1] === 'capabilities' && !segments[2]) {
+    return ok({
+      appleNotes: Boolean(deps.readNotes),
+      notion: Boolean(deps.readNotionPages),
+    });
+  }
+
+  /*
    * POST /api/workspaces — a copy of the corpus, for one visitor.
    *
    * Everyone shared `ws_demo` before this, which is fine until the first person
@@ -183,7 +221,10 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
    */
   if (req.method === 'POST' && segments[1] === 'workspaces' && !segments[2]) {
     if (!deps.createWorkspace) return notFound();
-    return ok({ workspaceId: deps.createWorkspace() });
+    const body = asRecord(req.body);
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    return ok({ workspaceId: deps.createWorkspace(locale) });
   }
 
   // /api/workspaces/:id/...
@@ -220,17 +261,34 @@ async function handleWorkspace(
     if (type !== 'text' && type !== 'link' && type !== 'screenshot') {
       return badRequest('type must be one of text, link, screenshot');
     }
+    // A photo written alongside the words: the client sends the image itself
+    // as a data URL, the server keeps it on disk, and from there the existing
+    // imagePath pipeline (normalize reads the file) carries it.
+    let uploadedPath: string | undefined;
+    if (typeof body.imageData === 'string' && body.imageData) {
+      if (!deps.saveImage) return badRequest('this server cannot store images');
+      try {
+        uploadedPath = await deps.saveImage(body.imageData);
+      } catch (err) {
+        return badRequest(err instanceof Error ? err.message : 'could not store the image');
+      }
+    }
     const result = await deps.ingest.ingest({
       workspaceId,
       type,
       content: typeof body.content === 'string' ? body.content : undefined,
       title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
-      imagePath: typeof body.imagePath === 'string' ? body.imagePath : undefined,
+      imagePath: uploadedPath ?? (typeof body.imagePath === 'string' ? body.imagePath : undefined),
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
       locale: body.locale === 'ko' || body.locale === 'en' ? body.locale : undefined,
+      // A diary entry names its day; anything else leaves it unset.
+      diaryDate:
+        typeof body.diaryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.diaryDate)
+          ? body.diaryDate
+          : undefined,
     });
 
     /*
@@ -373,6 +431,29 @@ async function handleWorkspace(
     return { status: 200, body: null, events: deps.ask.askStream(workspaceId, body.question, history) };
   }
 
+  /*
+   * POST /api/workspaces/:id/diary/retro — the look back: diary days in
+   * [from, to] gathered and reflected on in the memory's own voice. 501
+   * where no model can do it honestly; an empty range answers plainly.
+   */
+  if (req.method === 'POST' && resource === 'diary' && resourceId === 'retro' && !action) {
+    if (!deps.ask.canRetrospect()) {
+      return { status: 501, body: { error: 'this server cannot look back' } };
+    }
+    const body = asRecord(req.body);
+    const DAY = /^\d{4}-\d{2}-\d{2}$/;
+    if (typeof body.from !== 'string' || typeof body.to !== 'string' || !DAY.test(body.from) || !DAY.test(body.to)) {
+      return badRequest('from and to must be YYYY-MM-DD');
+    }
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ask.retrospect(workspaceId, body.from, body.to, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'retro failed' } };
+    }
+  }
+
   // POST /api/workspaces/:id/reorgs/:reorgId/undo
   if (req.method === 'POST' && resource === 'reorgs' && resourceId && action === 'undo') {
     const event = deps.repo.listReorgEvents(workspaceId, 50).find((e) => e.id === resourceId);
@@ -391,6 +472,24 @@ async function handleWorkspace(
    * configured — and everything a reader returns takes the exact same batch
    * path a file drop takes, so no two ways in can behave differently.
    */
+  /*
+   * POST /api/workspaces/:id/link/preview — read a link before keeping it.
+   * The client shows what came back and asks; nothing is written here.
+   */
+  if (req.method === 'POST' && resource === 'link' && resourceId === 'preview' && !action) {
+    if (!deps.previewLink) return { status: 501, body: { error: 'this server cannot read links' } };
+    const body = asRecord(req.body);
+    if (typeof body.url !== 'string' || !body.url.trim()) return badRequest('url is required');
+    try {
+      return ok(await deps.previewLink(body.url.trim()));
+    } catch (err) {
+      return {
+        status: 502,
+        body: { error: err instanceof Error ? err.message : 'could not read the link' },
+      };
+    }
+  }
+
   if (req.method === 'POST' && resource === 'import' && resourceId && !action) {
     const reader =
       resourceId === 'apple-notes' ? deps.readNotes
@@ -419,9 +518,13 @@ async function handleWorkspace(
 
     const items = read.notes.slice(0, 100).map((n) => ({
       workspaceId,
+      // Still 'text': the content was already read by the reader, and a
+      // 'link' type would invite the pipeline to fetch it. The url is the
+      // way back to the original — provenance, not something to scrape.
       type: 'text' as const,
       title: n.title || n.content.slice(0, 60),
       content: n.content,
+      url: n.url,
       locale,
     }));
 
@@ -480,6 +583,36 @@ async function handleWorkspace(
       return badRequest('autoReorganize must be a boolean');
     }
     deps.repo.setAutoReorganize(workspaceId, body.autoReorganize);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/sources/:sourceId/review — one source's review
+   * verdicts, applied atomically (spec §21). Unlisted memories are keeps.
+   * Discards keep their text in a verdict row; edits re-embed and lock; the
+   * source is stamped reviewed. The signal teaches the next extraction.
+   */
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'review') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+
+    const body = asRecord(req.body);
+    const discard = (Array.isArray(body.discard) ? body.discard : []).filter(
+      (v): v is string => typeof v === 'string',
+    );
+    const edits = (Array.isArray(body.edits) ? body.edits : [])
+      .map((raw) => asRecord(raw))
+      .filter(
+        (e): e is { memoryId: string; text: string } =>
+          typeof e.memoryId === 'string' && typeof e.text === 'string',
+      )
+      .map((e) => ({ memoryId: e.memoryId, text: e.text }));
+
+    try {
+      await deps.ingest.reviewSource(workspaceId, resourceId, { discard, edits });
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'review failed');
+    }
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 

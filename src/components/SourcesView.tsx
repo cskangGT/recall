@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
+import { FolderView } from './FolderView';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { effectivePlan, freeCutoff, isArchivedByPlan } from '../core/plan';
 import type { GraphPayload, Source, SourceType } from '../core/types';
 
 /**
@@ -37,6 +39,12 @@ export interface SourceRow {
   error: string | null;
   /** A capture that produced nothing is the case the toast points here for. */
   empty: boolean;
+  /**
+   * The full original text lives in this ledger — a DB fact (raw_content is
+   * always stored), surfaced so clearing the original at its source never
+   * feels like a gamble. The migration story: Mado is where things end up.
+   */
+  safe: boolean;
 }
 
 /**
@@ -71,6 +79,14 @@ export function buildSourceRows(payload: GraphPayload, filter: SourceFilter = 'a
         empty: !failed && memoryCount === 0,
         failed,
         error: s.error_message ?? null,
+        // Not "status === complete": the seed's sources carry no status at
+        // all, and a source that produced no memories still holds its text.
+        // Unsafe is only what genuinely is: failed, or still being read.
+        safe:
+          !failed &&
+          s.status !== 'pending' &&
+          s.status !== 'processing' &&
+          s.raw_content.trim().length > 0,
       };
     })
     .sort(
@@ -88,6 +104,8 @@ export function SourcesView() {
   const selectedId = useUiStore((s) => s.selectedId);
   const select = useUiStore((s) => s.select);
   const filter = useUiStore((s) => s.sourceFilter);
+  const mode = useUiStore((s) => s.sourcesMode);
+  const setMode = useUiStore((s) => s.setSourcesMode);
   const setFilter = useUiStore((s) => s.setSourceFilter);
 
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -114,6 +132,21 @@ export function SourcesView() {
     }
   };
 
+  /* Which of each source's memories the free plan has put to sleep — shown
+     beside the count, so the loss has an address, not just a number. */
+  const sleepingBySource = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!payload) return map;
+    const cutoff = freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace));
+    if (cutoff === null) return map;
+    for (const m of payload.memories) {
+      if (isArchivedByPlan(m.created_at, cutoff)) {
+        map.set(m.source_id, (map.get(m.source_id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [payload]);
+
   const rows = useMemo(
     () => (payload ? buildSourceRows(payload, filter) : []),
     [payload, filter],
@@ -125,7 +158,26 @@ export function SourcesView() {
     <div className="sources" data-testid="sources-view">
       <div className="sources__head">
         <span>{t('sources.title')}</span>
-        <div className="sources__filters">
+        {/* One control in the head, and only one: the mode. It reads as a
+            single segmented piece, not a crowd of pills — the type filters
+            live a row below, and only where they apply. */}
+        <div className="sources__modes" role="group" aria-label={t('sources.mode.aria')}>
+          {(['list', 'folders'] as const).map((m) => (
+            <button
+              key={m}
+              className={`sources__mode${mode === m ? ' sources__mode--on' : ''}`}
+              data-testid={`sources-mode-${m}`}
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+            >
+              {t(m === 'list' ? 'sources.mode.list' : 'sources.mode.folders')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'list' && (
+        <div className="sources__subbar">
           {(['all', 'text', 'link', 'screenshot'] as const).map((f) => (
             <button
               key={f}
@@ -137,11 +189,22 @@ export function SourcesView() {
             </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {rows.length === 0 && <p className="sources__empty">{t('sources.empty')}</p>}
+      {mode === 'folders' && <FolderView />}
+      {mode === 'list' && rows.length === 0 && (
+        <p className="sources__empty">{t('sources.empty')}</p>
+      )}
 
-      {rows.map(({ source, memoryCount, empty, failed, error }) => (
+      {/* The migration story in one line: what's here is held, whole. */}
+      {mode === 'list' && rows.some((r) => r.safe) && (
+        <p className="sources__held-summary" data-testid="sources-held-summary">
+          {t('sources.safeSummary', { n: rows.filter((r) => r.safe).length })}
+        </p>
+      )}
+
+      {mode === 'list' &&
+        rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
         <div
           key={source.id}
           data-testid={`source-row-${source.id}`}
@@ -181,6 +244,41 @@ export function SourcesView() {
               {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
               {empty ? t('sources.meta.empty') : ''}
               {failed ? `${t('sources.meta.failed')}${error ? ` — ${error}` : ''}` : ''}
+              {safe && (
+                <span className="source-row__safe" data-testid={`safe-${source.id}`} title={t('sources.safe')}>
+                  {' '}✓ {t('sources.held')}
+                </span>
+              )}
+              {/* The later door into review (spec §21): drop now, check when
+                  you like — an unreviewed source says so until you do. */}
+              {!failed &&
+                (source.reviewed_at ? (
+                  <span className="source-row__reviewed" data-testid={`reviewed-${source.id}`}>
+                    {' '}✓ {t('sources.reviewed')}
+                  </span>
+                ) : (
+                  <button
+                    className="source-row__review"
+                    data-testid={`review-open-${source.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      useUiStore.getState().openReview([source.id]);
+                    }}
+                  >
+                    {t('sources.reviewPending')}
+                  </button>
+                ))}
+              {source.url && (
+                <a
+                  className="source-row__origin"
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {' '}{t('sources.openOrigin')}
+                </a>
+              )}
             </span>
           </span>
           {failed ? (
@@ -196,7 +294,15 @@ export function SourcesView() {
               {retrying === source.id ? t('sources.retrying') : t('sources.retry')}
             </button>
           ) : (
-            <span className="source-row__count">{memoryCount}</span>
+            <span className="source-row__count">
+              {memoryCount}
+              {sleepingBySource.get(source.id) ? (
+                <span className="source-row__sleeping">
+                  {' · '}
+                  {t('sources.sleeping', { count: sleepingBySource.get(source.id)! })}
+                </span>
+              ) : null}
+            </span>
           )}
         </div>
       ))}
