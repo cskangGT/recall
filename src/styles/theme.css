@@ -4625,3 +4625,39 @@ body:lang(ko) {
 .bar__photo-add:hover {
   color: var(--text-dim);
 }
+
+/* The answer's press — a little brighter than the chips it closes. */
+.arc__profile-confirm {
+  margin-left: 6px;
+  padding: 5px 14px;
+  border: 1px solid rgba(236, 224, 246, 0.34);
+  border-radius: var(--radius-pill);
+  background: rgba(236, 224, 246, 0.16);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.arc__profile-confirm:hover {
+  background: rgba(236, 224, 246, 0.26);
+  border-color: rgba(236, 224, 246, 0.5);
+}
+
+/* The stars rise in order once the question is answered. */
+.arc__door {
+  animation: door-rise 0.6s ease both;
+  animation-delay: calc(var(--i, 0) * 140ms);
+}
+
+@keyframes door-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc__door {
+    animation: none;
+  }
+}

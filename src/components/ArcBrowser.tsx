@@ -352,6 +352,19 @@ export function ArcBrowser() {
     setProfile(next);
     localStorage.setItem('mado.ob.profile', JSON.stringify(next));
   };
+  /*
+   * The question is answered with a press, and the doors — the stars —
+   * rise only after it. Picking chips alone changed one hint, which read as
+   * nothing happening; an answer should visibly open the next step. Once
+   * answered (even with nothing picked), the stars are simply there.
+   */
+  const [profileDone, setProfileDone] = useState(
+    () => localStorage.getItem('mado.ob.profileDone') === '1',
+  );
+  const confirmProfile = () => {
+    localStorage.setItem('mado.ob.profileDone', '1');
+    setProfileDone(true);
+  };
 
   const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
   useEffect(() => {
@@ -595,6 +608,7 @@ export function ArcBrowser() {
     <>
       <button
         className="arc__door arc__door--fill"
+        style={{ '--i': 0 } as React.CSSProperties}
         data-testid="door-fill"
         aria-expanded={hasSourceChoices ? fillOpen : undefined}
         onClick={() => {
@@ -631,6 +645,15 @@ export function ArcBrowser() {
           {t(`welcome.profile.${kind}`)}
         </button>
       ))}
+      {!profileDone && (
+        <button
+          className="arc__profile-confirm"
+          data-testid="profile-confirm"
+          onClick={confirmProfile}
+        >
+          {t('welcome.profileConfirm')}
+        </button>
+      )}
     </div>
   );
 
@@ -1068,18 +1091,21 @@ export function ArcBrowser() {
                 <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
                 <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
                 {profileRow}
-                <div className="arc__doors">
-                  {fillDoor}
-                  <button
-                    className="arc__door"
-                    data-testid="door-diary"
-                    onClick={() => useUiStore.getState().setView('diary')}
-                  >
-                    <span className="arc__door-star" aria-hidden="true" />
-                    <span className="arc__door-name">{t('welcome.diary')}</span>
-                    <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
-                  </button>
-                </div>
+                {profileDone && (
+                  <div className="arc__doors" data-testid="welcome-doors">
+                    {fillDoor}
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 1 } as React.CSSProperties}
+                      data-testid="door-diary"
+                      onClick={() => useUiStore.getState().setView('diary')}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.diary')}</span>
+                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
+                    </button>
+                  </div>
+                )}
                 {fillSources}
                 {fileInput}
               </>
@@ -1101,22 +1127,30 @@ export function ArcBrowser() {
                   door is the old Enter-to-look-around, given a surface.
                 */}
                 {profileRow}
-                <div className="arc__doors">
-                  {fillDoor}
-                  <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
-                    <span className="arc__door-star" aria-hidden="true" />
-                    <span className="arc__door-name">{t('welcome.browse')}</span>
-                  </button>
-                  <button
-                    className="arc__door"
-                    data-testid="door-diary"
-                    onClick={() => useUiStore.getState().setView('diary')}
-                  >
-                    <span className="arc__door-star" aria-hidden="true" />
-                    <span className="arc__door-name">{t('welcome.diary')}</span>
-                    <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
-                  </button>
-                </div>
+                {profileDone && (
+                  <div className="arc__doors" data-testid="welcome-doors">
+                    {fillDoor}
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 1 } as React.CSSProperties}
+                      data-testid="door-browse"
+                      onClick={dismissWelcome}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.browse')}</span>
+                    </button>
+                    <button
+                      className="arc__door"
+                      style={{ '--i': 2 } as React.CSSProperties}
+                      data-testid="door-diary"
+                      onClick={() => useUiStore.getState().setView('diary')}
+                    >
+                      <span className="arc__door-star" aria-hidden="true" />
+                      <span className="arc__door-name">{t('welcome.diary')}</span>
+                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
+                    </button>
+                  </div>
+                )}
                 {fillSources}
                 {fileInput}
               </>
