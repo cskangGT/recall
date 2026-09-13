@@ -3,7 +3,7 @@ import { useUiStore } from '../store/uiStore';
 import { t } from '../i18n';
 import type { CaptureBatchResult, CaptureInput, CaptureResult } from '../data/dataSource';
 import type { ReorgEvent } from '../core/applyReorg';
-import { runBatchPipeline, type BatchItem, type BatchResult } from './batch';
+import { runBatchPipeline, summarizeCategories, type BatchItem, type BatchResult } from './batch';
 
 /**
  * The driver for a bulk drop: runs the batch pipeline, paces the reveal, and
@@ -181,12 +181,6 @@ async function runReaderImport(
 
     const addedMemoryIds = response.results.flatMap((r) => r.addedMemoryIds);
     const skippedCount = response.results.reduce((n, r) => n + r.skipped.length, 0);
-    const added = new Set(addedMemoryIds);
-    const byCategory = new Map<string, number>();
-    for (const m of response.graph.memories) {
-      if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-    }
-    const nameOf = new Map(response.graph.categories.map((c) => [c.id, c.name] as const));
 
     if (!reduced) await wait(ORGANIZE_MS);
     useWorkspaceStore.getState().applyPayload(response.graph);
@@ -212,14 +206,7 @@ async function runReaderImport(
         skipped: skippedCount,
         sources: response.notes.imported,
         sourceIds: response.results.map((r) => r.sourceId),
-        categories: [...byCategory.entries()]
-          .map(([id, count]) => ({
-            id,
-            name: nameOf.get(id) ?? '',
-            added: count,
-            isNew: !knownCategoryIds.has(id),
-          }))
-          .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+        categories: summarizeCategories(response.graph, addedMemoryIds, knownCategoryIds),
       },
     });
   } catch (err) {
@@ -253,27 +240,13 @@ async function batchViaEndpoint(
     useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
   }
 
-  const added = new Set(addedMemoryIds);
-  const byCategory = new Map<string, number>();
-  for (const m of response.graph.memories) {
-    if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-  }
-  const nameOf = new Map(response.graph.categories.map((c) => [c.id, c.name] as const));
-
   return {
     payload: response.graph,
     addedMemoryIds,
     sourceIds: response.results.map((r) => r.sourceId),
     claimCount: addedMemoryIds.length + skippedCount,
     skippedCount,
-    categories: [...byCategory.entries()]
-      .map(([id, count]) => ({
-        id,
-        name: nameOf.get(id) ?? '',
-        added: count,
-        isNew: !knownCategoryIds.has(id),
-      }))
-      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+    categories: summarizeCategories(response.graph, addedMemoryIds, knownCategoryIds),
     events: response.reorgs.map((reorg) => ({
       id: reorg.id,
       operation: reorg.operation as ReorgEvent['operation'],
@@ -337,27 +310,13 @@ async function batchViaApi(
   if (failed > 0) useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
 
   const payload = last.graph;
-  const added = new Set(addedMemoryIds);
-  const byCategory = new Map<string, number>();
-  for (const m of payload.memories) {
-    if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-  }
-  const nameOf = new Map(payload.categories.map((c) => [c.id, c.name] as const));
-
   return {
     payload,
     addedMemoryIds,
     sourceIds: [],
     claimCount: addedMemoryIds.length + skippedCount,
     skippedCount,
-    categories: [...byCategory.entries()]
-      .map(([id, count]) => ({
-        id,
-        name: nameOf.get(id) ?? '',
-        added: count,
-        isNew: !knownCategoryIds.has(id),
-      }))
-      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+    categories: summarizeCategories(payload, addedMemoryIds, knownCategoryIds),
     events,
   };
 }

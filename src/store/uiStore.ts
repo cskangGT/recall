@@ -4,7 +4,7 @@ import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 import type { CaptureStory } from '../capture/story';
-import type { BatchCategorySummary } from '../capture/batch';
+import type { BatchSummary } from '../capture/batch';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
 
@@ -20,16 +20,7 @@ export interface BatchRevealState {
   total: number;
   /** Items read so far — drives the pour of dots. */
   read: number;
-  summary: {
-    memories: number;
-    skipped: number;
-    sources: number;
-    categories: BatchCategorySummary[];
-    /** The stretch of time this batch rescued, when the import knows it. */
-    period?: { from: string; to: string } | null;
-    /** The batch's sources, in order — what "검수하기" walks through. */
-    sourceIds?: string[];
-  } | null;
+  summary: BatchSummary | null;
 }
 
 export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
