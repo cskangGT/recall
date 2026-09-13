@@ -44,8 +44,8 @@ export interface NotesReadResult {
  * live secret key, which was faithfully extracted into a memory and travelled
  * to the extraction model as prompt content. People keep secrets in notes
  * apps; an importer that forwards notes wholesale is an exfiltration tool
- * with good intentions. (scripts/import-notes.mjs carries the same list —
- * keep them in step.)
+ * with good intentions. (scripts/import-notes.mjs and import-instagram.mjs
+ * import this very function — one list, one place.)
  */
 export const SECRET_PATTERNS: RegExp[] = [
   /sk_(live|test)_[A-Za-z0-9]{8,}/, // Stripe secrets
