@@ -3,7 +3,13 @@ dist
 
 # Claude Code's scratch space, including git worktrees. A worktree is a repo
 # inside the repo; committing one produces a directory nobody can check out.
-.claude/
+# One exception, re-included rung by rung (git cannot un-ignore a child of an
+# ignored directory): the import-instagram skill is part of the product — it
+# is how saved posts get in — so it ships with the checkout.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/import-instagram/
 .DS_Store
 test-results
 playwright-report

@@ -99,6 +99,25 @@ Safari launches. Two things also need changing after the conversion:
 `chrome.notifications` is unsupported, and the shortcut has to be assigned by
 hand. That is the honest state of it, not "coming soon".
 
+### Bringing in what you saved on Instagram
+
+There is no API for saved posts, and the export carries captions alone — a
+save whose caption is "👇" tells nobody what it was. So the reading happens in
+your own browser: the `import-instagram` skill (`.claude/skills/import-instagram/`)
+has Claude open each saved post in your logged-in Chrome, look at it, and write
+a few sentences about what it shows. That JSON goes through
+
+```
+npm run import:instagram -- --file=posts.json [--dry-run] [--port=5174]
+```
+
+which lays each post out the way the ZIP importer does — the description, the
+author and date, the caption, the collection, the link last — drops
+credential-shaped lines, remembers what it sent in `~/.recall/instagram-seen.json`
+so the next run only brings the new ones, and ends with a link. Open it and
+the app plays the same declaration a file drop earns: how many memories, into
+which interests, and the review. `npm run import:notes` ends with the same link.
+
 ### The demo
 
 ```bash
@@ -323,6 +342,7 @@ Three things that will otherwise be rediscovered the hard way:
 |---|---|
 | `seed/` | The entire dataset. Generated — never hand-edit. |
 | `scripts/generate_seed.py` | Authors the 47 memories, generates vectors, verifies every gate |
+| `scripts/import-instagram.mjs`, `scripts/import-notes.mjs` | CLI importers — post to `capture/batch`, end with the reveal link |
 | `src/types/graph.ts` | The contract between every other module |
 | `src/data/dataSource.ts` | **The Phase 4 swap point** |
 | `src/reorg/` | Thresholds, vector math, gates, apply/undo, the 2.4s timeline |
