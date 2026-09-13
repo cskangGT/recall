@@ -82,6 +82,13 @@ describe('toItem', () => {
     expect(toItem(wordy).item.title).toBe('@cafe_owner · The quick brown fox jumps over the lazy dog');
   });
 
+  it('a caption that is only an emoji or a pointer is no title — the description is', () => {
+    const arrow = validatePosts([{ ...post, caption: '👇' }]).posts[0]!;
+    expect(toItem(arrow).item.title).toBe('@cafe_owner · A photo of a bright corner café with a');
+    const dots = validatePosts([{ ...post, caption: '...\n👇👇' }]).posts[0]!;
+    expect(toItem(dots).item.title).toBe('@cafe_owner · A photo of a bright corner café with a');
+  });
+
   it('falls back to the description when there is no caption', () => {
     const p2 = validatePosts([{ ...post, caption: null }]).posts[0]!;
     expect(toItem(p2).item.title).toBe('@cafe_owner · A photo of a bright corner café with a');

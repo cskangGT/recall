@@ -136,3 +136,45 @@ test('a user correction persists to the server (AC-28)', async ({ page }) => {
   expect(after).toContain('Hiring=8');
   expect(after).toContain('AI Tooling=8');
 });
+
+test('a batch written by the CLI is declared when its link is opened', async ({ page }) => {
+  // What `npm run import:instagram` does behind the page's back.
+  const res = await page.request.post('/api/workspaces/ws_demo/capture/batch', {
+    data: {
+      items: [
+        {
+          type: 'text',
+          title: '@runwithjae · 10K plan',
+          content:
+            'A reel laying out a 10K training plan: three runs a week, one easy, one tempo, one long.\n\n' +
+            'Instagram reel by @runwithjae, posted 2026-09-05.\n\nhttps://www.instagram.com/reel/E2E01/',
+          url: 'https://www.instagram.com/reel/E2E01/',
+        },
+      ],
+      locale: 'en',
+      includeGraph: false,
+    },
+  });
+  expect(res.ok()).toBe(true);
+  const ids = ((await res.json()).results as { sourceId: string }[]).map((r) => r.sourceId);
+
+  await page.goto(`${API_MODE}&skipWelcome=1&reveal=${ids.join(',')}&from=2026-09-05&to=2026-09-05`);
+  await expect(page.getByTestId('batch-reveal-declare')).toBeVisible();
+  await expect(page.getByTestId('batch-reveal-period')).toContainText('2026-09-05');
+  await expect(page.getByTestId('batch-reveal-review')).toBeVisible();
+  // Spent on arrival — a reload must not declare twice.
+  expect(page.url()).not.toContain('reveal=');
+});
+
+test('a reveal link in seed mode is spent quietly, with no API call', async ({ page }) => {
+  const apiCalls: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/')) apiCalls.push(r.url());
+  });
+  await page.goto('/?skipWelcome=1&reveal=src_langchain_thread');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(page.url()).not.toContain('reveal=');
+  await expect(page.getByTestId('batch-reveal-declare')).toHaveCount(0);
+  expect(apiCalls).toEqual([]);
+});

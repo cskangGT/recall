@@ -130,8 +130,10 @@ export function toItem(post) {
     post.url,
   ].filter((l) => l !== null);
 
+  // A caption of "👇" or "..." names nothing; the agent's account does.
+  const captionLine = (caption ?? '').split('\n')[0]?.trim() ?? '';
   const opener =
-    (caption ?? '').split('\n')[0]?.trim() ||
+    (/[\p{L}\p{N}]/u.test(captionLine) ? captionLine : '') ||
     (description ?? '').split(/(?<=[.!?。])\s/)[0]?.trim() ||
     post.code;
   const who = post.author ? `@${post.author}` : `Instagram ${post.kind}`;
