@@ -163,7 +163,7 @@ describe('seen-set', () => {
     const file = path.join(dir, 'nested', 'instagram-seen.json');
     expect(loadSeen(file)).toEqual({ version: 1, posts: {} });
     const seen = {
-      version: 1,
+      version: 1 as const,
       posts: {
         'https://www.instagram.com/p/ABC123/': {
           sourceId: 'src_1',
