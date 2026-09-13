@@ -14,6 +14,7 @@ import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
 import { importFiles, isTextLike, isZip } from './capture/importFiles';
+import { revealOnReturn } from './capture/revealOnReturn';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -104,6 +105,14 @@ export function App() {
     };
     setTimeout(() => void confirm(), 400);
   }, []);
+
+  // Back from `npm run import:instagram` / `import:notes`: the CLI printed a
+  // link carrying the ids it wrote, and the page plays their declaration once
+  // the graph is in — the summary is read out of it, not requested.
+  useEffect(() => {
+    if (loading) return;
+    revealOnReturn();
+  }, [loading]);
 
   useEffect(() => {
     const onResize = () =>
