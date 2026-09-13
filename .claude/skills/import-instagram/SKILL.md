@@ -40,26 +40,37 @@ into memories and ends with a link that plays the declaration in the app.
    (ask for the handle if you don't know it, or read it from the profile
    link). The first visit asks the user for site access; say so. If the page
    is a login form, stop — the user signs in, never you.
-4. **Count first.** Scroll the grid (`computer` scroll, a few ticks at a time,
-   until no new `a[href^="/p/"]` / `a[href^="/reel/"]` links appear or you have
-   passed the stop URL). Collect the links in order — the grid is newest-saved
-   first. Tell the user how many are new before opening any (≈ 8 seconds each,
-   so 80 posts is about ten minutes) and honor a `--max` if they gave one.
-   Before scrolling, check `read_network_requests` for a response whose URL
-   contains `feed/saved` — if it carries `caption.text`, `user.username`,
-   `taken_at` and `code` for many posts at once, take the metadata from there
-   and open posts only for the description.
-5. **Each post.** `navigate` to the post URL, `wait` 2 seconds, then:
-   - `get_page_text` / `read_page` for the caption, the author handle
-     (`@…` in the header), and the date (`time[datetime]`, ISO).
-   - `computer` `screenshot` and look at it. Write `description`: 2–4
-     sentences on what the post shows — the text in the image, the reel's
-     on-screen captions or subject, a card-news' point, the product, the
-     place. Write it as a note to the person who saved it, in the language
-     the post is in. This is the sentence the memory will be built from.
-   - A carousel: press the right arrow (`key` "ArrowRight") once or twice and
-     screenshot again if the first slide is not enough.
-   - `wait` 3–5 seconds before the next one.
+4. **Count first.** Scroll the grid (`computer` scroll, ten ticks at a time,
+   3 seconds between) until no new `a[href^="/p/"]` / `a[href^="/reel/"]`
+   links appear or you have passed the stop URL. About 21 tiles load per
+   screenful; collect the hrefs with one `javascript_tool` call — the grid is
+   newest-saved first. Tell the user how many are new before opening any
+   (≈ 8 seconds each, so 80 posts is about ten minutes) and honor a `--max`
+   if they gave one. The feed itself arrives as an opaque `POST /api/graphql`
+   whose body the tools cannot read, so there is no shortcut past the posts.
+5. **Each post.** `navigate` to the post URL, `wait` 3 seconds, then one
+   `javascript_tool` call reads everything textual off the meta tags — the
+   page's own `h1`/header markup is not stable, the meta tags are:
+   ```js
+   const m=(s)=>document.querySelector(s)?.getAttribute('content')||'';
+   const d=m('meta[name="description"]');           // "N likes, M comments - handle on Month D, YYYY: "…""
+   const a=d.match(/ - ([A-Za-z0-9._]+) on /);
+   const og=m('meta[property="og:title"]');         // "Name on Instagram: "full caption""
+   const cap=og.replace(/^[^"]*on Instagram: "/,'').replace(/"$/,'');
+   ({url:location.href, handle:a?a[1]:null,
+     time:document.querySelector('time[datetime]')?.getAttribute('datetime'), caption:cap})
+   ```
+   Name the field `handle`, not `author` — the browser tool redacts any
+   result key that looks like a credential field, and `author` trips it.
+   Then `computer` `screenshot` (scale 0.6 is enough) and look at it. Write
+   `description`: 2–4 sentences on what the post shows — the text in the
+   image, the reel's on-screen captions or subject, a card-news' point, the
+   product, the place. Write it as a note to the person who saved it, in the
+   language the post is in. This is the sentence the memory will be built
+   from; a caption that only says "댓글에 ○○ 남기세요" has nothing else.
+   A carousel's cover usually names the topic; press `key` "ArrowRight" and
+   screenshot again only when it does not. `wait` 3 seconds before the next
+   post. Two to five posts per `browser_batch` keeps the round trips down.
 6. **Write the file** to the session scratchpad as a JSON array (schema below),
    one row per post, in the order you read them.
 7. **Dry run, then run.**
