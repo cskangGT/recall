@@ -1337,11 +1337,13 @@ export function ArcBrowser() {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
                 e.stopPropagation();
-                select(memory.id);
+                useUiStore.getState().openMemoryPage(memory.id);
               }}
               onDragStart={() => setDragId(memory.id)}
               onDragEnd={() => setDragId(null)}
-              onClick={() => select(memory.id)}
+              // Picking a memory opens it as a page in the middle — found,
+              // now read — and selects it, so the inspector follows too.
+              onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
             >
               <span className="item__icon" title={source ? SOURCE_LABEL[source.type] : undefined}>
                 {source ? SOURCE_ICON[source.type] : '·'}

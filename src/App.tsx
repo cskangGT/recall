@@ -18,6 +18,7 @@ import { revealOnReturn } from './capture/revealOnReturn';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
 import { ReviewPanel } from './components/ReviewPanel';
+import { MemoryPage } from './components/MemoryPage';
 import { UpgradeSheet } from './components/UpgradeSheet';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
@@ -443,6 +444,7 @@ export function App() {
         )}
       </div>
       <Inspector />
+      <MemoryPage />
       <BatchReveal />
       <ReviewPanel />
       <UpgradeSheet />

@@ -143,6 +143,12 @@ interface UiState {
    * sequence of one.
    */
   review: { sourceIds: string[]; index: number } | null;
+  /**
+   * The memory open as a page in the middle of the screen — found, now being
+   * read. Independent of `selectedId`: closing the page keeps the selection,
+   * so the inspector still shows what you were looking at.
+   */
+  memoryPage: string | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -187,6 +193,8 @@ interface UiState {
   /** Steps to the next source, or closes after the last one. */
   advanceReview: () => void;
   closeReview: () => void;
+  openMemoryPage: (id: string) => void;
+  closeMemoryPage: () => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -230,6 +238,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   upgradeSheet: false,
   awaken: false,
   review: null,
+  memoryPage: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -295,6 +304,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       askThread: [],
       mapFocus: null,
       review: null,
+      memoryPage: null,
       cameraHistory: [],
     }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
@@ -362,6 +372,10 @@ export const useUiStore = create<UiState>((set, get) => ({
         : { review: { ...s.review, index } };
     }),
   closeReview: () => set({ review: null }),
+  // Opening a page is also selecting: the inspector follows, and the map
+  // knows what to centre on when you go there next.
+  openMemoryPage: (id) => set({ memoryPage: id, selectedId: id }),
+  closeMemoryPage: () => set({ memoryPage: null }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -382,6 +396,12 @@ export const useUiStore = create<UiState>((set, get) => ({
     // else. Verdicts not yet confirmed are simply not applied.
     if (s.review !== null) {
       set({ review: null });
+      return;
+    }
+    // The page closes before anything under it; the selection it came from
+    // stays, so the next Escape has something to clear.
+    if (s.memoryPage !== null) {
+      set({ memoryPage: null });
       return;
     }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {

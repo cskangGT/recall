@@ -6,13 +6,13 @@ import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
-const SOURCE_LABEL: Record<Source['type'], string> = {
+export const SOURCE_LABEL: Record<Source['type'], string> = {
   text: t('type.text'),
   link: t('type.link'),
   screenshot: t('type.screenshot'),
 };
 
-const relativeDate = (iso: string): string => {
+export const relativeDate = (iso: string): string => {
   const d = new Date(iso);
   return d.toLocaleDateString(currentLocale() === 'ko' ? 'ko-KR' : 'en-GB', { day: 'numeric', month: 'short' });
 };
@@ -57,7 +57,7 @@ function SourceCard({ source }: { source: Source }) {
   );
 }
 
-function MemoryRow({
+export function MemoryRow({
   memory,
   payload,
   onSelect,
@@ -284,7 +284,18 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.memory')}</div>
+      <div className="inspector__eyebrow inspector__eyebrow--row">
+        <span>{t('inspector.memory')}</span>
+        {/* The quick look offers the long one: the same page the reading list
+            opens on a click, for when you arrived here from the map. */}
+        <button
+          className="inspector__expand"
+          data-testid="inspector-expand"
+          onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
+        >
+          {t('page.expand')}
+        </button>
+      </div>
       <p className="memory-text">{memory.text}</p>
       <div className="chips">
         {category && (
