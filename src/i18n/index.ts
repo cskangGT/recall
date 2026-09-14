@@ -158,6 +158,7 @@ const en = {
   'composer.ask': 'Ask your memory a question',
   'composer.send': 'Send',
   'composer.thinking': 'Thinking…',
+  'composer.suggestKbd': 'Enter asks the suggested question — Tab to edit it first',
   'composer.thinkingAria': 'Thinking',
   'composer.askAction': 'Ask',
 
@@ -517,6 +518,7 @@ const ko: Record<StringKey, string> = {
   'composer.ask': '내 기억에게 질문하기',
   'composer.send': '보내기',
   'composer.thinking': '생각 중…',
+  'composer.suggestKbd': 'Enter로 추천 질문을 바로 물어봐요 — Tab은 먼저 고쳐 쓰기',
   'composer.thinkingAria': '생각 중',
   'composer.askAction': '질문',
 

@@ -45,12 +45,22 @@ export function Composer({
 
   const [text, setText] = useState('');
 
+  /*
+   * The recommendation is a question you can actually ask. When the box is
+   * empty and the placeholder is a recommended question (not the generic
+   * invitation), Enter asks it and Tab takes it into the box to be edited
+   * first. The greeting's empty Enter still means "look around", so this
+   * never applies on the first run.
+   */
+  const suggestion = !firstRun && placeholder && text.length === 0 ? placeholder : undefined;
+
   const submit = async () => {
-    if (!text.trim() || !payload) {
+    const question = text.trim() || suggestion || '';
+    if (!question || !payload) {
       onSubmitted?.();
       return;
     }
-    if (await runAsk(text)) setText('');
+    if (await runAsk(question)) setText('');
     onSubmitted?.();
   };
 
@@ -113,11 +123,22 @@ export function Composer({
             e.currentTarget.blur();
             return;
           }
+          if (e.key === 'Tab' && suggestion && !e.shiftKey) {
+            e.preventDefault();
+            setText(suggestion);
+            return;
+          }
           if (e.key !== 'Enter') return;
           e.preventDefault();
           if (!thinking) void submit();
         }}
       />
+      {suggestion && (
+        <kbd className="composer__kbd" data-testid="composer-kbd" title={t('composer.suggestKbd')}>
+          <span aria-hidden="true">↵</span>
+          <span className="sr-only">{t('composer.suggestKbd')}</span>
+        </kbd>
+      )}
       <button
         className="composer__send"
         data-testid={firstRun ? 'welcome-send' : 'composer-send'}

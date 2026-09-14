@@ -714,6 +714,19 @@ button {
   color: var(--text-faint);
 }
 
+/* The recommendation is askable: a quiet ↵ beside the placeholder says so. */
+.composer__kbd {
+  flex: none;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--edge);
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
 .composer__send {
   flex: none;
   padding: 9px 15px;

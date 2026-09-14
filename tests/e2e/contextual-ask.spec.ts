@@ -44,3 +44,30 @@ test('seed mode does not offer a summary it cannot honestly produce', async ({ p
   await expect(page.getByTestId('reading-list')).toBeVisible();
   await expect(page.getByTestId('reading-summarize')).toHaveCount(0);
 });
+
+/**
+ * The recommendation is a question you can actually ask: Enter on an empty
+ * composer asks it, Tab takes it into the box to be edited first. The
+ * generic invitation is not a question, so an empty Enter there still does
+ * nothing.
+ */
+test('Enter asks the recommended question, Tab takes it into the box', async ({ page }) => {
+  const input = page.getByTestId('composer-input');
+  await expect(page.getByTestId('composer-kbd')).toHaveCount(0);
+
+  await named(page, 'AI Tooling').click();
+  await expect(input).toHaveAttribute('placeholder', /AI Tooling/);
+  await expect(page.getByTestId('composer-kbd')).toBeVisible();
+  const suggested = await input.getAttribute('placeholder');
+
+  // Tab: the suggestion becomes text, ready to edit.
+  await input.click();
+  await page.keyboard.press('Tab');
+  await expect(input).toHaveValue(suggested!);
+  await expect(page.getByTestId('composer-kbd')).toHaveCount(0);
+
+  // Enter on the empty box asks the suggestion itself.
+  await input.fill('');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+});
