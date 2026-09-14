@@ -71,3 +71,17 @@ test('Enter asks the recommended question, Tab takes it into the box', async ({ 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('browser-answer')).toBeVisible();
 });
+
+/**
+ * "What have I been into lately?" resembles no memory, so it used to be
+ * refused. Now the memory looks around the last two weeks and says.
+ */
+test('a reflective question is answered by looking around, not refused', async ({ page }) => {
+  const input = page.getByTestId('composer-input');
+  await input.fill('내가 요즘 관심있는게 뭐야?');
+  await page.keyboard.press('Enter');
+  const answer = page.getByTestId('browser-answer');
+  await expect(answer).toBeVisible();
+  await expect(answer).not.toContainText(/anything saved about that|기억해둔 게 없어/);
+  await expect(answer).toContainText(/Lately|요즘/);
+});

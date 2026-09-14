@@ -185,6 +185,10 @@ const en = {
   // Must stay word-for-word identical to scriptedAsk's REFUSAL — the demo
   // asserts the refusal verbatim (AC-35), and en is the language it runs in.
   'ask.refusalText': "I don't have anything saved about that yet.",
+  'ask.reflect.lead': "Lately it has mostly been '{top}' — {count} things kept in two weeks.",
+  'ask.reflect.rest': 'Beside it, {rest} came up too.',
+  'ask.reflect.one': "Lately it has been '{top}', and only that — {count} things kept in two weeks.",
+  'ask.reflect.item': "'{name}' ({count})",
   'ask.noMatches': 'No matches.',
   'ask.followingUp': 'Following up on “{question}”',
   'ask.startFresh': 'Start fresh',
@@ -546,6 +550,10 @@ const ko: Record<StringKey, string> = {
   'ask.placeholderFollowUp': '이어서 물어보거나, 위에서 새로 시작하세요',
   // 기억 자신의 목소리로 — 보고체가 아니라 떠올리려다 비어 있는 말투.
   'ask.refusalText': '아직 그것에 대해 기억해둔 게 없어.',
+  'ask.reflect.lead': "요즘은 '{top}' 쪽에 자꾸 손이 갔지 — 두 주 동안 {count}개나 남겼으니까.",
+  'ask.reflect.rest': '그 옆으로 {rest}도 몇 번씩 챙겨 뒀고.',
+  'ask.reflect.one': "요즘 마음이 가 있던 건 '{top}' 하나였지 — 두 주 동안 {count}개.",
+  'ask.reflect.item': "'{name}' {count}개",
   'ask.noMatches': '일치하는 것이 없어요.',
   'ask.followingUp': '“{question}”에 이어서',
   'ask.startFresh': '새로 시작',

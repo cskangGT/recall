@@ -5,6 +5,7 @@ import type {
   AiProvider, AnswerResult, AskTurn, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
+  Reflection,
 } from './provider.ts';
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
@@ -130,6 +131,7 @@ export class AnthropicProvider implements AiProvider {
     question: string;
     retrieved: RetrievedMemory[];
     history?: AskTurn[];
+    reflective?: Reflection;
   }): Promise<AnswerResult> {
     const raw = await this.json(buildAnswerPrompt(input), answerSchema, 2048);
     return resolveAnswer(raw, input.retrieved);

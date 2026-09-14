@@ -101,6 +101,17 @@ export interface AnswerResult {
   refused: boolean;
 }
 
+/**
+ * The shape of the fortnight, for a reflective question: which interests
+ * took the most, and when "lately" was. The memories themselves ride in
+ * `retrieved`, sampled across those interests.
+ */
+export interface Reflection {
+  from: string;
+  to: string;
+  interests: { name: string; count: number }[];
+}
+
 export interface RetrievedMemory {
   memory_id: string;
   source_id: string;
@@ -147,6 +158,8 @@ export interface AiProvider {
   answer(input: {
     question: string;
     retrieved: RetrievedMemory[];
+    /** Set for a reflective question — the memories are a survey, not a lookup. */
+    reflective?: Reflection;
     /** Recent exchanges, oldest first — absent on a fresh question. */
     history?: AskTurn[];
   }): Promise<AnswerResult>;
@@ -161,6 +174,7 @@ export interface AiProvider {
     input: {
       question: string;
       retrieved: RetrievedMemory[];
+      reflective?: Reflection;
       history?: AskTurn[];
     },
     onDelta: (text: string) => void,

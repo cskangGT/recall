@@ -202,3 +202,24 @@ describe('AskPipeline', () => {
     expect(rows.some((r) => r.refused === 0)).toBe(true);
   });
 });
+
+describe('a reflective question', () => {
+  it('is answered by looking around the last two weeks, not refused', async () => {
+    const result = await ask.ask(WS, '내가 요즘 관심있는게 뭐야?');
+    expect(result.refused).toBe(false);
+    expect(result.citations.length).toBeGreaterThan(0);
+    const payload = repo.getGraphPayload(WS);
+    const newest = payload.memories.map((m) => m.created_at).sort().at(-1)!;
+    const cutoff = Date.parse(newest) - 14 * 864e5;
+    for (const c of result.citations) {
+      const m = payload.memories.find((x) => x.id === c.memory_id)!;
+      expect(Date.parse(m.created_at)).toBeGreaterThanOrEqual(cutoff);
+    }
+  });
+
+  it('still refuses when there is nothing at all to look back on', async () => {
+    repo.createWorkspace({ id: 'ws_empty', name: 'empty' });
+    const result = await ask.ask('ws_empty', 'what have I been into lately?');
+    expect(result.refused).toBe(true);
+  });
+});

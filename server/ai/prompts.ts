@@ -1,6 +1,6 @@
 import type {
   AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, MergeDraft, NameCluster, NamedCluster,
-  NormalizeInput, NormalizeResult, RetrievedMemory,
+  NormalizeInput, NormalizeResult, RetrievedMemory, Reflection,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
 import type { EntityKind, MemoryKind } from '../../src/core/types.ts';
@@ -368,6 +368,7 @@ export function buildAnswerPrompt(input: {
   question: string;
   retrieved: RetrievedMemory[];
   history?: AskTurn[];
+  reflective?: Reflection;
 }): string {
   const numbered = input.retrieved
     .map(
@@ -394,13 +395,41 @@ export function buildAnswerPrompt(input: {
         ]
       : [];
 
+  /*
+   * A reflective question ("what have I been into lately?") is answered by
+   * looking around, not looking up: the memories below are a sample of the
+   * last two weeks, spread across the interests that took the most. The task
+   * is the shape of the fortnight — what kept coming back, what was new —
+   * in three or four sentences, still citing what it leans on. The refusal
+   * clause stays for an empty list only; a fortnight with things in it is
+   * never "nothing saved about that".
+   */
+  const task = input.reflective
+    ? [
+        'The memories below are what this person kept in the last two weeks',
+        `(${input.reflective.from} to ${input.reflective.to}), sampled across`,
+        'their interests. The interests, by how much each took:',
+        ...input.reflective.interests.map((i) => `  - ${i.name} (${i.count})`),
+        '',
+        'They are asking what has been on their mind lately. Answer by looking',
+        'around, not looking up: say what these weeks were mostly about, what',
+        'kept coming back, what was new — three or four sentences, concrete,',
+        'naming the interests and one or two specific things kept. Every',
+        'sentence must carry at least one [n] citation from the memories it',
+        'leans on. Refuse only if there are no memories at all.',
+        '',
+      ]
+    : [
+        'Answer using only the numbered memories below. They are the entire world.',
+        '',
+        'Every sentence must carry at least one [n] citation. Cite by number.',
+        'Two or three sentences. Say what the person decided or believes, in their',
+        'own terms — you are reminding them, not briefing a stranger.',
+        '',
+      ];
+
   return [
-    'Answer using only the numbered memories below. They are the entire world.',
-    '',
-    'Every sentence must carry at least one [n] citation. Cite by number.',
-    'Two or three sentences. Say what the person decided or believes, in their',
-    'own terms — you are reminding them, not briefing a stranger.',
-    '',
+    ...task,
     /*
      * The voice, fixed rather than left to the model's mood: Mado answers as
      * the person's own memory surfacing, not as an assistant reporting on

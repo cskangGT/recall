@@ -5,6 +5,7 @@ import type {
   NameCluster,
   NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
+  Reflection,
 } from './provider.ts';
 import {
   answerSchema, answerSoFar, buildAnswerPrompt, buildCondensePrompt, buildExtractPrompt,
@@ -313,6 +314,7 @@ export class OpenAiProvider implements AiProvider {
     question: string;
     retrieved: RetrievedMemory[];
     history?: AskTurn[];
+    reflective?: Reflection;
   }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
   }
@@ -352,7 +354,7 @@ export class OpenAiProvider implements AiProvider {
    * the pipeline validates.
    */
   async answerStream(
-    input: { question: string; retrieved: RetrievedMemory[]; history?: AskTurn[] },
+    input: { question: string; retrieved: RetrievedMemory[]; history?: AskTurn[]; reflective?: Reflection },
     onDelta: (text: string) => void,
   ): Promise<AnswerResult> {
     const response = await this.fetchImpl(CHAT_ENDPOINT, {

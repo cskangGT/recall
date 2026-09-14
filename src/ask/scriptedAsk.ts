@@ -1,5 +1,7 @@
 import type { GraphPayload } from '../core/types';
 import answers from '../../seed/answers.json';
+import { isReflectiveQuestion, recentSample } from '../core/reflect';
+import { t } from '../i18n';
 
 /**
  * Verbatim and exact. Recall's credibility rests entirely on every answer being
@@ -33,6 +35,11 @@ export function answerQuestion(
   payload: GraphPayload,
   history: { question: string; answer: string }[] = [],
 ): ScriptedAnswer {
+  // "What have I been into lately?" is answered by looking around, not by a
+  // script: the last two weeks by interest, phrased from the counts — the
+  // seed's honest stand-in for what a model does with the same sample.
+  if (isReflectiveQuestion(question)) return reflect(payload);
+
   const q = question.toLowerCase();
   // A follow-up rarely repeats its referent's keywords — "which tool won?"
   // says nothing about evals. The question alone is matched first; failing
@@ -72,3 +79,33 @@ export const SUGGESTED_QUESTIONS = [
   'What works for hiring?',
   'What did we decide about pricing?',
 ];
+
+function reflect(payload: GraphPayload): ScriptedAnswer {
+  const sample = recentSample(payload, { cap: 3, perInterest: 1 });
+  const [top, ...others] = sample.interests;
+  if (!top) return { answer: REFUSAL, citations: [], highlighted_node_ids: [], refused: true };
+
+  const citations: Citation[] = sample.picks.map((m, i) => ({
+    n: i + 1,
+    memory_id: m.id,
+    source_id: m.source_id,
+  }));
+  const marks = (from: number, to: number) =>
+    citations.slice(from, to).map((c) => `[${c.n}]`).join(' ');
+  const rest = others
+    .slice(0, 3)
+    .map((i) => t('ask.reflect.item', { name: i.name, count: i.count }))
+    .join(', ');
+  const answer =
+    others.length === 0
+      ? `${t('ask.reflect.one', { top: top.name, count: top.count })} ${marks(0, 1)}`
+      : `${t('ask.reflect.lead', { top: top.name, count: top.count })} ${marks(0, 1)} ` +
+        `${t('ask.reflect.rest', { rest })} ${marks(1, citations.length)}`;
+
+  const highlighted = new Set<string>();
+  for (const m of sample.picks) {
+    highlighted.add(m.id);
+    highlighted.add(m.category_id);
+  }
+  return { answer: answer.trim(), citations, highlighted_node_ids: [...highlighted], refused: false };
+}

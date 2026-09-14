@@ -1,6 +1,7 @@
+import { isReflectiveQuestion, recentSample } from '../../src/core/reflect.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
-import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
+import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory, Reflection } from '../ai/provider.ts';
 import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
 
 /**
@@ -75,7 +76,7 @@ export class AskPipeline {
       yield { event: 'done', data: prepared.refusal };
       return;
     }
-    const { payload, context, survivingCount } = prepared;
+    const { payload, context, survivingCount, reflective } = prepared;
 
     /*
      * The provider pushes deltas through a callback; a generator pulls. The
@@ -92,11 +93,11 @@ export class AskPipeline {
     const streamFn = this.ai.answerStream?.bind(this.ai);
     const flight = (
       streamFn
-        ? streamFn({ question, retrieved: context, history }, (text) => {
+        ? streamFn({ question, retrieved: context, history, reflective }, (text) => {
             pending.push(text);
             wake();
           })
-        : this.ai.answer({ question, retrieved: context, history })
+        : this.ai.answer({ question, retrieved: context, history, reflective })
     ).finally(wake);
 
     let settled = false;
@@ -165,8 +166,8 @@ export class AskPipeline {
       this.record(workspaceId, question, prepared.refusal);
       return prepared.refusal;
     }
-    const { payload, context, survivingCount } = prepared;
-    const generated = await this.ai.answer({ question, retrieved: context, history });
+    const { payload, context, survivingCount, reflective } = prepared;
+    const generated = await this.ai.answer({ question, retrieved: context, history, reflective });
     return this.finish(workspaceId, question, payload, context, survivingCount, generated);
   }
 
@@ -181,9 +182,33 @@ export class AskPipeline {
         payload: ReturnType<Repository['getGraphPayload']>;
         context: RetrievedMemory[];
         survivingCount: number;
+        reflective?: Reflection;
       }
   > {
     const payload = this.repo.getGraphPayload(workspaceId);
+
+    /*
+     * "What have I been into lately?" resembles no memory, so retrieval would
+     * refuse it — and it is exactly the question a memory answers by looking
+     * around. The last two weeks, sampled across interests, stand in for the
+     * retrieval set; the citation contract downstream is unchanged.
+     */
+    if (isReflectiveQuestion(question)) {
+      const sample = recentSample(payload);
+      if (sample.picks.length === 0 || !sample.from || !sample.to) {
+        return { refusal: refusal(0) };
+      }
+      return {
+        payload,
+        context: this.expand(payload, sample.picks),
+        survivingCount: sample.picks.length,
+        reflective: {
+          from: sample.from,
+          to: sample.to,
+          interests: sample.interests.map((i) => ({ name: i.name, count: i.count })),
+        },
+      };
+    }
 
     /*
      * A follow-up retrieves on the conversation, not on itself. "Which of
@@ -212,21 +237,29 @@ export class AskPipeline {
 
     // Context expansion (spec §9.2 step 5): the model sees each memory with its
     // category and source, so it can attribute rather than guess.
+    const context = this.expand(payload, surviving.slice(0, CONTEXT_LIMIT).map((r) => r.memory));
+
+    return { payload, context, survivingCount: surviving.length };
+  }
+
+  /** Each memory with its category and source, so the model can attribute rather than guess. */
+  private expand(
+    payload: ReturnType<Repository['getGraphPayload']>,
+    memories: { id: string; source_id: string; text: string; category_id: string }[],
+  ): RetrievedMemory[] {
     const categoryName = new Map(payload.categories.map((c) => [c.id, c.name]));
     const sourceById = new Map(payload.sources.map((s) => [s.id, s]));
-    const context: RetrievedMemory[] = surviving.slice(0, CONTEXT_LIMIT).map((r) => {
-      const source = sourceById.get(r.memory.source_id);
+    return memories.map((m) => {
+      const source = sourceById.get(m.source_id);
       return {
-        memory_id: r.memory.id,
-        source_id: r.memory.source_id,
-        text: r.memory.text,
-        category_name: categoryName.get(r.memory.category_id) ?? 'Uncategorised',
+        memory_id: m.id,
+        source_id: m.source_id,
+        text: m.text,
+        category_name: categoryName.get(m.category_id) ?? 'Uncategorised',
         source_title: source?.title ?? 'Unknown source',
         source_type: source?.type ?? 'text',
       };
     });
-
-    return { payload, context, survivingCount: surviving.length };
   }
 
   /** Validation and recording — everything after a model spoke. */
