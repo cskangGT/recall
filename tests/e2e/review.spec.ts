@@ -83,3 +83,31 @@ test('escape walks away having changed nothing', async ({ page }) => {
   await expect(page.getByTestId('sources-view')).toBeVisible();
   expect(await page.locator('[data-testid^="reviewed-"]').count()).toBe(0);
 });
+
+test('throwing a source away takes its memories with it, after asking twice', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await dropFiles(page, [FILES[0]!, FILES[1]!]);
+  await expect(page.getByTestId('batch-reveal-declare')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('batch-reveal-review').click();
+  await expect(page.getByTestId('review-original')).toContainText('Aeolian');
+
+  const memoriesBefore = await page.evaluate(
+    () => document.querySelectorAll('[data-testid^="review-item-"]').length,
+  );
+  expect(memoriesBefore).toBeGreaterThan(0);
+
+  // First press arms; the card is still there.
+  await page.getByTestId('review-discard').click();
+  await expect(page.getByTestId('review-original')).toContainText('Aeolian');
+  // Second press throws it away and moves on.
+  await page.getByTestId('review-discard').click();
+  await expect(page.getByTestId('review-original')).toContainText('tri-tip');
+  await page.getByTestId('review-skip').click();
+
+  // Gone from the drawer: only the grill log remains of the two.
+  await page.keyboard.press('s');
+  await expect(page.getByTestId('sources-view')).toBeVisible();
+  await expect(page.getByTestId('sources-view')).not.toContainText('travel notes');
+  await expect(page.getByTestId('sources-view')).toContainText('grill log');
+});

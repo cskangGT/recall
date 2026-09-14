@@ -113,6 +113,8 @@ export interface Repository {
    * offering an undo it could not honour.
    */
   deleteMemory(id: string): void;
+  /** Throws a source away whole — its memories and their edges go with it, by schema. */
+  deleteSource(id: string): void;
 
   insertCategory(workspaceId: string, category: Category): void;
   updateCategory(id: string, fields: Partial<Pick<Category,

@@ -863,6 +863,31 @@ export class IngestPipeline {
     return typeof this.ai.mergeMemories === 'function';
   }
 
+  canCondense(): boolean {
+    return typeof this.ai.condenseSource === 'function';
+  }
+
+  /**
+   * One source's memories → one draft. Reads, never writes: the draft lands
+   * in the review card as a staged rewrite-plus-drops, and only the person's
+   * confirm applies it — through the same review route as any other verdict,
+   * so the curation signal is recorded like any other.
+   */
+  async condenseSource(
+    workspaceId: string,
+    sourceId: string,
+    locale?: 'en' | 'ko',
+  ): Promise<{ text: string }> {
+    if (!this.ai.condenseSource) throw new Error('this model cannot condense');
+    const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
+    if (!source) throw new Error(`unknown source ${sourceId}`);
+    const texts = this.repo.listMemories(workspaceId)
+      .filter((m) => m.source_id === sourceId)
+      .map((m) => m.text);
+    if (texts.length === 0) throw new Error('nothing to condense');
+    return this.ai.condenseSource({ title: source.title ?? '', texts, locale });
+  }
+
   /**
    * The AI's half of a user-driven merge: why these overlap, and the one text
    * that would hold everything. Reads nothing but the memories and writes

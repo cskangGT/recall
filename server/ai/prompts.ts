@@ -518,6 +518,56 @@ export function coerceMerge(raw: unknown, fallbackTexts: string[]): MergeDraft {
   };
 }
 
+export const condenseSchema = {
+  type: 'object',
+  properties: { text: { type: 'string' } },
+  required: ['text'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * One source, many memories, and the person wants one.
+ *
+ * Unlike a merge, this *is* allowed to lose: a source that produced six
+ * fragments usually amounts to one or two things worth keeping, and the ask
+ * is for that — what this source comes to, said once. Specific facts that
+ * carry the point (a number, a name, a place) stay; the fluff around them
+ * goes. Still nothing may be added: the model condenses what is there, it
+ * does not write what might be. The person edits the result before it is
+ * saved, so the draft should read like a memory they would write themselves.
+ */
+export function buildCondensePrompt(input: {
+  title: string;
+  texts: string[];
+  locale?: 'en' | 'ko';
+}): string {
+  const lines = [
+    'A person saved one thing, and these are the separate memories that were',
+    'extracted from it. Too many, they feel — they want ONE memory that says',
+    'what this source comes to.',
+    '',
+    `The source: ${input.title || '(untitled)'}`,
+    '',
+    'Return one field, `text`: ONE memory, two to four sentences at most,',
+    'written as a note to self. Keep the specific facts that carry the point',
+    '— numbers, names, places, the concrete claim — and let the rest go.',
+    'Nothing may be added: no fact that does not appear below. Write it in',
+    'the same language the memories themselves are written in.',
+    input.locale === 'ko' ? '(The viewer reads Korean; the memories below are most likely Korean.)' : '',
+    '',
+    'The memories:',
+    ...input.texts.map((t, i) => `${i + 1}. ${t}`),
+  ];
+  return lines.filter((l) => l !== '').join('\n');
+}
+
+export function coerceCondense(raw: unknown, fallbackTexts: string[]): { text: string } {
+  const o = (raw ?? {}) as { text?: unknown };
+  const text = typeof o.text === 'string' ? o.text.trim() : '';
+  // A model that returns nothing must not cost the person their content.
+  return { text: text.length > 0 ? text : fallbackTexts.join(' · ') };
+}
+
 // ------------------------------------------------------------------ streaming
 
 /**

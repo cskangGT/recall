@@ -1,14 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, MergeDraft, NameCluster,
+  AiProvider, AnswerResult, AskTurn, CondenseDraft, EmbeddingProvider, ExtractResult, MergeDraft,
+  NameCluster,
   NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
 } from './provider.ts';
 import {
-  answerSchema, answerSoFar, buildAnswerPrompt, buildExtractPrompt, buildMergePrompt,
-  buildNamePrompt, buildNormalizePrompt, buildRetroPrompt, coerceExtract, coerceMerge,
-  coerceNormalize, coerceRetro, extractSchema, mergeSchema, nameByFallback, nameSchema,
+  answerSchema, answerSoFar, buildAnswerPrompt, buildCondensePrompt, buildExtractPrompt,
+  buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildRetroPrompt, coerceCondense,
+  coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
+  mergeSchema, nameByFallback, nameSchema,
   normalizeSchema, resolveAnswer, resolveNames, retroSchema,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
@@ -326,6 +328,17 @@ export class OpenAiProvider implements AiProvider {
   async mergeMemories(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft> {
     return coerceMerge(
       await this.json(buildMergePrompt(input), 'merge', mergeSchema, 2048),
+      input.texts,
+    );
+  }
+
+  async condenseSource(input: {
+    title: string;
+    texts: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<CondenseDraft> {
+    return coerceCondense(
+      await this.json(buildCondensePrompt(input), 'condense', condenseSchema, 1024),
       input.texts,
     );
   }

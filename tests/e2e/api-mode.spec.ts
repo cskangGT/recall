@@ -178,3 +178,73 @@ test('a reveal link in seed mode is spent quietly, with no API call', async ({ p
   await expect(page.getByTestId('batch-reveal-declare')).toHaveCount(0);
   expect(apiCalls).toEqual([]);
 });
+
+test('condense stages one draft over the memories, and confirm applies it through the review', async ({ page }) => {
+  const res = await page.request.post('/api/workspaces/ws_demo/capture/batch', {
+    data: {
+      items: [
+        {
+          type: 'text',
+          title: 'Rizz, the AI wingman',
+          content:
+            'Rizz suggests the next line when you upload a dating-app screenshot.\n' +
+            'It charges seven dollars a week and makes five hundred thousand dollars a month.\n' +
+            'Two founders built it with no outside money and reached seven million downloads.',
+        },
+      ],
+      locale: 'en',
+      includeGraph: false,
+    },
+  });
+  expect(res.ok()).toBe(true);
+  const [sourceId] = ((await res.json()).results as { sourceId: string }[]).map((r) => r.sourceId);
+
+  await page.goto(`${API_MODE}&skipWelcome=1&reveal=${sourceId}`);
+  await expect(page.getByTestId('batch-reveal-declare')).toBeVisible();
+  await page.getByTestId('batch-reveal-review').click();
+  await expect(page.getByTestId('review-panel')).toBeVisible();
+
+  const items = page.locator('[data-testid^="review-item-"]');
+  const before = await items.count();
+  test.skip(before < 2, 'the model kept fewer than two memories — nothing to condense');
+
+  // The door is drawn only where the server can open it; here it can.
+  await page.getByTestId('review-condense').click();
+  await expect(page.getByTestId('review-condense-hint')).toBeVisible({ timeout: 30_000 });
+  // One editor open with the draft, the rest struck through.
+  await expect(page.locator('[data-testid^="review-editor-"]')).toHaveCount(1);
+  await expect(page.locator('.reviewitem--dropped')).toHaveCount(before - 1);
+
+  await page.getByTestId('review-confirm').click();
+  await expect(page.getByTestId('review-panel')).toHaveCount(0);
+  const graph = (await (await page.request.get('/api/workspaces/ws_demo/graph')).json()) as {
+    memories: { source_id: string }[];
+  };
+  expect(graph.memories.filter((m) => m.source_id === sourceId)).toHaveLength(1);
+});
+
+test('throwing a source away over HTTP removes it and everything it produced', async ({ page }) => {
+  const res = await page.request.post('/api/workspaces/ws_demo/capture/batch', {
+    data: {
+      items: [{ type: 'text', title: 'junk', content: 'Leave a comment to get the file.\nLink in bio for the rest.' }],
+      locale: 'en',
+      includeGraph: false,
+    },
+  });
+  const [sourceId] = ((await res.json()).results as { sourceId: string }[]).map((r) => r.sourceId);
+
+  await page.goto(`${API_MODE}&skipWelcome=1&reveal=${sourceId}`);
+  await page.getByTestId('batch-reveal-review').click();
+  await expect(page.getByTestId('review-panel')).toBeVisible();
+  await page.getByTestId('review-discard').click();
+  await expect(page.getByTestId('review-discard')).toContainText(/Really|정말/);
+  await page.getByTestId('review-discard').click();
+  await expect(page.getByTestId('review-panel')).toHaveCount(0);
+
+  const graph = (await (await page.request.get('/api/workspaces/ws_demo/graph')).json()) as {
+    sources: { id: string }[];
+    memories: { source_id: string }[];
+  };
+  expect(graph.sources.some((s) => s.id === sourceId)).toBe(false);
+  expect(graph.memories.some((m) => m.source_id === sourceId)).toBe(false);
+});

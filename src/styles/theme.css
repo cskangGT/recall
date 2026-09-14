@@ -1704,6 +1704,46 @@ button {
   margin: 12px 0 6px;
 }
 
+.reviewpanel__eyebrow--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* The two hands beside the eyebrow and the skip: quiet until wanted. */
+.reviewpanel__condense {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.reviewpanel__condense:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.reviewpanel__condense:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.reviewpanel__aside {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.reviewpanel__discard--armed {
+  color: var(--accent);
+}
+
 .reviewpanel__original {
   padding: 10px 12px;
   border-radius: 10px;

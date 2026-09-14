@@ -184,6 +184,22 @@ export interface AiProvider {
    * answers 501.
    */
   mergeMemories?(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft>;
+  /**
+   * Optional: condenses one source's memories into a single draft — what the
+   * source comes to, said once. Allowed to drop, never to add. The person
+   * edits the draft before anything is saved. Providers that cannot do this
+   * honestly (the fixture) do not have it, and the route answers 501.
+   */
+  condenseSource?(input: {
+    title: string;
+    texts: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<CondenseDraft>;
+}
+
+export interface CondenseDraft {
+  /** The one memory this source comes to. Source language. */
+  text: string;
 }
 
 export interface MergeDraft {

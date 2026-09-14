@@ -207,6 +207,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     return ok({
       appleNotes: Boolean(deps.readNotes),
       notion: Boolean(deps.readNotionPages),
+      condense: deps.ingest.canCondense(),
     });
   }
 
@@ -613,6 +614,46 @@ async function handleWorkspace(
     } catch (err) {
       return badRequest(err instanceof Error ? err.message : 'review failed');
     }
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/sources/:sourceId/condense-preview — one draft
+   * for what this source comes to. Writes nothing; the review card stages it
+   * as a rewrite of the first memory plus drops of the rest, and the person's
+   * confirm goes through the review route above like any other verdict.
+   */
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'condense-preview') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+    if (!deps.ingest.canCondense()) {
+      return { status: 501, body: { error: 'this server cannot condense' } };
+    }
+    const body = asRecord(req.body);
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.condenseSource(workspaceId, resourceId, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'condense failed';
+      return message === 'nothing to condense'
+        ? badRequest(message)
+        : { status: 502, body: { error: message } };
+    }
+  }
+
+  /*
+   * DELETE /api/workspaces/:id/sources/:sourceId — throw a source away whole.
+   *
+   * Not a review verdict: a drop says "this extraction was wrong" and teaches
+   * the next one; this says "this source was never worth keeping" and teaches
+   * nothing. Its memories go with it. The UI asks twice before calling this.
+   */
+  if (req.method === 'DELETE' && resource === 'sources' && resourceId && !action) {
+    if (!deps.repo.listSources(workspaceId).some((s) => s.id === resourceId)) {
+      return notFound(`unknown source ${resourceId}`);
+    }
+    deps.repo.deleteSource(resourceId);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 

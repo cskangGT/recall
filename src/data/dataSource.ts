@@ -120,6 +120,17 @@ export interface DataSource {
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
   deleteMemory?(memoryId: string): Promise<GraphPayload>;
+  /**
+   * Throws a source away whole, memories and all. Not a review verdict —
+   * teaches nothing. Not reversible; the UI asks twice.
+   */
+  deleteSource?(sourceId: string): Promise<GraphPayload>;
+  /**
+   * One draft for what a source comes to. Writes nothing — the review card
+   * stages it, and the person's confirm applies it through reviewSource.
+   * Closed by the capability probe on a server without a model.
+   */
+  condenseSource?(sourceId: string): Promise<{ text: string }>;
   updateCategory?(
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
@@ -280,9 +291,14 @@ export class ApiDataSource implements DataSource {
     try {
       const response = await fetch(`${this.base}/capabilities`);
       if (!response.ok) return;
-      const caps = (await response.json()) as { appleNotes?: boolean; notion?: boolean };
+      const caps = (await response.json()) as {
+        appleNotes?: boolean;
+        notion?: boolean;
+        condense?: boolean;
+      };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
+      if (!caps.condense) this.condenseSource = undefined;
     } catch {
       // Leave the doors as they are.
     }
@@ -416,6 +432,21 @@ export class ApiDataSource implements DataSource {
     );
     return validateSeed(graph);
   }
+
+  async deleteSource(sourceId: string): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/sources/${encodeURIComponent(sourceId)}`,
+      { method: 'DELETE' },
+    );
+    return validateSeed(graph);
+  }
+
+  // Assigned, not declared as a method, so the probe can close the door by
+  // setting it to undefined — the same shape as importAppleNotes.
+  condenseSource?: (sourceId: string) => Promise<{ text: string }> = (sourceId) =>
+    this.post<{ text: string }>(`/sources/${encodeURIComponent(sourceId)}/condense-preview`, {
+      locale: currentLocale(),
+    });
 
   async moveMemory(memoryId: string, categoryId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(

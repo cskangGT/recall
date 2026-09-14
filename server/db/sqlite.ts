@@ -374,6 +374,13 @@ export class SqliteRepository implements Repository {
     this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
   }
 
+  deleteSource(id: string): void {
+    // memories cascade from sources, and everything else cascades from
+    // memories (see deleteMemory); curation and reorg rows that pointed at
+    // the source keep their row and lose the pointer (ON DELETE SET NULL).
+    this.db.prepare('DELETE FROM sources WHERE id = ?').run(id);
+  }
+
   deleteCategory(id: string): void {
     // Re-parent members to the category's parent first: deleting a category
     // must never delete memories (spec §5.4, AC-30).
