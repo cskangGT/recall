@@ -248,6 +248,10 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
   const [merge, setMerge] = useState<MergeState>(null);
   useEffect(() => setMerge(null), [memory.id]);
   const canMerge = Boolean(useWorkspaceStore.getState().source.mergePreview);
+  // The page in the middle is reading this memory; a second copy here beside
+  // it reads as a glitch. The inspector steps back to what the page does not
+  // do — merging, relating, deleting — and says where the text went.
+  const readingHere = useUiStore((s) => s.memoryPage) === memory.id;
 
   const startMerge = async (otherId: string) => {
     setMerge({ phase: 'loading', withId: otherId });
@@ -288,15 +292,23 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
         <span>{t('inspector.memory')}</span>
         {/* The quick look offers the long one: the same page the reading list
             opens on a click, for when you arrived here from the map. */}
-        <button
-          className="inspector__expand"
-          data-testid="inspector-expand"
-          onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
-        >
-          {t('page.expand')}
-        </button>
+        {!readingHere && (
+          <button
+            className="inspector__expand"
+            data-testid="inspector-expand"
+            onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
+          >
+            {t('page.expand')}
+          </button>
+        )}
       </div>
-      <p className="memory-text">{memory.text}</p>
+      {readingHere ? (
+        <p className="inspector__meta inspector__reading-here" data-testid="inspector-reading-here">
+          {t('page.readingHere')}
+        </p>
+      ) : (
+        <p className="memory-text">{memory.text}</p>
+      )}
       <div className="chips">
         {category && (
           <button className="chip" onClick={() => select(category.id)}>
@@ -320,7 +332,7 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
           ))}
         </div>
       )}
-      {source && <SourceCard source={source} />}
+      {source && !readingHere && <SourceCard source={source} />}
       {/*
         Alike enough to be the same thought said twice — offer, never act. Its
         own section rather than a decoration on "related": related excludes

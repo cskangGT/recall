@@ -37,3 +37,16 @@ test('the home doors stand with the index', async ({ page }) => {
   await expect(page.getByTestId('home-diary-link')).toBeVisible();
   await expect(page.getByTestId('home-import-link')).toBeVisible();
 });
+
+test('the Browse rail button, pressed inside a category, returns to the index', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.getByTestId('index-card-cat_ai_tooling').click();
+  await expect(page.getByTestId('reading-list')).toContainText('AI Tooling');
+  await page.getByTestId('rail-tree').click();
+  await expect(page.getByTestId('category-index')).toBeVisible();
+  // And the T key does the same.
+  await page.getByTestId('index-card-cat_hiring').click();
+  await expect(page.getByTestId('reading-list')).toContainText('Hiring');
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('category-index')).toBeVisible();
+});

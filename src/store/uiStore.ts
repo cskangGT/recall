@@ -152,6 +152,12 @@ interface UiState {
   toasts: Toast[];
 
   setView: (view: View) => void;
+  /**
+   * The Browse door: from elsewhere it opens the browser; from inside a
+   * category it returns to the index. A door that does nothing when you are
+   * already through it reads as broken.
+   */
+  goBrowse: () => void;
   setSourceFilter: (filter: SourceFilter) => void;
   setSourcesMode: (mode: 'list' | 'folders') => void;
   openCategory: (id: string | null) => void;
@@ -254,6 +260,12 @@ export const useUiStore = create<UiState>((set, get) => ({
       welcomeDismissed: s.welcomeDismissed || view !== 'browse',
     })),
 
+  goBrowse: () =>
+    set((s) =>
+      s.view === 'browse'
+        ? { openCategoryId: null, arcLevelId: null, memoryPage: null }
+        : { view: 'browse', centerOnId: null, welcomeDismissed: true },
+    ),
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
   setSourcesMode: (sourcesMode) => {
     if (typeof localStorage !== 'undefined') localStorage.setItem('mado.sourcesMode', sourcesMode);

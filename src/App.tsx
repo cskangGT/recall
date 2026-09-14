@@ -252,7 +252,7 @@ export function App() {
         return;
       }
       if (e.key === 't' || e.key === 'T') {
-        ui.setView('browse');
+        ui.goBrowse();
         return;
       }
       if (e.key === 's' || e.key === 'S') {

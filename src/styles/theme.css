@@ -4970,3 +4970,9 @@ body:lang(ko) {
   font-size: var(--text-sm);
   line-height: 1.45;
 }
+
+.inspector__reading-here {
+  margin: 4px 0 14px;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}

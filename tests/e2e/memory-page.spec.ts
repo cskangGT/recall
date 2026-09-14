@@ -55,3 +55,14 @@ test('another memory from the same original swaps the page, not the stack', asyn
   await page.keyboard.press('Escape');
   await expect(memoryPage).toHaveCount(0);
 });
+
+test('while the page is open the inspector steps back — no second copy, no expand button', async ({ page }) => {
+  await named(page, 'AI Tooling').click();
+  await page.locator('.reading .item').first().click();
+  await expect(page.getByTestId('memory-page')).toBeVisible();
+  await expect(page.getByTestId('inspector-expand')).toHaveCount(0);
+  await expect(page.getByTestId('inspector-reading-here')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('inspector-expand')).toBeVisible();
+  await expect(page.getByTestId('inspector-reading-here')).toHaveCount(0);
+});

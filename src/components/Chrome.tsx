@@ -103,7 +103,7 @@ export function LeftRail() {
         aria-label={t('rail.browse')}
         aria-current={view === 'browse' ? 'page' : undefined}
         data-testid="rail-tree"
-        onClick={() => setView('browse')}
+        onClick={() => useUiStore.getState().goBrowse()}
       >
         <span aria-hidden="true">⊞</span>
       </button>
