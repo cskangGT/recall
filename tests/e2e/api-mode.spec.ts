@@ -248,3 +248,26 @@ test('throwing a source away over HTTP removes it and everything it produced', a
   expect(graph.sources.some((s) => s.id === sourceId)).toBe(false);
   expect(graph.memories.some((m) => m.source_id === sourceId)).toBe(false);
 });
+
+test('a single text file dropped on a live server is captured as that file, not the demo', async ({ page }) => {
+  await page.goto(`${API_MODE}&skipWelcome=1`);
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(
+      new File(
+        ['Test the lab backup restore this month; a successful backup job is not proof that recovery works.'],
+        'lab-notes.md',
+        { type: 'text/markdown' },
+      ),
+    );
+    const shell = document.querySelector('.shell')!;
+    shell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+
+  await page.keyboard.press('s');
+  await expect(page.getByTestId('sources-view')).toBeVisible();
+  await expect(page.getByTestId('sources-view')).toContainText('lab notes', { timeout: 30_000 });
+  await expect(page.getByTestId('sources-view')).not.toContainText('demo capture');
+});

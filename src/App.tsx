@@ -13,7 +13,7 @@ import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './com
 import { useUiStore } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
-import { importFiles, isTextLike, isZip } from './capture/importFiles';
+import { importFiles, isTextLike, isZip, titleFromFilename } from './capture/importFiles';
 import { revealOnReturn } from './capture/revealOnReturn';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
@@ -349,6 +349,26 @@ export function App() {
           void importFiles(files).finally(() => {
             busy.current = false;
           });
+          return;
+        }
+        /*
+         * One text file is read and captured as itself. It used to fall
+         * through to the bare `capture()` below — which, against a live
+         * server, posts the seed's demo screenshot: a source called "demo
+         * capture" that fails on a file the server does not have, while the
+         * note the person actually dropped went nowhere.
+         */
+        const [only] = files;
+        if (only && isTextLike(only)) {
+          void only.text().then((content) =>
+            capture({ type: 'text', content, title: titleFromFilename(only.name) }),
+          );
+          return;
+        }
+        // Anything else is the rehearsal's demo — in seed mode. A live server
+        // has no demo to play and says so instead.
+        if (useWorkspaceStore.getState().source.mode === 'api') {
+          useUiStore.getState().toast(t('toast.nothingReadable'));
           return;
         }
         void capture();

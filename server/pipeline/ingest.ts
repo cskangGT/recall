@@ -558,9 +558,20 @@ export class IngestPipeline {
       } else if (step.kind === 'joins') {
         categoryId = createdByCluster.get(step.clusterId)!;
       } else {
+        /*
+         * The parent the plan chose may be provisional: a cluster opened two
+         * memories ago in this same batch, known to the plan only by its
+         * synthetic id. That cluster's real row was inserted when its own
+         * `new` step ran (plan order is index order), so resolve through the
+         * same map `joins` uses. Writing the synthetic id was a FOREIGN KEY
+         * failure on any long note that opened a category and then a child
+         * beside it.
+         */
+        const parentId =
+          step.parentId === null ? null : (createdByCluster.get(step.parentId) ?? step.parentId);
         const created: Category = {
           id: id('cat'),
-          parent_id: step.parentId,
+          parent_id: parentId,
           name: names.get(step.clusterId) ?? fallbackName([extractedMemory.text], [[extractedMemory.text]]),
           rationale: `auto-created at similarity ${step.score.toFixed(3)}`,
           name_locked: false, user_created: false,
