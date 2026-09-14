@@ -12,6 +12,7 @@ import {
   type Viewport,
 } from '../graph/camera';
 import { hitTest } from '../graph/hitTest';
+import { focusTargetsFor } from '../graph/focus';
 import { runLayout } from '../graph/layout';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
@@ -465,9 +466,12 @@ export function MapCanvas({
         }
         if (hit) {
           ui.select(hit.id);
-          // A lit search hit pulls you in when clicked — the word you found
-          // becomes the place you are (뒤로가기 is a frame away).
-          if (ui.highlightedIds.includes(hit.id)) ui.requestZoomTo([hit.id]);
+          // A category is a place: clicking it pulls the camera in around it
+          // and what it holds (← walks back). A lit search hit does the same
+          // for itself — the word you found becomes the place you are.
+          const inside = focusTargetsFor(nodes, hit.id);
+          if (inside.length > 0) ui.requestZoomTo(inside);
+          else if (ui.highlightedIds.includes(hit.id)) ui.requestZoomTo([hit.id]);
         } else ui.clearSelection();
       }}
       onWheel={(e) => {
