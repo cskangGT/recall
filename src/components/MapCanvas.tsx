@@ -466,12 +466,11 @@ export function MapCanvas({
         }
         if (hit) {
           ui.select(hit.id);
-          // A category is a place: clicking it pulls the camera in around it
-          // and what it holds (← walks back). A lit search hit does the same
-          // for itself — the word you found becomes the place you are.
+          // Everything on the map is a place. A category pulls the camera in
+          // around itself and what it holds; a memory or an entity brings the
+          // camera to itself, close enough to read. ← walks back either way.
           const inside = focusTargetsFor(nodes, hit.id);
-          if (inside.length > 0) ui.requestZoomTo(inside);
-          else if (ui.highlightedIds.includes(hit.id)) ui.requestZoomTo([hit.id]);
+          ui.requestZoomTo(inside.length > 0 ? inside : [hit.id]);
         } else ui.clearSelection();
       }}
       onWheel={(e) => {
