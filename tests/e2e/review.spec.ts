@@ -111,3 +111,28 @@ test('throwing a source away takes its memories with it, after asking twice', as
   await expect(page.getByTestId('sources-view')).not.toContainText('travel notes');
   await expect(page.getByTestId('sources-view')).toContainText('grill log');
 });
+
+test('finishing a review lands where the memories went', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await dropFiles(page, [FILES[0]!, FILES[1]!]);
+  await expect(page.getByTestId('batch-reveal-declare')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('batch-reveal-review').click();
+  await expect(page.getByTestId('review-original')).toContainText('Aeolian');
+
+  // Saving the first of two moves on without landing — the run is not over.
+  await page.getByTestId('review-confirm').click();
+  await expect(page.getByTestId('review-original')).toContainText('tri-tip');
+  await expect(page.locator('.item--selected')).toHaveCount(0);
+
+  // Saving the last one lands.
+  await page.getByTestId('review-confirm').click();
+  await expect(page.getByTestId('review-panel')).toHaveCount(0);
+
+  // The reading list is open on the category that took the memories, with
+  // one of them selected — the trail from "saved" to "here".
+  const selected = page.locator('.item--selected');
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toContainText(/tri-tip|Oak chunks/);
+  await expect(page.getByTestId('toast').filter({ hasText: /into|에/ })).toHaveCount(1);
+});

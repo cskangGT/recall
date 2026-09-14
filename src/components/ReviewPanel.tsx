@@ -4,6 +4,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { localVector } from '../capture/embedLocal';
 import type { GraphPayload } from '../core/types';
+import { landAfterReview } from '../capture/reviewLanding';
 
 /**
  * The review — one source's original against what Mado made of it (spec §21).
@@ -137,6 +138,9 @@ function ReviewCard({ payload, sourceId }: { payload: GraphPayload; sourceId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verdicts, memories]);
 
+  const total = review.sourceIds.length;
+  const isLast = review.index === total - 1;
+
   const confirm = async () => {
     const discard = memories.filter((m) => verdictOf(m.id).kind === 'drop').map((m) => m.id);
     const edits = memories
@@ -186,15 +190,14 @@ function ReviewCard({ payload, sourceId }: { payload: GraphPayload; sourceId: st
       }
       useUiStore.getState().toast(t('review.toast', { k: counts.k, d: counts.d, e: counts.e }));
       useUiStore.getState().advanceReview();
+      // The last save of a run lands where its memories went.
+      if (isLast) landAfterReview(sourceId);
     } catch {
       useUiStore.getState().toast(t('toast.batchFailed'));
     } finally {
       setSaving(false);
     }
   };
-
-  const total = review.sourceIds.length;
-  const isLast = review.index === total - 1;
 
   return (
     <div className="reviewpanel" data-testid="review-panel" role="dialog" aria-label={t('review.title')}>
