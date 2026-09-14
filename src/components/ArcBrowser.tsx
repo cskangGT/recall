@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
-import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
+import { arcPositions, fitArc, arcCapacity, seatByRank, paginate, homeIndexOpen } from '../arc/layout';
 import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
 import { filterByKeywords, keywordsFor } from '../arc/keywords';
 import { useInterestStore } from '../store/interestStore';
@@ -152,8 +152,18 @@ export function ArcBrowser() {
 
   const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
   const isOpen = showingAnswer || openRow !== undefined;
+  /*
+   * Home, once the greeting has stepped aside, is an index of the categories:
+   * the constellation says it in light, the index says it in words the eye
+   * can read — name, size, the last two things kept. It takes the reading
+   * list's place and the arc gives up radius for it, the same trade the open
+   * state makes. An empty workspace has nothing to index and keeps its
+   * invitation.
+   */
+  const indexOpen = !isOpen && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
+  const laidOpen = isOpen || indexOpen;
 
-  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
+  const geometry = useMemo(() => fitArc(viewport, laidOpen), [viewport, laidOpen]);
 
   /*
    * How interesting each top-level category is, right now.
@@ -168,6 +178,18 @@ export function ArcBrowser() {
     const saves = savesFrom(payload);
     return interestScores(saves, interestEvents, corpusNow(saves, new Date()));
   }, [payload, interestEvents]);
+
+  /** Every category at this level, ranked as the arc ranks — the index shows all of them. */
+  const indexRows = useMemo(() => {
+    const level = categoryRows.filter((r) =>
+      effectiveLevelId === null ? r.depth === 0 : r.parentId === effectiveLevelId,
+    );
+    const byId = new Map(level.map((r) => [r.id, r]));
+    return rankByInterest(
+      level.map((r) => r.id),
+      scores,
+    ).map((id) => byId.get(id)!);
+  }, [categoryRows, effectiveLevelId, scores]);
 
   const nodes = useMemo((): ArcNode[] => {
     const level = categoryRows.filter((r) =>
@@ -932,10 +954,10 @@ export function ArcBrowser() {
       {/* The figure sits on the crest, at the arc's focus, looking at what is
           above it. */}
       <div
-        className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
+        className={`arc__thinker${laidOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={(isOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
+        <Thinker size={(laidOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
       {ceremonyActive && (
@@ -952,7 +974,11 @@ export function ArcBrowser() {
 
       {!isOpen &&
         (welcomeDismissed ? (
-          <>
+          <div
+            className={indexOpen ? 'reading reading--index' : 'arc__home'}
+            data-testid={indexOpen ? 'category-index' : 'arc-home'}
+            style={indexOpen ? { top: geometry.listTop } : undefined}
+          >
             <p className="arc__prompt">{heading}</p>
             {/* The quiet door to today's page — home should always know the
                 way to the diary. */}
@@ -1074,7 +1100,44 @@ export function ArcBrowser() {
               </div>
             )}
             {fileInput}
-          </>
+            {indexOpen && (
+              <div className="index" role="list">
+                {indexRows.map((row) => {
+                  const inside = payload!.memories
+                    .filter((m) => {
+                      if (m.category_id === row.id) return true;
+                      const home = categoryRows.find((c) => c.id === m.category_id);
+                      return home?.parentId === row.id;
+                    })
+                    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+                    .slice(0, 2);
+                  const children = categoryRows.filter((c) => c.parentId === row.id).length;
+                  return (
+                    <button
+                      key={row.id}
+                      className="index__card"
+                      role="listitem"
+                      data-testid={`index-card-${row.id}`}
+                      onClick={() =>
+                        activate({ id: row.id, label: row.label, count: row.count, kind: 'folder', row })
+                      }
+                    >
+                      <span className="index__name">{row.label}</span>
+                      <span className="index__meta">
+                        {t('index.count', { count: row.count ?? 0 })}
+                        {children > 0 ? ` · ${t('index.children', { count: children })}` : ''}
+                      </span>
+                      {inside.map((m) => (
+                        <span key={m.id} className="index__peek">
+                          {m.text}
+                        </span>
+                      ))}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="arc__greeting" data-testid="welcome">
             {/*

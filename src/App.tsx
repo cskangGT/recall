@@ -27,7 +27,7 @@ import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
-import { FOCUS_FRACTION } from './arc/layout';
+import { FOCUS_FRACTION, homeIndexOpen } from './arc/layout';
 
 const MIN_VIEWPORT_WIDTH = 1280;
 
@@ -56,6 +56,8 @@ export function App() {
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const view = useUiStore((s) => s.view);
   const openCategoryId = useUiStore((s) => s.openCategoryId);
+  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const memoryCount = useWorkspaceStore((s) => s.payload?.memories.length ?? 0);
   const dropActive = useUiStore((s) => s.dropActive);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
@@ -385,7 +387,7 @@ export function App() {
       */}
       {view === 'browse' && (
         <Sky
-          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed)}%`}
+          crestTop={`${100 * (openCategoryId !== null || homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed)}%`}
         />
       )}
 

@@ -262,3 +262,13 @@ export function paginate(total: number, capacity: number, page: number): ArcPage
   const count = Math.min(perPage, total - start);
   return { start, count, hidden: total - count, pages };
 }
+
+/**
+ * Whether home shows the category index — and therefore whether the arc, the
+ * figure and the hill take their open positions with nothing open. Shared by
+ * the browser (which draws the index) and the shell (which places the hill),
+ * so the figure never floats above a crest that stayed down.
+ */
+export function homeIndexOpen(welcomeDismissed: boolean, memoryCount: number): boolean {
+  return welcomeDismissed && memoryCount > 0;
+}

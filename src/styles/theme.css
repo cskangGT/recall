@@ -4864,3 +4864,109 @@ body:lang(ko) {
   color: var(--text);
   border-color: var(--accent-dim);
 }
+
+/* ---------------------------------------------------------- category index */
+
+/* Home is an index: the prompt, the doors and the cards live in the reading
+   list's place, in flow — the arc has given up radius for them, as it does
+   for an open category. The absolute positions elsewhere are the layout for
+   a home without an index; here they come back into the document. */
+.reading--index {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-top: 4px;
+}
+
+.reading--index .arc__prompt,
+.reading--index .arc__homelinks,
+.reading--index .arc__morning,
+.reading--index .arc__diarylink {
+  position: static;
+  transform: none;
+  top: auto;
+}
+
+.reading--index .arc__prompt {
+  text-align: left;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 550;
+  letter-spacing: -0.012em;
+  text-shadow: none;
+}
+
+.reading--index .arc__homelinks {
+  justify-content: flex-start;
+  padding: 6px 10px 0;
+  gap: 18px;
+}
+
+.reading--index .arc__morning {
+  margin: 12px 0 2px;
+  justify-content: flex-start;
+  padding: 0 10px;
+}
+
+.reading--index .arc__sources {
+  justify-content: flex-start;
+  padding: 0 10px;
+}
+
+.index {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+  margin-top: 14px;
+  padding: 0 4px;
+}
+
+/* No card chrome — the separation is the spacing, the hierarchy the type. A
+   raised ground appears only under the hand. */
+.index__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 10px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  animation: rise 0.25s ease both;
+}
+
+.index__card:hover,
+.index__card:focus-visible {
+  background: rgba(240, 232, 250, 0.08);
+  outline: none;
+}
+
+.index__name {
+  font-size: var(--text-lg);
+  font-weight: 550;
+  letter-spacing: -0.012em;
+}
+
+.index__meta {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  margin-bottom: 3px;
+}
+
+.index__peek {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
