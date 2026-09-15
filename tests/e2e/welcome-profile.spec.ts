@@ -58,3 +58,16 @@ test('answering with nothing picked still opens the doors', async ({ page }) => 
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
 });
+
+test('thoughts are the fourth answer, and their door is today’s page', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('welcome').waitFor();
+  await page.getByTestId('profile-thoughts').click();
+  await page.getByTestId('profile-confirm').click();
+  const doors = page.getByTestId('welcome-doors');
+  await expect(doors).toBeVisible();
+  await expect(doors.getByTestId('door-fill')).toHaveCount(0);
+  await expect(doors.getByTestId('door-diary').locator('.arc__door-hint')).toContainText('in your head');
+  await doors.getByTestId('door-diary').click();
+  await expect(page.getByTestId('diary-view')).toBeVisible();
+});

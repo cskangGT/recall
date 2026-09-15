@@ -631,7 +631,24 @@ export function ArcBrowser() {
    * One door either way: when the local Mac server offers a second source it
    * opens into the choice, otherwise it IS the file picker.
    */
-  const fillDoor = (
+  const fillDoor = profile[0] === 'thoughts' ? (
+    /*
+     * The fourth answer to "what has been piling up?" is thoughts — the
+     * kind nothing was ever saved from. Its door is not a file picker but
+     * today's page: the diary, folded into the welcome as an answer rather
+     * than standing beside it as a stranger.
+     */
+    <button
+      className="arc__door arc__door--fill"
+      style={{ '--i': 0 } as React.CSSProperties}
+      data-testid="door-diary"
+      onClick={() => useUiStore.getState().setView('diary')}
+    >
+      <span className="arc__door-star" aria-hidden="true" />
+      <span className="arc__door-name">{t('welcome.diary')}</span>
+      <span className="arc__door-hint">{t('welcome.fillHint.thoughts', { product: PRODUCT })}</span>
+    </button>
+  ) : (
     <>
       <button
         className="arc__door arc__door--fill"
@@ -665,7 +682,7 @@ export function ArcBrowser() {
       <span className="arc__profile-q">
         {t('welcome.profileAnswered', {
           kind:
-            profile[0] === 'shots' || profile[0] === 'links' || profile[0] === 'notes'
+            profile[0] === 'shots' || profile[0] === 'links' || profile[0] === 'notes' || profile[0] === 'thoughts'
               ? t(`welcome.profile.${profile[0]}`)
               : t('welcome.profile.none'),
         })}
@@ -684,7 +701,7 @@ export function ArcBrowser() {
   ) : (
     <div className="arc__profile" data-testid="welcome-profile" role="radiogroup">
       <span className="arc__profile-q">{t('welcome.profileQ')}</span>
-      {(['shots', 'links', 'notes'] as const).map((kind) => (
+      {(['shots', 'links', 'notes', 'thoughts'] as const).map((kind) => (
         <button
           key={kind}
           className={`arc__profile-chip${profile[0] === kind ? ' arc__profile-chip--on' : ''}`}
