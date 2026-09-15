@@ -25,9 +25,10 @@ test('the stars rise only after the question is answered, worded by the pick', a
   await expect(doors).toBeVisible();
   await expect(doors.getByTestId('door-fill')).toBeVisible();
   await expect(doors.getByTestId('door-browse')).toBeVisible();
-  await expect(doors.getByTestId('door-diary')).toBeVisible();
+  // The diary is not an answer to 'what has been piling up?' — it waits at home.
+  await expect(doors.getByTestId('door-diary')).toHaveCount(0);
   await expect(page.getByTestId('door-fill').locator('.arc__door-hint')).toContainText(
-    'a few of those screenshots',
+    'Too many screenshots',
   );
   // The press is spent.
   await expect(page.getByTestId('profile-confirm')).toHaveCount(0);
@@ -40,7 +41,7 @@ test('the stars rise only after the question is answered, worded by the pick', a
   await page.getByTestId('welcome').waitFor();
   await expect(page.getByTestId('welcome-doors')).toBeVisible();
   await expect(page.getByTestId('door-fill').locator('.arc__door-hint')).toContainText(
-    'a few of those screenshots',
+    'Too many screenshots',
   );
   // The question folded into one line where it stood; the way back is there.
   await expect(page.getByTestId('welcome-profile-answered')).toContainText('Screenshots');

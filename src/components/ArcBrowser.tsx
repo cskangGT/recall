@@ -1229,16 +1229,8 @@ export function ArcBrowser() {
                       <span className="arc__door-star" aria-hidden="true" />
                       <span className="arc__door-name">{t('welcome.browse')}</span>
                     </button>
-                    <button
-                      className="arc__door"
-                      style={{ '--i': 2 } as React.CSSProperties}
-                      data-testid="door-diary"
-                      onClick={() => useUiStore.getState().setView('diary')}
-                    >
-                      <span className="arc__door-star" aria-hidden="true" />
-                      <span className="arc__door-name">{t('welcome.diary')}</span>
-                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
-                    </button>
+                    {/* No diary door here: it is not an answer to "what has been
+                        piling up?", and home keeps its own way to today's page. */}
                   </div>
                 )}
                 {fillSources}
