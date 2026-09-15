@@ -149,6 +149,8 @@ interface UiState {
    * so the inspector still shows what you were looking at.
    */
   memoryPage: string | null;
+  /** The source open as a page in the middle — the original, and what came from it. */
+  sourcePage: string | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -201,6 +203,8 @@ interface UiState {
   closeReview: () => void;
   openMemoryPage: (id: string) => void;
   closeMemoryPage: () => void;
+  openSourcePage: (id: string) => void;
+  closeSourcePage: () => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -245,6 +249,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   awaken: false,
   review: null,
   memoryPage: null,
+  sourcePage: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -263,7 +268,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   goBrowse: () =>
     set((s) =>
       s.view === 'browse'
-        ? { openCategoryId: null, arcLevelId: null, memoryPage: null }
+        ? { openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null }
         : { view: 'browse', centerOnId: null, welcomeDismissed: true },
     ),
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
@@ -317,6 +322,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       mapFocus: null,
       review: null,
       memoryPage: null,
+      sourcePage: null,
       cameraHistory: [],
     }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
@@ -386,8 +392,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   closeReview: () => set({ review: null }),
   // Opening a page is also selecting: the inspector follows, and the map
   // knows what to centre on when you go there next.
-  openMemoryPage: (id) => set({ memoryPage: id, selectedId: id }),
+  openMemoryPage: (id) => set({ memoryPage: id, sourcePage: null, selectedId: id }),
   closeMemoryPage: () => set({ memoryPage: null }),
+  openSourcePage: (id) => set({ sourcePage: id, memoryPage: null, selectedId: id }),
+  closeSourcePage: () => set({ sourcePage: null }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -412,8 +420,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     }
     // The page closes before anything under it; the selection it came from
     // stays, so the next Escape has something to clear.
-    if (s.memoryPage !== null) {
-      set({ memoryPage: null });
+    if (s.memoryPage !== null || s.sourcePage !== null) {
+      set({ memoryPage: null, sourcePage: null });
       return;
     }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {

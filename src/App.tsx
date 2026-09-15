@@ -44,7 +44,7 @@ const MIN_VIEWPORT_WIDTH = 1280;
 const MIN_VIEWPORT_HEIGHT = 760;
 
 /** Must match `--rail-w` and `--inspector-w` in theme.css. */
-const RAIL_W = 56;
+const RAIL_W = 64;
 const INSPECTOR_W = 360;
 
 export function App() {

@@ -102,7 +102,6 @@ const relativeDate = (iso: string): string =>
 export function SourcesView() {
   const payload = useWorkspaceStore((s) => s.payload);
   const selectedId = useUiStore((s) => s.selectedId);
-  const select = useUiStore((s) => s.select);
   const filter = useUiStore((s) => s.sourceFilter);
   const mode = useUiStore((s) => s.sourcesMode);
   const setMode = useUiStore((s) => s.setSourcesMode);
@@ -231,9 +230,11 @@ export function SourcesView() {
           onKeyDown={(e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
             e.preventDefault();
-            select(source.id);
+            useUiStore.getState().openSourcePage(source.id);
           }}
-          onClick={() => select(source.id)}
+          // Picking a source opens it as a page in the middle — found, now
+          // read — and selects it, so the inspector follows.
+          onClick={() => useUiStore.getState().openSourcePage(source.id)}
         >
           <span className="source-row__icon" title={SOURCE_LABEL[source.type]}>
             {SOURCE_ICON[source.type]}

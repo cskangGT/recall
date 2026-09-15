@@ -65,7 +65,7 @@
   --lift-1: inset 0 0 0 1px var(--edge), 0 10px 26px -12px rgb(0 0 0 / 70%);
   --lift-2: inset 0 0 0 1px var(--edge), 0 24px 60px -30px rgb(0 0 0 / 85%);
 
-  --rail-w: 56px;
+  --rail-w: 64px;
   --inspector-w: 360px;
 
   color-scheme: dark;
@@ -412,14 +412,24 @@ button {
 /* The glyphs inherited 13px body type and read as specks against a full-window
    scene. They are the only navigation there is; they can afford the pixels. */
 .rail__btn {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  min-height: 40px;
+  padding: 5px 0 4px;
   border-radius: var(--radius-md);
   font-size: var(--text-lg);
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   color: var(--text-faint);
   transition: color 120ms ease, background 120ms ease;
+}
+
+/* A glyph with its name under it. The tooltip stays for the shortcut. */
+.rail__label {
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
 }
 
 .rail__btn:hover:not(:disabled) {
@@ -4983,4 +4993,38 @@ body:lang(ko) {
   margin: 4px 0 14px;
   color: var(--text-faint);
   font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------- page actions */
+
+.memorypage__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.memorypage__move {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.memorypage__move select {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--edge);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.memorypage__original--tall {
+  max-height: 48vh;
 }

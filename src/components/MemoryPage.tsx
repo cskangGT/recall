@@ -4,7 +4,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { relatedMemories } from '../core/related';
 import { useDismissable } from './useDismissable';
-import { MemoryRow, SOURCE_LABEL, relativeDate } from './Inspector';
+import { DeleteButton, MemoryRow, SOURCE_LABEL, relativeDate } from './Inspector';
 
 /**
  * Found it — now read it.
@@ -20,6 +20,75 @@ import { MemoryRow, SOURCE_LABEL, relativeDate } from './Inspector';
  * Escape and a click outside close it; the selection it came from stays.
  */
 export function MemoryPage() {
+  const sourceId = useUiStore((s) => s.sourcePage);
+  if (sourceId) return <SourcePageView id={sourceId} />;
+  return <MemoryPageView />;
+}
+
+/**
+ * The same page for a source: the original in full, and what came from it.
+ * Sources used to open only in the side column, which made the drawer the
+ * one place where finding something did not put it in front of you.
+ */
+function SourcePageView({ id }: { id: string }) {
+  const payload = useWorkspaceStore((s) => s.payload);
+  const source = payload ? payload.sources.find((x) => x.id === id) : undefined;
+  const close = useUiStore((s) => s.closeSourcePage);
+  useEffect(() => {
+    if (payload && !source) close();
+  }, [payload, source, close]);
+  const dismiss = useDismissable(close);
+  if (!payload || !source) return null;
+
+  const extracted = payload.memories.filter((m) => m.source_id === source.id);
+  const open = (memoryId: string) => useUiStore.getState().openMemoryPage(memoryId);
+
+  return (
+    <div className="memorypage" data-testid="source-page" {...dismiss}>
+      <article className="memorypage__card" role="dialog" aria-modal="true" aria-label={t('inspector.source')}>
+        <div className="memorypage__head">
+          <span className="memorypage__eyebrow">{t('inspector.source')}</span>
+          <button className="memorypage__close" data-testid="source-page-close" onClick={close}>
+            {t('page.close')}
+          </button>
+        </div>
+        <p className="memorypage__text">{source.title}</p>
+        <p className="memorypage__meta">
+          {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
+          {t('inspector.memoryCount', { count: extracted.length })}
+          {source.url && (
+            <>
+              {' · '}
+              <a href={source.url} target="_blank" rel="noreferrer noopener">
+                {t('inspector.openLink')}
+              </a>
+            </>
+          )}
+        </p>
+        <section className="memorypage__section">
+          <div className="memorypage__eyebrow">
+            {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
+          </div>
+          <div className="memorypage__original memorypage__original--tall" data-testid="source-page-original">
+            {source.type === 'screenshot' && source.scene_description
+              ? source.scene_description
+              : source.raw_content}
+          </div>
+        </section>
+        <section className="memorypage__section">
+          <div className="memorypage__eyebrow">{t('inspector.extracted')}</div>
+          {extracted.length === 0 ? (
+            <p className="memorypage__meta">{t('inspector.emptySource')}</p>
+          ) : (
+            extracted.map((m) => <MemoryRow key={m.id} memory={m} payload={payload} onSelect={open} />)
+          )}
+        </section>
+      </article>
+    </div>
+  );
+}
+
+function MemoryPageView() {
   const id = useUiStore((s) => s.memoryPage);
   const payload = useWorkspaceStore((s) => s.payload);
   const memory = payload && id ? payload.memories.find((m) => m.id === id) : undefined;
@@ -55,6 +124,7 @@ export function MemoryPage() {
             {category ? (
               <button
                 className="memorypage__crumb"
+                data-testid="memory-page-crumb"
                 onClick={() => {
                   const ui = useUiStore.getState();
                   ui.closeMemoryPage();
@@ -125,6 +195,43 @@ export function MemoryPage() {
             ))}
           </section>
         )}
+
+        {/* The hand, where the eye already is: re-file it, or throw it away.
+            Both are the inspector's actions too — the page just stops
+            sending you to the side for them. */}
+        <div className="memorypage__actions">
+          <label className="memorypage__move">
+            {t('page.move')}
+            <select
+              data-testid="memory-page-move"
+              value={memory.category_id}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (!next || next === memory.category_id) return;
+                useWorkspaceStore.getState().moveMemory(memory.id, next);
+                useUiStore.getState().toast(t('toast.moved'));
+              }}
+            >
+              {payload.categories.map((c) => {
+                const parent = c.parent_id ? payload.categories.find((p) => p.id === c.parent_id) : null;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {parent ? `${parent.name} · ${c.name}` : c.name}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <DeleteButton
+            label={t('inspector.deleteMemoryLabel')}
+            testId="memory-page-delete"
+            onConfirm={() => {
+              useWorkspaceStore.getState().deleteMemory(memory.id);
+              useUiStore.getState().select(null);
+              useUiStore.getState().toast(t('toast.deleted'));
+            }}
+          />
+        </div>
       </article>
     </div>
   );

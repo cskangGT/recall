@@ -439,12 +439,20 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
  * about to go, which it can do in place. It disarms on blur, so a stray click
  * does not leave a loaded button sitting on the screen.
  */
-function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+export function DeleteButton({
+  label,
+  onConfirm,
+  testId = 'delete-button',
+}: {
+  label: string;
+  onConfirm: () => void;
+  testId?: string;
+}) {
   const [armed, setArmed] = useState(false);
   return (
     <button
       className={`danger${armed ? ' danger--armed' : ''}`}
-      data-testid="delete-button"
+      data-testid={testId}
       onBlur={() => setArmed(false)}
       onClick={() => {
         if (!armed) return setArmed(true);
@@ -457,7 +465,7 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
   );
 }
 
-function AnswerDetail() {
+function AnswerDetail({ compact = false }: { compact?: boolean }) {
   const answer = useUiStore((s) => s.answer)!;
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload)!;
@@ -471,7 +479,13 @@ function AnswerDetail() {
   return (
     <>
       <div className="inspector__eyebrow">{t('inspector.answer')}</div>
-      <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }}>{answer.question}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }} data-testid={compact ? 'inspector-answer' : undefined}>
+        {answer.question}
+      </h2>
+      {/* Beside the browser the middle already holds the answer in full; the
+          side keeps to what it leaned on, so it is not the third column
+          repeating the second. */}
+      {!compact && (
       <p className="answer" data-testid="answer">
         {parts.map((part, i) => {
           const match = /^\[(\d+)\]$/.exec(part);
@@ -490,6 +504,7 @@ function AnswerDetail() {
           );
         })}
       </p>
+      )}
 
       {answer.citations.length > 0 && <div className="inspector__eyebrow">{t('inspector.sources')}</div>}
       {answer.citations.map((c) => {
@@ -619,10 +634,22 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
 function SourceDetail({ source, payload }: { source: Source; payload: GraphPayload }) {
   const select = useUiStore((s) => s.select);
   const extracted = payload.memories.filter((m) => m.source_id === source.id);
+  const readingHere = useUiStore((s) => s.sourcePage) === source.id;
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.source')}</div>
+      <div className="inspector__eyebrow inspector__eyebrow--row">
+        <span>{t('inspector.source')}</span>
+        {!readingHere && (
+          <button
+            className="inspector__expand"
+            data-testid="inspector-expand"
+            onClick={() => useUiStore.getState().openSourcePage(source.id)}
+          >
+            {t('page.expand')}
+          </button>
+        )}
+      </div>
       <h2>{source.title}</h2>
       <div className="inspector__meta">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
@@ -637,16 +664,22 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
         </div>
       )}
 
-      <div className="source-card">
-        <div className="source-card__type">
-          {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
+      {readingHere ? (
+        <p className="inspector__meta inspector__reading-here" data-testid="inspector-reading-here">
+          {t('page.readingHere')}
+        </p>
+      ) : (
+        <div className="source-card">
+          <div className="source-card__type">
+            {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
+          </div>
+          <div className="source-card__body">
+            {source.type === 'screenshot' && source.scene_description
+              ? source.scene_description
+              : source.raw_content}
+          </div>
         </div>
-        <div className="source-card__body">
-          {source.type === 'screenshot' && source.scene_description
-            ? source.scene_description
-            : source.raw_content}
-        </div>
-      </div>
+      )}
 
       {extracted.length === 0 ? (
         // The state the "It's in your Sources" toast points at. Saying so beats
@@ -698,6 +731,8 @@ export function Inspector() {
         <SourceDetail source={source} payload={payload} />
       ) : showAnswerHere ? (
         <AnswerDetail />
+      ) : answer !== null ? (
+        <AnswerDetail compact />
       ) : (
         <EmptyDetail payload={payload} />
       )}

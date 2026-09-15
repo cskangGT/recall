@@ -86,6 +86,7 @@ export function LeftRail() {
         onClick={() => setView('diary')}
       >
         <span aria-hidden="true">✎</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.diary')}</span>
       </button>
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
@@ -96,6 +97,7 @@ export function LeftRail() {
         onClick={() => setView('map')}
       >
         <span aria-hidden="true">◍</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.map')}</span>
       </button>
       <button
         className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
@@ -106,6 +108,7 @@ export function LeftRail() {
         onClick={() => useUiStore.getState().goBrowse()}
       >
         <span aria-hidden="true">⊞</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.browse')}</span>
       </button>
       <button
         className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
@@ -116,6 +119,7 @@ export function LeftRail() {
         onClick={() => setView('sources')}
       >
         <span aria-hidden="true">▤</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.sources')}</span>
       </button>
       <button
         className="rail__btn"
@@ -125,6 +129,7 @@ export function LeftRail() {
         onClick={() => setAskOpen(true)}
       >
         <span aria-hidden="true">?</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.ask')}</span>
       </button>
       <div className="rail__spacer" />
       <button
