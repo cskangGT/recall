@@ -655,27 +655,33 @@ export function ArcBrowser() {
           )}
         </span>
       </button>
-      {/* The way back to the question, once it has stepped aside: a quiet
-          link under the door whose hint the answer shaped. */}
-      {profileDone && !welcomeDismissed && (
-        <button
-          className="arc__profile-change"
-          data-testid="profile-change"
-          onClick={() => {
-            localStorage.removeItem('mado.ob.profileDone');
-            setProfileDone(false);
-          }}
-        >
-          {t('welcome.profileChange')}
-        </button>
-      )}
     </>
   );
 
-  // Asked once. Answered, the question steps aside and the doors stand alone —
-  // the answer already lives in the fill door's hint, and the link under the
-  // door leads back to the question.
-  const profileRow = profileDone ? null : (
+  // Asked once. Answered, the question folds into one quiet line in the same
+  // place — what was picked, and the way back — so the doors do not jump.
+  const profileRow = profileDone ? (
+    <div className="arc__profile arc__profile--answered" data-testid="welcome-profile-answered">
+      <span className="arc__profile-q">
+        {t('welcome.profileAnswered', {
+          kind:
+            profile[0] === 'shots' || profile[0] === 'links' || profile[0] === 'notes'
+              ? t(`welcome.profile.${profile[0]}`)
+              : t('welcome.profile.none'),
+        })}
+      </span>
+      <button
+        className="arc__profile-change"
+        data-testid="profile-change"
+        onClick={() => {
+          localStorage.removeItem('mado.ob.profileDone');
+          setProfileDone(false);
+        }}
+      >
+        {t('welcome.profileChange')}
+      </button>
+    </div>
+  ) : (
     <div className="arc__profile" data-testid="welcome-profile" role="radiogroup">
       <span className="arc__profile-q">{t('welcome.profileQ')}</span>
       {(['shots', 'links', 'notes'] as const).map((kind) => (

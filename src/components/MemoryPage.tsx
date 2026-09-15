@@ -48,9 +48,26 @@ function SourcePageView({ id }: { id: string }) {
       <article className="memorypage__card" role="dialog" aria-modal="true" aria-label={t('inspector.source')}>
         <div className="memorypage__head">
           <span className="memorypage__eyebrow">{t('inspector.source')}</span>
-          <button className="memorypage__close" data-testid="source-page-close" onClick={close}>
-            {t('page.close')}
-          </button>
+          <span className="memorypage__headactions">
+            {/* The check, from the page: the same card the reveal offers,
+                for this one source — reachable from where you are reading. */}
+            {extracted.length > 0 && (
+              <button
+                className="memorypage__review"
+                data-testid="source-page-review"
+                onClick={() => {
+                  const ui = useUiStore.getState();
+                  ui.closeSourcePage();
+                  ui.openReview([source.id]);
+                }}
+              >
+                {source.reviewed_at ? t('sources.reviewed') : t('page.review')}
+              </button>
+            )}
+            <button className="memorypage__close" data-testid="source-page-close" onClick={close}>
+              {t('page.close')}
+            </button>
+          </span>
         </div>
         <p className="memorypage__text">{source.title}</p>
         <p className="memorypage__meta">

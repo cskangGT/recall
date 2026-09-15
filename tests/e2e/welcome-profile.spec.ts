@@ -42,6 +42,8 @@ test('the stars rise only after the question is answered, worded by the pick', a
   await expect(page.getByTestId('door-fill').locator('.arc__door-hint')).toContainText(
     'a few of those screenshots',
   );
+  // The question folded into one line where it stood; the way back is there.
+  await expect(page.getByTestId('welcome-profile-answered')).toContainText('Screenshots');
   await page.getByTestId('profile-change').click();
   await expect(page.getByTestId('welcome-profile')).toBeVisible();
   await expect(page.getByTestId('profile-shots')).toHaveAttribute('aria-checked', 'true');

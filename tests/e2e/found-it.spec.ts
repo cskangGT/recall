@@ -35,6 +35,14 @@ test('a source opens as a page in the middle, and its memories lead on', async (
   await expect(sourcePage.getByTestId('source-page-original')).toBeVisible();
   await expect(page.getByTestId('inspector-expand')).toHaveCount(0);
 
+  // The check is one click from the page, for this source alone.
+  await sourcePage.getByTestId('source-page-review').click();
+  await expect(page.getByTestId('review-panel')).toBeVisible();
+  await expect(page.getByTestId('review-step')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.locator('.source-row').first().click();
+  await expect(sourcePage).toBeVisible();
+
   await sourcePage.locator('.memory-row').first().click();
   await expect(page.getByTestId('memory-page')).toBeVisible();
   await expect(sourcePage).toHaveCount(0);

@@ -5046,3 +5046,29 @@ body:lang(ko) {
 .arc__profile-change:hover {
   color: var(--text);
 }
+
+.memorypage__headactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.memorypage__review {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.memorypage__review:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.arc__profile--answered .arc__profile-change {
+  align-self: auto;
+  margin-top: 0;
+}
