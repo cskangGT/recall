@@ -453,12 +453,17 @@ test('the logo is the way home — pressed on instinct, and the instinct is righ
 
   await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('reading-list')).toHaveCount(0);
+  // Home is the first screen — the greeting — and 'look around first' from
+  // there is the browse start.
+  await expect(page.getByTestId('welcome')).toBeVisible();
+  await page.getByTestId('profile-confirm').click();
+  await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('arc-browser')).toContainText('Where would you like to look?');
 
-  // From the map too — home means the browse start, wherever you were.
+  // From the map too — the logo means the first screen, wherever you were.
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('arc-browser')).toBeVisible();
+  await expect(page.getByTestId('welcome')).toBeVisible();
 });
 

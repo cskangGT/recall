@@ -17,9 +17,12 @@ test('the first thought lands on the map, the second stays home', async ({ page 
   // After the capture beat, the view is the big picture.
   await expect(page.getByTestId('map-canvas')).toBeVisible({ timeout: 10000 });
 
-  // Back home; a second thought does not hijack the view.
+  // Back home — the first screen, then 'look around first' to the browse
+  // start; a second thought does not hijack the view.
   await page.getByTestId('rail-home').click();
   await page.getByTestId('capture-story-close').click();
+  await page.getByTestId('profile-confirm').click();
+  await page.getByTestId('door-browse').click();
   await page.getByTestId('home-think-link').click();
   await page.getByTestId('capture-input').fill('Zone 2 rides moved the resting heart rate more than intervals.');
   await page.keyboard.press('Enter');

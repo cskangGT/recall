@@ -309,9 +309,13 @@ export const useUiStore = create<UiState>((set, get) => ({
     return prev;
   },
   setMapFocus: (mapFocus) => set({ mapFocus }),
+  // The logo's promise is the first screen — the greeting, its question and
+  // its doors — not merely the browser's index. "Look around first" from
+  // there is one press away, and the press means what it says.
   goHome: () =>
     set({
       view: 'browse',
+      welcomeDismissed: false,
       openCategoryId: null,
       arcLevelId: null,
       selectedId: null,
