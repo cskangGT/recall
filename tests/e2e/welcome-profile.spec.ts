@@ -14,8 +14,11 @@ test('the stars rise only after the question is answered, worded by the pick', a
   // No doors yet — the answer opens them.
   await expect(page.getByTestId('welcome-doors')).toHaveCount(0);
 
+  // One answer at a time: picking links then shots leaves only shots chosen.
+  await page.getByTestId('profile-links').click();
   await page.getByTestId('profile-shots').click();
-  await expect(page.getByTestId('profile-shots')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('profile-shots')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('profile-links')).toHaveAttribute('aria-checked', 'false');
   await page.getByTestId('profile-confirm').click();
 
   const doors = page.getByTestId('welcome-doors');
@@ -29,11 +32,19 @@ test('the stars rise only after the question is answered, worded by the pick', a
   // The press is spent.
   await expect(page.getByTestId('profile-confirm')).toHaveCount(0);
 
+  // Answered, the question steps aside — and the way back is under the door.
+  await expect(page.getByTestId('welcome-profile')).toHaveCount(0);
+
   // Next visit: answered, so the stars are already up and the pick holds.
   await page.reload();
   await page.getByTestId('welcome').waitFor();
   await expect(page.getByTestId('welcome-doors')).toBeVisible();
-  await expect(page.getByTestId('profile-shots')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('door-fill').locator('.arc__door-hint')).toContainText(
+    'a few of those screenshots',
+  );
+  await page.getByTestId('profile-change').click();
+  await expect(page.getByTestId('welcome-profile')).toBeVisible();
+  await expect(page.getByTestId('profile-shots')).toHaveAttribute('aria-checked', 'true');
 });
 
 test('answering with nothing picked still opens the doors', async ({ page }) => {

@@ -371,8 +371,11 @@ export function ArcBrowser() {
       return [];
     }
   });
-  const toggleProfile = (kind: string) => {
-    const next = profile.includes(kind) ? profile.filter((k) => k !== kind) : [...profile, kind];
+  // One answer, like a radio: the only thing the answer changes is one line
+  // of hint, and a multi-select whose extra picks changed nothing read as
+  // dead clicks. Choosing again re-chooses; nothing toggles off.
+  const chooseProfile = (kind: string) => {
+    const next = [kind];
     setProfile(next);
     localStorage.setItem('mado.ob.profile', JSON.stringify(next));
   };
@@ -652,32 +655,48 @@ export function ArcBrowser() {
           )}
         </span>
       </button>
+      {/* The way back to the question, once it has stepped aside: a quiet
+          link under the door whose hint the answer shaped. */}
+      {profileDone && !welcomeDismissed && (
+        <button
+          className="arc__profile-change"
+          data-testid="profile-change"
+          onClick={() => {
+            localStorage.removeItem('mado.ob.profileDone');
+            setProfileDone(false);
+          }}
+        >
+          {t('welcome.profileChange')}
+        </button>
+      )}
     </>
   );
 
-  const profileRow = (
-    <div className="arc__profile" data-testid="welcome-profile">
+  // Asked once. Answered, the question steps aside and the doors stand alone —
+  // the answer already lives in the fill door's hint, and the link under the
+  // door leads back to the question.
+  const profileRow = profileDone ? null : (
+    <div className="arc__profile" data-testid="welcome-profile" role="radiogroup">
       <span className="arc__profile-q">{t('welcome.profileQ')}</span>
       {(['shots', 'links', 'notes'] as const).map((kind) => (
         <button
           key={kind}
-          className={`arc__profile-chip${profile.includes(kind) ? ' arc__profile-chip--on' : ''}`}
+          className={`arc__profile-chip${profile[0] === kind ? ' arc__profile-chip--on' : ''}`}
           data-testid={`profile-${kind}`}
-          aria-pressed={profile.includes(kind)}
-          onClick={() => toggleProfile(kind)}
+          role="radio"
+          aria-checked={profile[0] === kind}
+          onClick={() => chooseProfile(kind)}
         >
           {t(`welcome.profile.${kind}`)}
         </button>
       ))}
-      {!profileDone && (
-        <button
-          className="arc__profile-confirm"
-          data-testid="profile-confirm"
-          onClick={confirmProfile}
-        >
-          {t('welcome.profileConfirm')}
-        </button>
-      )}
+      <button
+        className="arc__profile-confirm"
+        data-testid="profile-confirm"
+        onClick={confirmProfile}
+      >
+        {t('welcome.profileConfirm')}
+      </button>
     </div>
   );
 

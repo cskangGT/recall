@@ -5028,3 +5028,21 @@ body:lang(ko) {
 .memorypage__original--tall {
   max-height: 48vh;
 }
+
+/* The way back to the sixty-second question, under the door it shaped. */
+.arc__profile-change {
+  align-self: center;
+  margin-top: -2px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.arc__profile-change:hover {
+  color: var(--text);
+}
