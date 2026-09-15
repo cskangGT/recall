@@ -237,10 +237,12 @@ export function ArcBrowser() {
       row,
     }));
 
-    if (slice.hidden > 0) {
+    // At home the index below already lists every category; an overflow
+    // mark on the arc would be a second count that disagrees with it.
+    if (slice.hidden > 0 && !indexOpen) {
       folders.push({
         id: '__more__',
-        label: `${slice.hidden} more`,
+        label: t('arc.more', { count: slice.hidden }),
         count: null,
         kind: 'more',
         row: null,
@@ -281,7 +283,7 @@ export function ArcBrowser() {
       });
     }
     return folders;
-  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page]);
+  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page, indexOpen]);
 
   const points = useMemo(
     () => arcPositions(nodes.length, geometry.radius),

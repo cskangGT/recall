@@ -144,7 +144,7 @@ const en = {
   'arc.thinkLink': 'Sort out a thought',
   'welcome.prompt': 'Where would you like to look?',
   'index.count': '{count} memories',
-  'index.children': '{count} inside',
+  'index.children': '{count} subcategories',
   'welcome.emptyPrompt': 'No stars yet — set the first thought down below.',
   'welcome.emptyTitle': 'Your sky, still dark.',
   'welcome.emptyAside':
@@ -345,6 +345,8 @@ const en = {
   // ---------------------------------------------------------------- inspector
   'inspector.category': 'Category',
   'inspector.memory': 'Memory',
+  'inspector.memoryCount': '{count} memories',
+  'arc.more': '{count} more',
   'inspector.answer': 'Answer',
   'inspector.sources': 'Sources',
   'inspector.workspace': 'Workspace',
@@ -517,7 +519,7 @@ const ko: Record<StringKey, string> = {
   'arc.thinkLink': '생각 정리하기',
   'welcome.prompt': '어디를 들여다볼까요?',
   'index.count': '기억 {count}개',
-  'index.children': '하위 {count}개',
+  'index.children': '하위 카테고리 {count}개',
   'welcome.emptyPrompt': '아직 별이 없어요 — 첫 생각을 아래에 놓아보세요.',
   'welcome.emptyTitle': '아직 어두운, 당신의 하늘이에요.',
   'welcome.emptyAside': `폰에 쌓인 스크린샷 서너 장이면 충분해요 — 아래에 던져 놓으면 ${PRODUCT}가 읽고 자리를 찾아줘요. 지도는 거기서부터 자라나요.`,
@@ -706,6 +708,8 @@ const ko: Record<StringKey, string> = {
 
   'inspector.category': '카테고리',
   'inspector.memory': '기억',
+  'inspector.memoryCount': '기억 {count}개',
+  'arc.more': '{count}개 더',
   'inspector.answer': '답변',
   'inspector.sources': '출처',
   'inspector.workspace': '워크스페이스',

@@ -91,3 +91,27 @@ describe('the seed answerer looks around too', () => {
     expect(answerQuestion('What is the capital of France?', payload).refused).toBe(true);
   });
 });
+
+describe('the demo answers speak Korean in the memory’s own register', () => {
+  it('every scripted answer has a Korean twin with the same citations', async () => {
+    const { answerQuestion } = await import('../../src/ask/scriptedAsk');
+    const { setLocaleForTest: setLocale } = await import('../../src/i18n');
+    const { KO_ANSWERS } = await import('../../src/ask/answersKo');
+    const answers = (await import('../../seed/answers.json')).default as { match: string[]; answer: string }[];
+    for (const a of answers) {
+      const ko = KO_ANSWERS[a.match.join('+')];
+      expect(ko, a.match.join('+')).toBeTruthy();
+      const enMarks = a.answer.match(/\[\d+\]/g)!.sort();
+      expect(ko!.match(/\[\d+\]/g)!.sort()).toEqual(enMarks);
+      expect(ko).not.toMatch(/하셨습니다|당신/);
+    }
+    setLocale('ko');
+    try {
+      const result = answerQuestion('What did we decide about our eval stack?', payload);
+      expect(result.answer).toMatch(/LangChain/);
+      expect(result.answer).toMatch(/였지|잖아|했지|거야|있어/);
+    } finally {
+      setLocale('en');
+    }
+  });
+});

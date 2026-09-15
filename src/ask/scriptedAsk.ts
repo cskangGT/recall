@@ -1,7 +1,8 @@
 import type { GraphPayload } from '../core/types';
 import answers from '../../seed/answers.json';
 import { isReflectiveQuestion, recentSample } from '../core/reflect';
-import { t } from '../i18n';
+import { t, currentLocale } from '../i18n';
+import { KO_ANSWERS } from './answersKo';
 
 /**
  * Verbatim and exact. Recall's credibility rests entirely on every answer being
@@ -64,8 +65,11 @@ export function answerQuestion(
     if (memory) highlighted.add(memory.category_id);
   }
 
+  // The viewer's language, in the memory's register — the English seed reads
+  // as a briefing, and the demo is the first answer a tester ever hears.
+  const ko = currentLocale() === 'ko' ? KO_ANSWERS[entry.match.join('+')] : undefined;
   return {
-    answer: entry.answer,
+    answer: ko ?? entry.answer,
     citations: entry.citations,
     highlighted_node_ids: [...highlighted],
     refused: false,

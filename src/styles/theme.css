@@ -1896,6 +1896,14 @@ button {
   text-decoration: underline;
 }
 
+/* Two badges in a row read as one word; a dot between them says otherwise. */
+.source-row__safe + .source-row__review::before,
+.source-row__safe + .source-row__reviewed::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-faint);
+}
+
 .source-row__reviewed {
   margin-left: 8px;
   color: var(--text-faint);

@@ -626,7 +626,7 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
       <h2>{source.title}</h2>
       <div className="inspector__meta">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
-        {extracted.length} {extracted.length === 1 ? 'memory' : 'memories'}
+        {t('inspector.memoryCount', { count: extracted.length })}
       </div>
 
       {source.url && (
