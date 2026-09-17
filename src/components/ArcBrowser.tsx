@@ -9,6 +9,7 @@ import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
+import { Briefing } from './Briefing';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { importFiles } from '../capture/importFiles';
@@ -1003,7 +1004,9 @@ export function ArcBrowser() {
             data-testid={indexOpen ? 'category-index' : 'arc-home'}
             style={indexOpen ? { top: geometry.listTop } : undefined}
           >
-            <p className="arc__prompt">{heading}</p>
+            {/* Home opens on the briefing — what Mado holds, said first — and
+                the prompt only where there is no index to brief about. */}
+            {indexOpen ? <Briefing /> : <p className="arc__prompt">{heading}</p>}
             {/* The quiet door to today's page — home should always know the
                 way to the diary. */}
             <span className="arc__homelinks">

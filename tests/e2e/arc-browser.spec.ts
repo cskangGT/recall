@@ -456,7 +456,8 @@ test('the logo is the way home — pressed on instinct, and the instinct is righ
   // For someone who has been here (skipWelcome counts), home is the index —
   // the greeting is the first visit's.
   await expect(page.getByTestId('category-index')).toBeVisible();
-  await expect(page.getByTestId('arc-browser')).toContainText('Where would you like to look?');
+  // Home opens on the briefing now, not on a prompt.
+  await expect(page.getByTestId('briefing')).toBeVisible();
 
   // From the map too — the logo means home, wherever you were.
   await page.keyboard.press('g');

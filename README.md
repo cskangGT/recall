@@ -118,6 +118,20 @@ so the next run only brings the new ones, and ends with a link. Open it and
 the app plays the same declaration a file drop earns: how many memories, into
 which interests, and the review. `npm run import:notes` ends with the same link.
 
+### Meetings from Google Calendar
+
+With a Google OAuth client configured (`GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` in `.env.local` and `~/.recall/env`; the client's
+redirect URI must be `http://127.0.0.1:5170/api/google/callback`, plus the
+5174 one for `npm run dev:api`), the rail gains **Meetings** (M). Connect from
+there or from Settings; the server keeps the refresh token in its own table
+and never in a response. Meetings sync lazily when read — a week back, two
+weeks ahead, no more than every ten minutes — and each one carries what Mado
+remembers about the people in the room and the subject: attendees are matched
+to the people and companies in your graph first, then the title and agenda go
+through the same retrieval Ask uses. Home's briefing shows today's meetings at
+the top. Calendar read access only; mail is a later door.
+
 ### The demo
 
 ```bash

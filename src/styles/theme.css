@@ -5414,3 +5414,160 @@ body:lang(ko) {
   opacity: 0.5;
   cursor: default;
 }
+
+/* ---------------------------------------------------------------- briefing */
+
+/* The first page of home: sentences and rows, separated by spacing. No
+   tiles — a briefing that looks like a dashboard has failed. */
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 10px 8px;
+}
+
+.brief__date {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 550;
+  letter-spacing: -0.012em;
+}
+
+.brief__block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brief__eyebrow {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.brief__lately {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+
+.brief__cites {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.brief__cite {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.brief__cite:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.brief__row,
+.brief__line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 5px 8px;
+  margin-left: -8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+button.brief__row,
+button.brief__line {
+  cursor: pointer;
+}
+
+button.brief__row:hover,
+button.brief__line:hover {
+  background: rgba(240, 232, 250, 0.06);
+}
+
+.brief__line--quiet {
+  color: var(--text-dim);
+}
+
+.brief__time {
+  flex: none;
+  min-width: 46px;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.brief__kind {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  min-width: 34px;
+}
+
+.brief__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.brief__meta {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.brief__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brief__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.brief__chip:hover {
+  border-color: var(--accent-dim);
+}
+
+.brief__chip--quiet {
+  color: var(--text-dim);
+}
+
+.brief__chip-count {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}

@@ -141,6 +141,7 @@ export function App() {
       }
     }
     void useWorkspaceStore.getState().loadMeetings(google === 'connected');
+    void useWorkspaceStore.getState().loadLately();
   }, [loading]);
 
   useEffect(() => {
