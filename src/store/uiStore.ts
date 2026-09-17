@@ -164,6 +164,11 @@ interface UiState {
   memoryPage: string | null;
   /** The source open as a page in the middle — the original, and what came from it. */
   sourcePage: string | null;
+  /**
+   * A look-back the diary should open on — set by home's weekly card, read
+   * and cleared by the diary when it mounts. A request, not a state.
+   */
+  retroRange: { from: string; to: string } | null;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -219,6 +224,7 @@ interface UiState {
   closeMemoryPage: () => void;
   openSourcePage: (id: string) => void;
   closeSourcePage: () => void;
+  setRetroRange: (range: { from: string; to: string } | null) => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
@@ -264,6 +270,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   review: null,
   memoryPage: null,
   sourcePage: null,
+  retroRange: null,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -437,6 +444,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   closeMemoryPage: () => set({ memoryPage: null }),
   openSourcePage: (id) => set({ sourcePage: id, memoryPage: null, selectedId: id }),
   closeSourcePage: () => set({ sourcePage: null }),
+  setRetroRange: (retroRange) => set({ retroRange }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 

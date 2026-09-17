@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -56,6 +56,16 @@ export function DiaryView() {
     return { entriesByDay: entries, memoriesByDay: memories };
   }, [payload]);
 
+  // Home's weekly card sends the person here with a range to look back over.
+  // Read once and cleared — it is a request, and a request is answered once.
+  const retroRange = useUiStore((st) => st.retroRange);
+  useEffect(() => {
+    if (!retroRange || !canRetro) return;
+    useUiStore.getState().setRetroRange(null);
+    void lookBack({ ...retroRange, label: t('diary.retro.lastWeek') });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retroRange]);
+
   if (!payload) return <div className="diary" data-testid="diary-view" />;
 
   const locale = currentLocale() === 'ko' ? 'ko-KR' : 'en-GB';
@@ -77,17 +87,17 @@ export function DiaryView() {
     .filter((m) => m.created_at.slice(0, 10) === day)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
-  const lookBack = async () => {
+  const lookBack = async (range?: { from: string; to: string; label: string }) => {
     if (looking) return;
-    const from = dayKey(new Date(month.getFullYear(), month.getMonth(), 1));
-    const to = dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+    const from = range?.from ?? dayKey(new Date(month.getFullYear(), month.getMonth(), 1));
+    const to = range?.to ?? dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
     setLooking(true);
     try {
       const result = await useWorkspaceStore.getState().source.diaryRetro!(from, to);
       if (result.days === 0 || !result.reflection) {
         useUiStore.getState().toast(t('diary.retro.none'));
       } else {
-        setRetro({ month: monthLabel, text: result.reflection });
+        setRetro({ month: range?.label ?? monthLabel, text: result.reflection });
       }
     } catch {
       useUiStore.getState().toast(t('toast.batchFailed'));

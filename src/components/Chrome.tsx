@@ -80,16 +80,8 @@ export function LeftRail() {
       >
         M
       </button>
-      <button
-        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.diary.tip')}
-        aria-label={t('rail.diary')}
-        data-testid="rail-diary"
-        onClick={() => setView('diary')}
-      >
-        <span aria-hidden="true">✎</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.diary')}</span>
-      </button>
+      {/* In the order of a day: what is on, what is held, the big picture,
+          the originals — and the page that closes it, last. */}
       {hasMeetings && (
         <button
           className={`rail__btn${view === 'meetings' ? ' rail__btn--active' : ''}`}
@@ -104,17 +96,6 @@ export function LeftRail() {
         </button>
       )}
       <button
-        className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.map.tip')}
-        aria-label={t('rail.map')}
-        aria-current={view === 'map' ? 'page' : undefined}
-        data-testid="rail-map"
-        onClick={() => setView('map')}
-      >
-        <span aria-hidden="true">◍</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.map')}</span>
-      </button>
-      <button
         className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.browse.tip')}
         aria-label={t('rail.browse')}
@@ -126,6 +107,17 @@ export function LeftRail() {
         <span className="rail__label" aria-hidden="true">{t('rail.label.browse')}</span>
       </button>
       <button
+        className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.map.tip')}
+        aria-label={t('rail.map')}
+        aria-current={view === 'map' ? 'page' : undefined}
+        data-testid="rail-map"
+        onClick={() => setView('map')}
+      >
+        <span aria-hidden="true">◍</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.map')}</span>
+      </button>
+      <button
         className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.sources.tip')}
         aria-label={t('rail.sources')}
@@ -135,6 +127,16 @@ export function LeftRail() {
       >
         <span aria-hidden="true">▤</span>
         <span className="rail__label" aria-hidden="true">{t('rail.label.sources')}</span>
+      </button>
+      <button
+        className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.diary.tip')}
+        aria-label={t('rail.diary')}
+        data-testid="rail-diary"
+        onClick={() => setView('diary')}
+      >
+        <span aria-hidden="true">✎</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.diary')}</span>
       </button>
       <button
         className="rail__btn"

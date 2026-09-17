@@ -24,12 +24,32 @@ export { localDay };
  * new ground, and the card says what the day made and where tomorrow starts.
  * It reads the stamp the welcome left (`FIRST_DAY_KEY`) and speaks only on
  * that calendar day.
+ *
+ * And once a week, where the server can look back: the first visit of a week
+ * whose predecessor has diary pages offers "the you of last week". It ranks
+ * under yesterday's page (the nearer pull) and over a vector link.
  */
+
+export interface MorningOptions {
+  /** The day the welcome ended (FIRST_DAY_KEY), if it did. */
+  firstDayStamp?: string | null;
+  /** The Monday of the week whose look-back was already offered or put away. */
+  weekStamp?: string | null;
+  /** The server has the look-back door (source.diaryRetro). */
+  canRetro?: boolean;
+}
+
+/** Monday (local) of the week `d` falls in, as a local day. */
+export function mondayOf(d: Date): string {
+  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  return localDay(m);
+}
 
 export type MorningCard =
   | { kind: 'firstDay'; count: number }
   | { kind: 'meetings'; count: number; first: Meeting }
   | { kind: 'diary'; sourceId: string; date: string }
+  | { kind: 'week'; from: string; to: string; days: number }
   | { kind: 'link'; recent: Memory; older: Memory; similarity: number };
 
 const HOURS = 3600_000;
@@ -44,10 +64,10 @@ export function morningCardOf(
   payload: GraphPayload,
   now: Date,
   meetings: Meeting[] = [],
-  firstDayStamp: string | null = null,
+  opts: MorningOptions = {},
 ): MorningCard | null {
   const today = localDay(now);
-  if (firstDayStamp === today) {
+  if (opts.firstDayStamp === today) {
     const count = payload.memories.filter((m) => localDay(new Date(m.created_at)) === today).length;
     return { kind: 'firstDay', count };
   }
@@ -60,6 +80,21 @@ export function morningCardOf(
   const yesterday = localDay(new Date(now.getTime() - 24 * HOURS));
   const diary = payload.sources.find((s) => s.diary_date === yesterday);
   if (diary) return { kind: 'diary', sourceId: diary.id, date: yesterday };
+
+  // Last week, Monday to Sunday — offered once, and only if it has pages:
+  // the look-back reads diary days, and a week without any has nothing to say.
+  const monday = mondayOf(now);
+  if (opts.canRetro && opts.weekStamp !== monday) {
+    const [y, mo, d] = monday.split('-').map(Number) as [number, number, number];
+    const from = localDay(new Date(y, mo - 1, d - 7));
+    const to = localDay(new Date(y, mo - 1, d - 1));
+    const days = new Set(
+      payload.sources
+        .map((s) => s.diary_date)
+        .filter((day): day is string => Boolean(day) && day! >= from && day! <= to),
+    ).size;
+    if (days > 0) return { kind: 'week', from, to, days };
+  }
 
   const t = now.getTime();
   const recents = payload.memories

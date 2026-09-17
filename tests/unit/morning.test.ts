@@ -135,13 +135,31 @@ describe('morningCardOf', () => {
       payloadWith([mem('m_a', 'src_1', [1, 0], 2), mem('m_b', 'src_2', [0, 1], 3)]),
       NOW,
       [meeting('m1', 1, 2)],
-      localDay(NOW),
+      { firstDayStamp: localDay(NOW) },
     );
     expect(card).toEqual({ kind: 'firstDay', count: 2 });
   });
 
   it('a first-day stamp from another day is silent', () => {
-    const card = morningCardOf(payloadWith([]), NOW, [], '2026-08-20');
+    const card = morningCardOf(payloadWith([]), NOW, [], { firstDayStamp: '2026-08-20' });
     expect(card).toBeNull();
+  });
+
+  // NOW is Friday 2026-08-21; its week began Monday the 17th, so "last week"
+  // is the 10th through the 16th.
+  const diarySource = (date: string) => ({ id: `src_${date}`, diary_date: date, created_at: `${date}T20:00:00Z` });
+
+  it('offers last week once, where the server can look back and the week has pages', () => {
+    const p = payloadWith([], [diarySource('2026-08-12'), diarySource('2026-08-14'), diarySource('2026-08-18')]);
+    expect(morningCardOf(p, NOW, [], { canRetro: true })).toEqual({
+      kind: 'week',
+      from: '2026-08-10',
+      to: '2026-08-16',
+      days: 2,
+    });
+    // Already offered this week, no door for it, or no pages: silent.
+    expect(morningCardOf(p, NOW, [], { canRetro: true, weekStamp: '2026-08-17' })).toBeNull();
+    expect(morningCardOf(p, NOW, [], {})).toBeNull();
+    expect(morningCardOf(payloadWith([], [diarySource('2026-08-18')]), NOW, [], { canRetro: true })).toBeNull();
   });
 });

@@ -181,6 +181,18 @@ grey while you are looking something up, amber the moment you press `G`.
 **Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
 and the only surface where a reorganization is animated.
 
+## The day, not the views
+
+The features are arranged along a day rather than across a menu.
+
+- **The first hour.** The greeting asks for one thought, typed, and the memory answers it in its own voice — what it kept and where. Then the calendar (only where the server has that door) and what has piled up. However the greeting is left, home says the first day once. Settings → *The first screen* plays it again.
+- **Home reads by the hour.** The briefing keeps its blocks and changes their order (`src/core/dayPart.ts`): mornings open on the day's meetings, afternoons on sorting — three originals at a time, the oldest first — and evenings on what came in today and the diary page that closes it.
+- **Put down, not deleted.** A question, decision or task on the briefing can be put down (`settled_at`, `PATCH /api/workspaces/:id/memories/:memoryId`). The memory stays where it was filed; its page is where it is picked back up.
+- **A meeting keeps a line.** A meeting that has begun takes one line in the meetings view. It is an ordinary note with the meeting and the people written into the original, so the attendee match brings it back the next time they are in the room.
+- **Once a week**, where the server can look back, the first visit offers "the you of last week" — the diary's look-back over the previous Monday to Sunday.
+
+Deliberately absent: to-do checkboxes, streaks, push reminders, colour that changes with the hour.
+
 ## Verify
 
 ```bash

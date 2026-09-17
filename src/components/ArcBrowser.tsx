@@ -16,7 +16,7 @@ import { Welcome } from './Welcome';
 import { SourceChips } from './SourceChips';
 import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep } from '../core/onboarding';
 import { runAsk } from '../ask/runAsk';
-import { morningCardOf, localDay, type MorningCard } from '../core/morning';
+import { morningCardOf, localDay, mondayOf, type MorningCard } from '../core/morning';
 import { attendeeLine, formatTime } from '../core/meetings';
 import { t, PRODUCT, currentLocale } from '../i18n';
 import type { SourceType } from '../core/types';
@@ -404,11 +404,17 @@ export function ArcBrowser() {
         payload,
         new Date(),
         homeIndexOpen(true, payload.memories.length) ? [] : (calendar ?? []),
-        localStorage.getItem(FIRST_DAY_KEY),
+        {
+          firstDayStamp: localStorage.getItem(FIRST_DAY_KEY),
+          weekStamp: localStorage.getItem('mado.ob.weekCard'),
+          canRetro: Boolean(useWorkspaceStore.getState().source.diaryRetro),
+        },
       ),
     );
   }, [payload, meetingsWindow, welcomeDismissed]);
   const closeMorning = () => {
+    // The weekly offer is made once a week, taken or not.
+    if (morning?.kind === 'week') localStorage.setItem('mado.ob.weekCard', mondayOf(new Date()));
     localStorage.setItem('mado.ob.morning', localDay(new Date()));
     setMorning(null);
   };
@@ -877,6 +883,11 @@ export function ArcBrowser() {
                     closeMorning();
                     const ui = useUiStore.getState();
                     if (morning.kind === 'firstDay') return;
+                    if (morning.kind === 'week') {
+                      ui.setRetroRange({ from: morning.from, to: morning.to });
+                      ui.setView('diary');
+                      return;
+                    }
                     if (morning.kind === 'meetings') {
                       ui.setView('meetings');
                     } else if (morning.kind === 'diary') {
@@ -890,6 +901,10 @@ export function ArcBrowser() {
                   {morning.kind === 'firstDay' ? (
                     <span className="arc__morning-line" data-testid="morning-first-day">
                       {t('morning.firstDay', { count: morning.count, product: PRODUCT })}
+                    </span>
+                  ) : morning.kind === 'week' ? (
+                    <span className="arc__morning-line" data-testid="morning-week">
+                      {t('morning.week', { days: morning.days })}
                     </span>
                   ) : morning.kind === 'meetings' ? (
                     <span className="arc__morning-line" data-testid="morning-meetings">
