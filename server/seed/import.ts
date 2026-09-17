@@ -2,6 +2,7 @@ import type { Repository } from '../db/repository.ts';
 import type { GraphPayload, Memory } from '../../src/core/types.ts';
 import workspaceJson from '../../seed/workspace.json' with { type: 'json' };
 import workspaceKoJson from '../../seed/workspace.ko.json' with { type: 'json' };
+import { normalizeEntityName } from '../entities/normalize.ts';
 
 /**
  * The demo corpus in the visitor's language.
@@ -104,7 +105,7 @@ export function importSeed(
         id: e.id,
         name: e.name,
         kind: e.kind,
-        normalized_name: e.name.trim().toLowerCase(),
+        normalized_name: normalizeEntityName(e.name),
       });
     }
 

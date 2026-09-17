@@ -8,6 +8,7 @@ import { evaluateReorg } from '../../src/core/gates.ts';
 import { applyReorg } from '../../src/core/applyReorg.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
 import { RELATES_TO_MIN_SIMILARITY, DUPLICATE_SIMILARITY } from '../../src/core/thresholds.ts';
+import { normalizeEntityName } from '../entities/normalize.ts';
 
 /**
  * The ingest pipeline — spec §5.3, §8.3, §8.4.
@@ -625,7 +626,7 @@ export class IngestPipeline {
           id: id('ent'),
           name: entity.name,
           kind: entity.kind,
-          normalized_name: entity.name.trim().toLowerCase(),
+          normalized_name: normalizeEntityName(entity.name),
         });
         this.repo.linkMemoryEntity(memoryId, entityId);
       }

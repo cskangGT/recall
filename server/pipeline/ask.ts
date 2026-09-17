@@ -2,7 +2,7 @@ import { isReflectiveQuestion, recentSample } from '../../src/core/reflect.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
 import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory, Reflection } from '../ai/provider.ts';
-import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
+import { expandMemories, relevantTo, CONTEXT_LIMIT } from '../search/retrieve.ts';
 
 /**
  * Ask — spec §9.2.
@@ -200,7 +200,7 @@ export class AskPipeline {
       }
       return {
         payload,
-        context: this.expand(payload, sample.picks),
+        context: expandMemories(payload, sample.picks),
         survivingCount: sample.picks.length,
         reflective: {
           from: sample.from,
@@ -225,11 +225,14 @@ export class AskPipeline {
     const previous = history.at(-1);
     const retrievalText = previous ? `${previous.question}\n${question}` : question;
 
-    const [questionVector] = await this.embeddings.embed([retrievalText], 'query');
-    const keywordHits = this.repo.keywordSearch(workspaceId, retrievalText, RETRIEVE_LIMIT);
-
-    const fused = fuse(payload, questionVector!, keywordHits, RETRIEVE_LIMIT);
-    const surviving = applyFloor(fused);
+    // No limit on purpose: the refusal below counts everything that cleared
+    // the floor, and only the context handed to the model is capped.
+    const surviving = await relevantTo(
+      payload,
+      (q, n) => this.repo.keywordSearch(workspaceId, q, n),
+      this.embeddings,
+      retrievalText,
+    );
 
     if (surviving.length < MIN_SUPPORTING_MEMORIES) {
       return { refusal: refusal(surviving.length) };
@@ -237,29 +240,9 @@ export class AskPipeline {
 
     // Context expansion (spec §9.2 step 5): the model sees each memory with its
     // category and source, so it can attribute rather than guess.
-    const context = this.expand(payload, surviving.slice(0, CONTEXT_LIMIT).map((r) => r.memory));
+    const context = expandMemories(payload, surviving.slice(0, CONTEXT_LIMIT).map((r) => r.memory));
 
     return { payload, context, survivingCount: surviving.length };
-  }
-
-  /** Each memory with its category and source, so the model can attribute rather than guess. */
-  private expand(
-    payload: ReturnType<Repository['getGraphPayload']>,
-    memories: { id: string; source_id: string; text: string; category_id: string }[],
-  ): RetrievedMemory[] {
-    const categoryName = new Map(payload.categories.map((c) => [c.id, c.name]));
-    const sourceById = new Map(payload.sources.map((s) => [s.id, s]));
-    return memories.map((m) => {
-      const source = sourceById.get(m.source_id);
-      return {
-        memory_id: m.id,
-        source_id: m.source_id,
-        text: m.text,
-        category_name: categoryName.get(m.category_id) ?? 'Uncategorised',
-        source_title: source?.title ?? 'Unknown source',
-        source_type: source?.type ?? 'text',
-      };
-    });
   }
 
   /** Validation and recording — everything after a model spoke. */
