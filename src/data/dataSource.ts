@@ -119,6 +119,8 @@ export interface DataSource {
   ): Promise<{ mergedMemoryId: string; graph: GraphPayload }>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
+  /** Puts a memory down (or picks it back up) — it stays, and leaves "on the table". */
+  settleMemory?(memoryId: string, settled: boolean): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
   deleteMemory?(memoryId: string): Promise<GraphPayload>;
   /**
@@ -484,6 +486,14 @@ export class ApiDataSource implements DataSource {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/memories/${encodeURIComponent(memoryId)}/category`,
       { categoryId },
+    );
+    return validateSeed(graph);
+  }
+
+  async settleMemory(memoryId: string, settled: boolean): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/memories/${encodeURIComponent(memoryId)}`,
+      { method: 'PATCH', body: JSON.stringify({ settled }) },
     );
     return validateSeed(graph);
   }

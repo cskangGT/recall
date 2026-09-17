@@ -66,6 +66,12 @@ export interface Memory {
    * absent means 1.
    */
   times_seen?: number;
+  /**
+   * When the person put this down — a question answered, a decision made, a
+   * task done. The memory stays; it only leaves "on the table". Absent or
+   * null means still held.
+   */
+  settled_at?: string | null;
 }
 
 export interface Category {

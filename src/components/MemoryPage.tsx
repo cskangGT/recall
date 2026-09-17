@@ -167,6 +167,11 @@ function MemoryPageView() {
         {(memory.times_seen ?? 1) > 1 && (
           <p className="memorypage__meta">{t('inspector.timesSeen', { n: memory.times_seen! })}</p>
         )}
+        {memory.settled_at && (
+          <p className="memorypage__meta" data-testid="memory-page-settled">
+            {t('page.settled', { date: memory.settled_at.slice(0, 10) })}
+          </p>
+        )}
 
         {source && (
           <section className="memorypage__section">
@@ -239,6 +244,30 @@ function MemoryPageView() {
               })}
             </select>
           </label>
+          {/* Only what can be "on the table" can be put down or picked back up. */}
+          {(memory.kind === 'question' || memory.kind === 'decision' || memory.kind === 'task') && (
+            <button
+              className="memorypage__settle"
+              data-testid="memory-page-settle"
+              onClick={() => {
+                const next = !memory.settled_at;
+                useWorkspaceStore.getState().settleMemory(memory.id, next);
+                useUiStore.getState().toast(
+                  next
+                    ? t(
+                        memory.kind === 'question'
+                          ? 'toast.settled.question'
+                          : memory.kind === 'decision'
+                            ? 'toast.settled.decision'
+                            : 'toast.settled.task',
+                      )
+                    : t('toast.pickedUp'),
+                );
+              }}
+            >
+              {memory.settled_at ? t('page.pickUp') : t('briefing.settle')}
+            </button>
+          )}
           <DeleteButton
             label={t('inspector.deleteMemoryLabel')}
             testId="memory-page-delete"

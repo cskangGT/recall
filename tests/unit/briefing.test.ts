@@ -19,6 +19,17 @@ describe('briefingOf', () => {
     for (const m of b.concerns) expect(['question', 'decision', 'task']).toContain(m.kind);
   });
 
+  it('leaves out what has been put down — settled is off the table, not gone', () => {
+    const settled = {
+      ...payload,
+      memories: payload.memories.map((m) =>
+        m.id === 'mem_11' ? { ...m, settled_at: '2026-07-20T00:00:00Z' } : m,
+      ),
+    };
+    expect(briefingOf(settled).concerns.map((m) => m.id)).toEqual(['mem_22']);
+    expect(settled.memories.some((m) => m.id === 'mem_11')).toBe(true);
+  });
+
   it('names the categories that grew most in the window, biggest first, at least two memories each', () => {
     const b = briefingOf(payload);
     expect(b.learning.map((l) => l.categoryId)).toEqual(['cat_ai_tooling', 'cat_eng_hiring']);

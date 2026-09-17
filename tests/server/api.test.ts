@@ -177,6 +177,27 @@ describe('POST undo', () => {
   });
 });
 
+describe('PATCH memory — putting it down', () => {
+  it('stamps the time, keeps the memory, and picks it back up', async () => {
+    const memory = repo.getGraphPayload(WS).memories[0]!;
+    const down = await patch(`${base}/memories/${memory.id}`, { settled: true });
+    expect(down.status).toBe(200);
+    const settled = (down.body as { graph: GraphPayload }).graph.memories.find((m) => m.id === memory.id)!;
+    expect(settled.text).toBe(memory.text);
+    expect(settled.settled_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const up = await patch(`${base}/memories/${memory.id}`, { settled: false });
+    const held = (up.body as { graph: GraphPayload }).graph.memories.find((m) => m.id === memory.id)!;
+    expect(held.settled_at ?? null).toBeNull();
+  });
+
+  it('404s an unknown memory and 400s anything but a boolean', async () => {
+    expect((await patch(`${base}/memories/mem_nope`, { settled: true })).status).toBe(404);
+    const id = repo.getGraphPayload(WS).memories[0]!.id;
+    expect((await patch(`${base}/memories/${id}`, { settled: 'yes' })).status).toBe(400);
+  });
+});
+
 describe('POST memory category — a user correction', () => {
   it('moves the memory and locks the assignment', async () => {
     const payload = repo.getGraphPayload(WS);

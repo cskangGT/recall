@@ -57,7 +57,8 @@ export function briefingOf(payload: GraphPayload, days: number = BRIEFING_DAYS):
   const recent = payload.memories.filter((m) => inWindow(m.created_at));
 
   const concerns = recent
-    .filter((m) => CONCERN_KINDS.has(m.kind))
+    // Put down is not forgotten — it is only off the table.
+    .filter((m) => CONCERN_KINDS.has(m.kind) && !m.settled_at)
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id))
     .slice(0, CONCERNS_LIMIT);
 

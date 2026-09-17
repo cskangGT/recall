@@ -41,6 +41,8 @@ interface WorkspaceState {
   applyPayload: (payload: GraphPayload) => void;
   /** User re-categorizes a memory. The assignment locks — see spec 6.3. */
   moveMemory: (memoryId: string, categoryId: string) => void;
+  /** Put a memory down, or pick it back up. It is never removed by this. */
+  settleMemory: (memoryId: string, settled: boolean) => void;
   /** Throws a memory away. Not reversible — the UI asks first. */
   deleteMemory: (memoryId: string) => void;
   /** User re-parents a child category. */
@@ -135,6 +137,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const { source } = get();
     void source
       .deleteMemory?.(memoryId)
+      .then(get().applyPayload)
+      .catch(() => void get().load());
+  },
+
+  settleMemory: (memoryId, settled) => {
+    const current = get().payload;
+    if (!current) return;
+    const at = settled ? new Date().toISOString() : null;
+    // Optimistic, like a move: the row should leave the table under the hand.
+    get().applyPayload({
+      ...current,
+      memories: current.memories.map((m) => (m.id === memoryId ? { ...m, settled_at: at } : m)),
+    });
+    const { source } = get();
+    void source.settleMemory?.(memoryId, settled)
       .then(get().applyPayload)
       .catch(() => void get().load());
   },

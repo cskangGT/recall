@@ -63,6 +63,7 @@ export class SqliteRepository implements Repository {
     this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
     this.ensureColumn('sources', 'reviewed_at', 'TEXT');
     this.ensureColumn('sources', 'diary_date', 'TEXT');
+    this.ensureColumn('memories', 'settled_at', 'TEXT');
   }
 
   /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
@@ -297,7 +298,12 @@ export class SqliteRepository implements Repository {
       pinned: bool(r.pinned),
       created_at: r.created_at as string,
       times_seen: (r.times_seen as number | undefined) ?? 1,
+      settled_at: (r.settled_at as string | null | undefined) ?? null,
     }));
+  }
+
+  setMemorySettled(id: string, settledAt: string | null): void {
+    this.db.prepare('UPDATE memories SET settled_at = ? WHERE id = ?').run(settledAt, id);
   }
 
   reinforceMemory(id: string): void {

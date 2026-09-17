@@ -234,3 +234,36 @@ test('a server with no Google client draws no door', async ({ page }) => {
   await page.keyboard.press(',');
   await expect(page.getByTestId('settings-google')).toHaveCount(0);
 });
+
+/**
+ * The way back from the calendar into memory: a meeting that has happened
+ * takes one line, kept as an ordinary note with the meeting and the people
+ * written into it — so the next meeting with them finds it by their names.
+ * A meeting still ahead on another day offers no such line.
+ */
+test('a finished meeting keeps one line, with the people written into the original', async ({ page }) => {
+  await mockServer(page, { connected: true, google: true });
+  let sent: { title?: string; content?: string } | null = null;
+  await page.route('**/api/workspaces/*/capture', (route) => {
+    sent = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ addedMemoryIds: [], reorg: null, graph: JSON.parse(seed) }),
+    });
+  });
+  await page.goto('/?api=1&skipWelcome=1&lang=ko');
+  await page.getByTestId('rail-meetings').click();
+
+  await page.getByTestId('meeting-evt_tomorrow').getByRole('button').first().click();
+  await expect(page.getByTestId('meeting-evt_tomorrow-note')).toHaveCount(0);
+
+  await page.getByTestId('meeting-evt_past').getByRole('button').first().click();
+  await page.getByTestId('meeting-evt_past-note').fill('플랫폼 팀은 배포 파이프라인을 다음 분기에 옮기기로 했다');
+  await page.getByTestId('meeting-evt_past-note').press('Enter');
+
+  await expect(page.getByTestId('toast').last()).toContainText('박준과 만날 때');
+  expect(sent!.title).toBe('Retro with the platform team');
+  expect(sent!.content).toContain('배포 파이프라인');
+  expect(sent!.content).toContain('참석: 박준');
+  await expect(page.getByTestId('meeting-evt_past-note')).toHaveValue('');
+});

@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS memories (
   -- How many times this thought has arrived; duplicates reinforce, not repeat.
   -- Also added by ensureColumn for databases created before it.
   times_seen    INTEGER NOT NULL DEFAULT 1,
+  settled_at    TEXT,
   created_at    TEXT NOT NULL
 );
 

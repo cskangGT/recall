@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { t, currentLocale, type StringKey, type Locale } from '../i18n';
+import { t, josa, currentLocale, type StringKey, type Locale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import {
@@ -7,7 +7,7 @@ import {
   attendeeLine,
   formatTime,
   formatClock,
-  type MeetingGroupKey, isOver } from '../core/meetings';
+  type MeetingGroupKey, isOver, meetingDay, localDay } from '../core/meetings';
 import type { MeetingWithContext } from '../core/meetingTypes';
 import type { GraphPayload } from '../core/types';
 import { MemoryRow } from './Inspector';
@@ -230,8 +230,89 @@ function MeetingRow({
               );
             })
           )}
+          {/* The way back from the calendar into memory: once a meeting has
+              begun to happen, there is a line to keep from it. */}
+          {(over || meetingDay(meeting) === localDay(new Date())) && <MeetingNote meeting={meeting} />}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One line kept from a meeting.
+ *
+ * It goes in as an ordinary note, with the meeting and the people written
+ * into the original — honestly, as text — so the extractor meets their names
+ * and links them. That link is the whole point: the next meeting with the
+ * same person finds this memory through the attendee match, with no new
+ * table and no meeting id to keep in step.
+ */
+function MeetingNote({ meeting }: { meeting: MeetingWithContext }) {
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const canCapture = Boolean(useWorkspaceStore((s) => s.source.capture));
+  if (!canCapture) return null;
+
+  const save = async () => {
+    const content = text.trim();
+    if (!content || saving) return;
+    setSaving(true);
+    const store = useWorkspaceStore.getState();
+    const ui = useUiStore.getState();
+    try {
+      const names = attendeeLine(meeting);
+      const stamp = names
+        ? t('meetings.note.stamp', { title: meeting.title, names })
+        : t('meetings.note.stampSolo', { title: meeting.title });
+      const result = await store.source.capture!({
+        type: 'text',
+        title: meeting.title,
+        content: `${content}\n\n${stamp}`,
+      });
+      store.applyPayload(result.graph);
+      setText('');
+      const first = meeting.attendees.find((a) => !a.self)?.name;
+      ui.toast(
+        first
+          ? t('toast.meetingNoted', { name: currentLocale() === 'ko' ? josa(first, '과', '와') : first })
+          : t('toast.meetingNotedSolo'),
+      );
+      // The cards are computed server-side; a fresh read shows the new memory on them.
+      void store.loadMeetings();
+    } catch {
+      ui.toast(t('toast.captureFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="meeting__note">
+      <input
+        className="meeting__note-input"
+        data-testid={`meeting-${meeting.id}-note`}
+        aria-label={t('meetings.note.placeholder')}
+        placeholder={t('meetings.note.placeholder')}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            e.currentTarget.blur();
+            return;
+          }
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) void save();
+        }}
+      />
+      <button
+        className="meeting__note-save"
+        data-testid={`meeting-${meeting.id}-note-save`}
+        disabled={saving || text.trim().length === 0}
+        onClick={() => void save()}
+      >
+        {saving ? t('stage.reading') : t('meetings.note.save')}
+      </button>
     </div>
   );
 }

@@ -825,6 +825,23 @@ async function handleWorkspace(
   }
 
   /*
+   * PATCH /api/workspaces/:id/memories/:memoryId — put a memory down, or pick
+   * it back up. `{ settled: true }` stamps the time; `false` clears it. The
+   * memory itself is untouched: this is the difference between "I am done
+   * with this" and "forget this", and only the second is a delete.
+   */
+  if (req.method === 'PATCH' && resource === 'memories' && resourceId && !action) {
+    const body = asRecord(req.body);
+    if (typeof body.settled !== 'boolean') return badRequest('settled must be a boolean');
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    if (!payload.memories.some((m) => m.id === resourceId)) {
+      return notFound(`unknown memory ${resourceId}`);
+    }
+    deps.repo.setMemorySettled(resourceId, body.settled ? new Date().toISOString() : null);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
    * POST /api/workspaces/:id/memories/merge-preview — the AI's half of a
    * user-driven merge: why these overlap, and the one text that would hold
    * everything. Writes nothing; the user is about to decide.

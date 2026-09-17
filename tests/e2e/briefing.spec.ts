@@ -85,3 +85,30 @@ test('the evening closes the day: what came in, and the page to write', async ({
   await page.getByTestId('brief-write-today').click();
   await expect(page.getByTestId('diary-view')).toBeVisible();
 });
+
+/**
+ * What is held can be put down. The row leaves the table, the memory stays
+ * where it was filed, and its page is where it can be picked back up.
+ */
+test('a concern can be put down and picked back up — the memory never leaves', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  const row = page.getByTestId('brief-concern-mem_11');
+  await expect(row).toBeVisible();
+
+  await row.hover();
+  await page.getByTestId('brief-settle-mem_11').click();
+  await expect(row).toHaveCount(0);
+  await expect(page.locator('.toast').last()).toContainText('put down');
+
+  // The page is the other place to do it, and the way back: put down there,
+  // it says so; picked back up, the row is still on the table.
+  await page.getByTestId('brief-concern-mem_22').click();
+  await page.getByTestId('memory-page-settle').click();
+  await expect(page.getByTestId('memory-page-settled')).toContainText('Put down');
+  await expect(page.getByTestId('memory-page-settle')).toHaveText('Pick back up');
+  await page.getByTestId('memory-page-settle').click();
+  await expect(page.getByTestId('memory-page-settled')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('brief-concern-mem_22')).toBeVisible();
+  await expect(page.getByTestId('brief-concern-mem_11')).toHaveCount(0);
+});

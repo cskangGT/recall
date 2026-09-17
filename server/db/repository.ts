@@ -110,6 +110,8 @@ export interface Repository {
   insertMemories(workspaceId: string, memories: Memory[]): void;
   /** A duplicate arrival strengthens what is already held — never rewrites it. */
   reinforceMemory(id: string): void;
+  /** Mark a question, decision or task as put down (ISO time), or pick it back up (null). */
+  setMemorySettled(id: string, settledAt: string | null): void;
   listMemories(workspaceId: string): Memory[];
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void;
   /**

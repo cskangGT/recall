@@ -5369,6 +5369,52 @@ body:lang(ko) {
 }
 
 /* Not uppercased: the product's name is in this line, and it is written Mado. */
+/* One line kept from the meeting — an input as quiet as the rows above it. */
+.meeting__note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.meeting__note-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  outline: none;
+}
+
+.meeting__note-input::placeholder {
+  color: var(--text-faint);
+}
+
+.meeting__note-input:focus {
+  border-color: var(--accent-dim);
+}
+
+.meeting__note-save {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.meeting__note-save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .meeting__context-eyebrow {
   color: var(--text-faint);
   font-size: var(--text-xs);
@@ -5474,6 +5520,47 @@ body:lang(ko) {
 
 .brief__row--quiet .brief__text {
   color: var(--text-dim);
+}
+
+/* A row with a second, quieter action at its end — shown when the row is
+   under the hand or the keyboard, never as a permanent column of buttons. */
+.brief__split {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brief__split .brief__row {
+  flex: 1;
+  min-width: 0;
+}
+
+.brief__settle,
+.memorypage__settle {
+  flex: none;
+  padding: 3px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.brief__settle {
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+
+.brief__split:hover .brief__settle,
+.brief__split:focus-within .brief__settle {
+  opacity: 1;
+}
+
+.brief__settle:hover,
+.memorypage__settle:hover {
+  color: var(--text);
 }
 
 .brief__block {

@@ -114,6 +114,18 @@ export function Briefing() {
     weekday: 'long',
   });
   const open = (m: Memory) => ui.openMemoryPage(m.id);
+  const settle = (m: Memory) => {
+    useWorkspaceStore.getState().settleMemory(m.id, true);
+    ui.toast(
+      t(
+        m.kind === 'question'
+          ? 'toast.settled.question'
+          : m.kind === 'decision'
+            ? 'toast.settled.decision'
+            : 'toast.settled.task',
+      ),
+    );
+  };
   const openCategory = (id: string) => {
     ui.openCategory(id);
     ui.select(id);
@@ -217,15 +229,21 @@ export function Briefing() {
         <div className="brief__block" data-testid="brief-concerns">
           <span className="brief__eyebrow">{t('briefing.concerns')}</span>
           {brief.concerns.map((m) => (
-            <button
-              key={m.id}
-              className="brief__row"
-              data-testid={`brief-concern-${m.id}`}
-              onClick={() => open(m)}
-            >
-              <span className="brief__kind">{t(KIND_KEY[m.kind as keyof typeof KIND_KEY] ?? 'briefing.kind.task')}</span>
-              <span className="brief__text">{m.text}</span>
-            </button>
+            <div key={m.id} className="brief__split">
+              <button className="brief__row" data-testid={`brief-concern-${m.id}`} onClick={() => open(m)}>
+                <span className="brief__kind">{t(KIND_KEY[m.kind as keyof typeof KIND_KEY] ?? 'briefing.kind.task')}</span>
+                <span className="brief__text">{m.text}</span>
+              </button>
+              {/* What is held can be put down: the memory stays, the row goes. */}
+              <button
+                className="brief__settle"
+                data-testid={`brief-settle-${m.id}`}
+                aria-label={t('briefing.settleAria')}
+                onClick={() => settle(m)}
+              >
+                {t('briefing.settle')}
+              </button>
+            </div>
           ))}
         </div>
       ),
