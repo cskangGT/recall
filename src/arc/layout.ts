@@ -145,7 +145,12 @@ export function arcPositions(count: number, radius: number, spanDeg?: number): A
  * component that calls {@link fitArc}. Two hand-copied constants would drift
  * and the figure would start floating.
  */
-export const FOCUS_FRACTION = { open: 0.32, closed: 0.86 } as const;
+/**
+ * Two heights for the crest. Home (the briefing) shares the open one: the
+ * constellation cannot fold tighter without dropping categories off the
+ * arc, so what home changes is the gap below the crest, not the crest.
+ */
+export const FOCUS_FRACTION = { home: 0.32, open: 0.32, closed: 0.86 } as const;
 
 export interface ArcGeometry {
   /** Focus of the arc in canvas coordinates — where the Thinker stands. */
@@ -165,6 +170,8 @@ export interface ArcGeometry {
 export function fitArc(
   viewport: { w: number; h: number },
   open: boolean,
+  /** The briefing's home: tighter than open. Implies open. */
+  home: boolean = false,
 ): ArcGeometry {
   // Browsing, the figure sits low and the arc has the room above it. Open, the
   // whole assembly lifts so the reading list gets the bottom two thirds.
@@ -175,7 +182,8 @@ export function fitArc(
   // hill below it only 10%, so the person is more than twice the landform. At
   // 0.72 the ratio was inverted — 13% of figure over 28% of dark ground — and a
   // small mark on a large mass reads as standing on a plain.
-  const focusY = viewport.h * (open ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed);
+  const focusY =
+    viewport.h * (home ? FOCUS_FRACTION.home : open ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed);
   // Bounded by both axes so a short window narrows the fan instead of pushing
   // the top nodes off-screen.
   // The closed arc reaches much further than it used to, for two reasons that
@@ -221,7 +229,10 @@ export function fitArc(
   return {
     focus: { x: viewport.w / 2, y: focusY },
     radius,
-    listTop: focusY + (open ? 112 : 0),
+    // Home's briefing starts right under the crest — the figure sits above
+    // it, so there is nothing to clear — where a category's reading list
+    // leaves room for its heading.
+    listTop: focusY + (home ? 48 : open ? 112 : 0),
   };
 }
 

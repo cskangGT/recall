@@ -18,8 +18,11 @@ test('home is a briefing first, and every line is a door', async ({ page }) => {
   const firstCard = (await page.locator('[data-testid^="index-card-"]').first().boundingBox())!;
   expect(briefBox.y).toBeLessThan(firstCard.y);
 
-  // Lately, in the memory's voice, from the seed's own counts.
+  // Lately, in the memory's voice, from the seed's own counts — and the
+  // memories it leaned on, one press away.
   await expect(brief.getByTestId('brief-lately')).toContainText(/Lately/);
+  await brief.getByTestId('brief-evidence').click();
+  expect(await brief.getByTestId('brief-evidence-rows').locator('.memory-row').count()).toBeGreaterThan(0);
 
   // The fortnight's decisions, newest first, each a door to its page.
   const concerns = brief.locator('[data-testid^="brief-concern-"]');

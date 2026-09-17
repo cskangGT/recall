@@ -165,7 +165,10 @@ export function ArcBrowser() {
   const indexOpen = !isOpen && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
   const laidOpen = isOpen || indexOpen;
 
-  const geometry = useMemo(() => fitArc(viewport, laidOpen), [viewport, laidOpen]);
+  const geometry = useMemo(
+    () => fitArc(viewport, laidOpen, indexOpen),
+    [viewport, laidOpen, indexOpen],
+  );
 
   /*
    * How interesting each top-level category is, right now.
@@ -1139,6 +1142,7 @@ export function ArcBrowser() {
               </div>
             )}
             {fileInput}
+            {indexOpen && <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>}
             {indexOpen && (
               <div className="index" role="list">
                 {indexRows.map((row) => {

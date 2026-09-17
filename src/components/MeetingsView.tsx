@@ -7,8 +7,7 @@ import {
   attendeeLine,
   formatTime,
   formatClock,
-  type MeetingGroupKey,
-} from '../core/meetings';
+  type MeetingGroupKey, isOver } from '../core/meetings';
 import type { MeetingWithContext } from '../core/meetingTypes';
 import type { GraphPayload } from '../core/types';
 import { MemoryRow } from './Inspector';
@@ -181,8 +180,9 @@ function MeetingRow({
   const names = attendeeLine(meeting);
   const link = meeting.meetLink ?? meeting.htmlLink;
   const time = formatTime(meeting, locale);
+  const over = isOver(meeting, new Date());
   return (
-    <div className="meeting" data-testid={`meeting-${meeting.id}`}>
+    <div className={`meeting${over ? ' meeting--over' : ''}`} data-testid={`meeting-${meeting.id}`}>
       <div className="meeting__head">
         <button className="meeting__row" aria-expanded={open} onClick={onToggle}>
           <span className={`meeting__time${meeting.allDay ? ' meeting__time--allday' : ''}`}>

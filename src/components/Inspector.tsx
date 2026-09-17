@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { mergeCandidates, relatedMemories } from '../core/related';
+import { briefingOf } from '../core/briefing';
 import { effectivePlan, freeCutoff, sleepingCountOf, trialDaysLeft } from '../core/plan';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -555,12 +556,22 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
   return (
     <>
       <div className="inspector__eyebrow">{t('inspector.workspace')}</div>
-      <div className="stats">
-        {t('inspector.stats', {
-          memories: payload.memories.length,
-          sources: payload.sources.length,
-          categories: payload.categories.length,
-        })}
+      {/* Home already says the totals in its own way; beside it the panel says
+          what moved instead — the fortnight's arrivals. Elsewhere, the scale. */}
+      <div className="stats" data-testid="inspector-stats">
+        {view === 'browse'
+          ? (() => {
+              const b = briefingOf(payload);
+              return t('inspector.recent2w', {
+                memories: b.organizing.arrivedMemories,
+                sources: b.organizing.arrived,
+              });
+            })()
+          : t('inspector.stats', {
+              memories: payload.memories.length,
+              sources: payload.sources.length,
+              categories: payload.categories.length,
+            })}
       </div>
       {/* The plan, where the scale already is: a trial counts down, and on
           free the sleeping count is the quiet standing door to waking. */}

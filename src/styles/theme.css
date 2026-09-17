@@ -5571,3 +5571,36 @@ button.brief__line:hover {
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
+
+/* A finished meeting stays in its day, only quieter. */
+.meeting--over {
+  opacity: 0.55;
+}
+
+.index__eyebrow {
+  display: block;
+  margin: 22px 0 -6px;
+  padding: 0 10px;
+}
+
+.brief__evidence {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.brief__evidence:hover {
+  color: var(--text);
+}
+
+.brief__evidence-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}

@@ -67,7 +67,9 @@ export function groupMeetings<M extends Meeting>(meetings: M[], now: Date): Meet
   const buckets = new Map<MeetingGroupKey, M[]>();
   for (const meeting of meetings) {
     const day = meetingDay(meeting);
-    const key: MeetingGroupKey = isOver(meeting, now)
+    // Today keeps its finished meetings — dimmed by the view, not filed away:
+    // at eleven at night the day is still the day.
+    const key: MeetingGroupKey = day < todayKey || (day !== todayKey && isOver(meeting, now))
       ? 'past'
       : day === todayKey
         ? 'today'

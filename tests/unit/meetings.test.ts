@@ -78,7 +78,7 @@ describe('groupMeetings', () => {
     expect(groups[0]?.meetings.map((m) => m.id)).toEqual(['a', 'b']);
   });
 
-  it('a meeting that ended earlier today is past; one still running is today', () => {
+  it('a meeting that ended earlier today is still today — dimmed, not filed away', () => {
     const groups = groupMeetings(
       [
         meeting('done', at(2026, 9, 16, 8), at(2026, 9, 16, 9)),
@@ -86,9 +86,8 @@ describe('groupMeetings', () => {
       ],
       NOW,
     );
-    expect(groups.map((g) => g.key)).toEqual(['today', 'past']);
-    expect(groups[0]?.meetings[0]?.id).toBe('running');
-    expect(groups[1]?.meetings[0]?.id).toBe('done');
+    expect(groups.map((g) => g.key)).toEqual(['today']);
+    expect(groups[0]?.meetings.map((m) => m.id)).toEqual(['done', 'running']);
   });
 
   it('respects midnight: 23:59 is today, 00:00 is tomorrow', () => {

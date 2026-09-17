@@ -419,7 +419,7 @@ export function App() {
       */}
       {view === 'browse' && (
         <Sky
-          crestTop={`${100 * (openCategoryId !== null || homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed)}%`}
+          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.home : FOCUS_FRACTION.closed)}%`}
         />
       )}
 

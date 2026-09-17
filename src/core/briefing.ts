@@ -32,6 +32,8 @@ export interface Briefing {
     awaitingReview: number;
     /** Originals that arrived in the window. */
     arrived: number;
+    /** Memories kept in the window. */
+    arrivedMemories: number;
   };
   /** The window, ISO dates; null when the corpus is empty. */
   period: { from: string; to: string } | null;
@@ -45,7 +47,7 @@ export function briefingOf(payload: GraphPayload, days: number = BRIEFING_DAYS):
   const empty: Briefing = {
     concerns: [],
     learning: [],
-    organizing: { awaitingReview: 0, arrived: 0 },
+    organizing: { awaitingReview: 0, arrived: 0, arrivedMemories: 0 },
     period: null,
   };
   if (newest === 0) return empty;
@@ -78,7 +80,7 @@ export function briefingOf(payload: GraphPayload, days: number = BRIEFING_DAYS):
   return {
     concerns,
     learning,
-    organizing: { awaitingReview, arrived },
+    organizing: { awaitingReview, arrived, arrivedMemories: recent.length },
     period: { from: day(cutoff), to: day(newest) },
   };
 }
