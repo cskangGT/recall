@@ -416,6 +416,9 @@ const en = {
   'settings.reset.label': 'Reset the workspace',
   'settings.reset.hint': 'Back to the {count} seeded memories. Captures and corrections are discarded.',
   'settings.reset.action': 'Reset',
+  'settings.welcome.label': 'The first screen',
+  'settings.welcome.hint': 'See the welcome again — what Mado is, and the four kinds.',
+  'settings.welcome.action': 'Show again',
 
   // ---------------------------------------------------------------- toasts
   'toast.added': 'Added {count} memories.',
@@ -778,6 +781,9 @@ const ko: Record<StringKey, string> = {
   'settings.reset.label': '워크스페이스 초기화',
   'settings.reset.hint': '시드 기억 {count}개로 되돌아가요. 캡처와 수정 내역은 사라져요.',
   'settings.reset.action': '초기화',
+  'settings.welcome.label': '처음 화면',
+  'settings.welcome.hint': '처음 안내를 다시 봐요 — Mado가 무엇인지, 네 가지 넣는 길.',
+  'settings.welcome.action': '다시 보기',
 
   'toast.added': '기억 {count}개를 추가했어요.',
   'toast.moved': `옮겼어요. ${PRODUCT}가 다시 바꾸지 않아요.`,

@@ -26,11 +26,9 @@ test('home shows the categories as an index, and a card opens one', async ({ pag
   await expect(page.locator('.reading .item').first()).toBeVisible();
   await expect(index).toHaveCount(0);
 
-  // The logo is the way to the first screen; 'look around first' from there
-  // lands on the index again.
+  // The logo is the way home — and for anyone past the greeting, home is
+  // the index again.
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('welcome')).toBeVisible();
-  await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
 });
 

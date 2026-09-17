@@ -125,6 +125,20 @@ export function Settings() {
 
         <div className="settings__row">
           <span className="settings__body">
+            <span className="settings__label">{t('settings.welcome.label')}</span>
+            <span className="settings__hint">{t('settings.welcome.hint')}</span>
+          </span>
+          <button
+            className="settings__action"
+            data-testid="settings-welcome-again"
+            onClick={() => useUiStore.getState().welcomeAgain()}
+          >
+            {t('settings.welcome.action')}
+          </button>
+        </div>
+
+        <div className="settings__row">
+          <span className="settings__body">
             <span className="settings__label">{t('settings.reset.label')}</span>
             <span className="settings__hint">{t('settings.reset.hint', { count: 47 })}</span>
           </span>

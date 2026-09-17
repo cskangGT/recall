@@ -8,6 +8,18 @@ import type { BatchSummary } from '../capture/batch';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
 
+/*
+ * Two arrivals. The greeting belongs to the first: once a person has left it
+ * through any door, it is remembered, the next visit opens on home, and the
+ * logo means home for them. Settings keeps the way back to the first screen.
+ */
+const WELCOMED_KEY = 'mado.ob.welcomed';
+export const hasBeenWelcomed = (): boolean =>
+  typeof localStorage !== 'undefined' && localStorage.getItem(WELCOMED_KEY) === '1';
+const rememberWelcomed = (): void => {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(WELCOMED_KEY, '1');
+};
+
 /**
  * The reveal a bulk drop plays: dots pour in while items are read, gather
  * while the pipeline runs, and resolve into the declaration — what was
@@ -165,6 +177,7 @@ interface UiState {
   openCategory: (id: string | null) => void;
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
+  welcomeAgain: () => void;
   consumeCenterOn: () => string | null;
   setHovered: (id: string | null) => void;
   select: (id: string | null) => void;
@@ -222,7 +235,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       : 'list',
   openCategoryId: null,
   arcLevelId: null,
-  welcomeDismissed: false,
+  welcomeDismissed: hasBeenWelcomed(),
   centerOnId: null,
   hoveredId: null,
   selectedId: null,
@@ -254,7 +267,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   // Switching back to the map carries the selection with it and asks the canvas
   // to centre on it, so the two views never lose each other.
-  setView: (view) =>
+  setView: (view) => {
+    if (view !== 'browse') rememberWelcomed();
     set((s) => ({
       view,
       centerOnId: view === 'map' ? s.selectedId : null,
@@ -263,14 +277,17 @@ export const useUiStore = create<UiState>((set, get) => ({
       // Worse, the top bar renders over it offering "See the big picture" —
       // which is the picture you just came back from.
       welcomeDismissed: s.welcomeDismissed || view !== 'browse',
-    })),
+    }));
+  },
 
-  goBrowse: () =>
+  goBrowse: () => {
+    rememberWelcomed();
     set((s) =>
       s.view === 'browse'
-        ? { openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null }
+        ? { openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
         : { view: 'browse', centerOnId: null, welcomeDismissed: true },
-    ),
+    );
+  },
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
   setSourcesMode: (sourcesMode) => {
     if (typeof localStorage !== 'undefined') localStorage.setItem('mado.sourcesMode', sourcesMode);
@@ -279,7 +296,24 @@ export const useUiStore = create<UiState>((set, get) => ({
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
   setArcLevel: (arcLevelId) => set({ arcLevelId }),
-  dismissWelcome: () => set({ welcomeDismissed: true }),
+  dismissWelcome: () => {
+    rememberWelcomed();
+    set({ welcomeDismissed: true });
+  },
+  // The way back to the first screen, from Settings: forget the welcome and
+  // stand on it again.
+  welcomeAgain: () => {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(WELCOMED_KEY);
+    set({
+      view: 'browse',
+      welcomeDismissed: false,
+      settingsOpen: false,
+      openCategoryId: null,
+      arcLevelId: null,
+      memoryPage: null,
+      sourcePage: null,
+    });
+  },
 
   consumeCenterOn: () => {
     const id = get().centerOnId;
@@ -315,7 +349,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   goHome: () =>
     set({
       view: 'browse',
-      welcomeDismissed: false,
+      welcomeDismissed: hasBeenWelcomed(),
       openCategoryId: null,
       arcLevelId: null,
       selectedId: null,
