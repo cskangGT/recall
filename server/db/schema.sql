@@ -258,3 +258,43 @@ CREATE TABLE IF NOT EXISTS ask_history (
   refused       INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL
 );
+
+-- Google Calendar. One connected account per workspace; the refresh token is
+-- the durable credential and must never leave this table — not in the graph
+-- payload, not in any response. Revoked at Google on disconnect, then dropped.
+CREATE TABLE IF NOT EXISTS google_tokens (
+  workspace_id   TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  email          TEXT,
+  refresh_token  TEXT NOT NULL,
+  access_token   TEXT,
+  expires_at     TEXT,
+  scopes         TEXT NOT NULL,
+  connected_at   TEXT NOT NULL
+);
+
+-- A synced copy of the calendar window (a week back, two weeks ahead — see
+-- src/core/meetingTypes.ts). Google's event id is the key, so a re-sync
+-- replaces rather than duplicates. Attendees are a JSON array.
+CREATE TABLE IF NOT EXISTS meetings (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,
+  starts_at     TEXT NOT NULL,
+  ends_at       TEXT NOT NULL,
+  all_day       INTEGER NOT NULL DEFAULT 0,
+  location      TEXT,
+  description   TEXT,
+  meet_link     TEXT,
+  html_link     TEXT,
+  attendees     TEXT NOT NULL DEFAULT '[]',
+  synced_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS meetings_workspace_starts ON meetings(workspace_id, starts_at);
+
+-- When the window was last read successfully — the staleness clock the sync
+-- consults before asking Google again.
+CREATE TABLE IF NOT EXISTS meeting_sync (
+  workspace_id  TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  synced_at     TEXT NOT NULL
+);

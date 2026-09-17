@@ -9,6 +9,8 @@ import { readAppleNotes } from '../notes/appleNotes.ts';
 import { previewLink } from '../link/preview.ts';
 import { imageSaver } from '../link/saveImage.ts';
 import { readNotionPages } from '../notion/notionPages.ts';
+import { selectGoogle, GoogleAuth } from '../google/oauth.ts';
+import { contextForAll } from '../google/meetingContext.ts';
 import { createApiServer } from './server.ts';
 
 /**
@@ -74,6 +76,19 @@ console.log(`ai provider: ${provider.name} (${reason})`);
 const billingConfig = selectBilling();
 const billing = billingConfig ? new StripeBilling(billingConfig) : undefined;
 console.log(NOTION_TOKEN ? 'notion: connected' : 'notion: off (no NOTION_TOKEN)');
+/*
+ * Google needs the port before it can name its redirect, which is why it is
+ * selected here rather than beside the other env reads: the OAuth client at
+ * Google must list the exact URI, and printing it is the fastest way to see
+ * that the two agree.
+ */
+const googleConfig = selectGoogle(process.env, PORT);
+const google = googleConfig ? new GoogleAuth(googleConfig, repo) : undefined;
+console.log(
+  googleConfig
+    ? `google: configured (redirect ${googleConfig.redirectUri})`
+    : 'google: off (no GOOGLE_CLIENT_ID/SECRET)',
+);
 console.log(
   billing
     ? `billing: stripe ${billingConfig!.livemode ? 'LIVE' : 'test'} mode` +
@@ -152,6 +167,10 @@ const server = createApiServer(
       DB_PATH === ':memory:' ? 'uploads' : `${DB_PATH}.uploads`,
     ),
     readNotionPages: NOTION_TOKEN ? (days) => readNotionPages(NOTION_TOKEN, days) : undefined,
+    google,
+    // What Mado remembers about each meeting — attendees first, then the
+    // subject; see server/google/meetingContext.ts.
+    meetingContext: (workspaceId, meetings) => contextForAll(repo, embeddings, workspaceId, meetings),
   },
   STATIC_ROOT,
   /*

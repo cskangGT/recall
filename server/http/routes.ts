@@ -3,6 +3,10 @@ import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
 import type { StripeBilling } from '../billing/stripe.ts';
 import type { NotesReadResult } from '../notes/appleNotes.ts';
+import type { GoogleAuth } from '../google/oauth.ts';
+import { syncMeetings, syncWindow } from '../google/meetings.ts';
+import type { contextForAll } from '../google/meetingContext.ts';
+import type { MeetingMemory, MeetingsResponse } from '../../src/core/meetingTypes.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -32,11 +36,24 @@ export interface ApiRequest {
   origin?: string;
   /** The request's own `Host` header — what `originAllowed` compares against. */
   host?: string;
+  /**
+   * The query string, first value per key. Optional because almost no route
+   * reads one — the API's inputs are bodies, deliberately (see the capture
+   * route's `includeGraph`) — and the two that do, the OAuth callback that
+   * Google addresses and `?refresh=1`, are GETs with nothing to put a body in.
+   */
+  query?: Record<string, string>;
 }
 
 export interface ApiResponse {
   status: number;
   body: unknown;
+  /**
+   * A redirect. When present the adapter answers 302 with this Location and
+   * no body — the one shape the OAuth callback needs, since what arrives
+   * there is a browser that was sent by Google and must be sent home.
+   */
+  redirect?: string;
   /**
    * Server-sent events. When present the adapter streams these frames instead
    * of writing `body` — the router stays a pure function (a generator is a
@@ -80,6 +97,17 @@ export interface Deps {
   previewLink?: (url: string) => Promise<import('../link/preview.ts').LinkPreview>;
   /** Reads Notion pages via the official API — present when a token is configured. */
   readNotionPages?: (days: number) => Promise<NotesReadResult>;
+  /** Google OAuth — absent means no client id and secret, and the door stays undrawn. */
+  google?: GoogleAuth;
+  /**
+   * What Mado remembers that bears on each meeting, keyed by meeting id.
+   * Injected so the route can be tested with a fake and the retrieval can be
+   * written beside it without either knowing the other's insides.
+   */
+  meetingContext?: (
+    workspaceId: string,
+    meetings: Parameters<typeof contextForAll>[3],
+  ) => ReturnType<typeof contextForAll>;
 }
 
 const asRecord = (body: unknown): Record<string, unknown> =>
@@ -190,6 +218,32 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     return ok({ received: true, ...deps.billing.handleEvent(req.rawBody, deps.repo) });
   }
 
+  /*
+   * GET /api/google/callback — where Google sends the browser back. Beside
+   * the Stripe webhook for the same reason: the caller cannot present an
+   * invite, and does not need to — the signed state *is* the authentication,
+   * naming the workspace that started the round trip. Whatever happens, the
+   * browser goes home; the query string tells the client which way it went.
+   */
+  if (req.method === 'GET' && segments[1] === 'google' && segments[2] === 'callback' && !segments[3]) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    const code = req.query?.code;
+    const state = req.query?.state;
+    const home = (outcome: 'connected' | 'failed'): ApiResponse =>
+      ({ status: 302, body: null, redirect: `/?api=1&google=${outcome}` });
+    if (!code || !state) return home('failed');
+    try {
+      await deps.google.handleCallback(code, state);
+      return home('connected');
+    } catch (err) {
+      // The browser only learns "failed"; the reason goes where the operator
+      // can read it, because a refused refresh token has a fix and a forged
+      // state does not.
+      console.warn(`google callback failed: ${err instanceof Error ? err.message : String(err)}`);
+      return home('failed');
+    }
+  }
+
   if (!writesAllowed(req, deps)) {
     return forbidden('This demo is read-only without an invite.');
   }
@@ -208,6 +262,9 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       appleNotes: Boolean(deps.readNotes),
       notion: Boolean(deps.readNotionPages),
       condense: deps.ingest.canCondense(),
+      // Configured, not connected: connection is per workspace, and this
+      // endpoint has none — `GET /workspaces/:id/google` says the rest.
+      google: Boolean(deps.google),
     });
   }
 
@@ -254,6 +311,78 @@ async function handleWorkspace(
 
   if (req.method === 'GET' && resource === 'reorgs' && !resourceId) {
     return ok(deps.repo.listReorgEvents(workspaceId, 10));
+  }
+
+  /*
+   * The Google door, per workspace.
+   *
+   *   GET  /google             — configured? connected? as whom?
+   *   POST /google/connect     — the consent URL; the client sends the browser
+   *   POST /google/disconnect  — revoke at Google, forget here
+   *
+   * A server without a client id answers the status honestly and the two
+   * actions with 503, the same way billing does without a Stripe key.
+   */
+  if (req.method === 'GET' && resource === 'google' && !resourceId) {
+    return ok(
+      deps.google
+        ? deps.google.status(workspaceId)
+        : { configured: false, connected: false, email: null },
+    );
+  }
+
+  if (req.method === 'POST' && resource === 'google' && resourceId === 'connect' && !action) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    return ok({ url: deps.google.authUrl(workspaceId) });
+  }
+
+  if (req.method === 'POST' && resource === 'google' && resourceId === 'disconnect' && !action) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    await deps.google.disconnect(workspaceId);
+    return ok({ disconnected: true });
+  }
+
+  /*
+   * GET /api/workspaces/:id/meetings[?refresh=1] — the window, with what Mado
+   * remembers attached to each meeting.
+   *
+   * Sync first (a no-op inside ten minutes unless `refresh`), then read the
+   * stored rows, then ask for context. A sync that fails still answers with
+   * the last good rows and the reason; not connected answers the empty shape
+   * with 200, because "nothing to show" is a state the client draws, not an
+   * error it handles.
+   */
+  if (req.method === 'GET' && resource === 'meetings' && !resourceId) {
+    const { from, to } = syncWindow(new Date());
+    const status = deps.google?.status(workspaceId);
+    if (!deps.google || !status?.connected) {
+      const empty: MeetingsResponse = {
+        connected: false, email: null, syncedAt: null, reason: null, from, to, meetings: [],
+      };
+      return ok(empty);
+    }
+
+    const { syncedAt, reason } = await syncMeetings(
+      { repo: deps.repo, auth: deps.google },
+      workspaceId,
+      { refresh: req.query?.refresh === '1' },
+    );
+    const meetings = deps.repo.listMeetings(workspaceId, from, to);
+    // Context is a nicety on top of the list; a retrieval that fails must
+    // not take the calendar down with it.
+    const context: Record<string, MeetingMemory[]> = deps.meetingContext
+      ? await deps.meetingContext(workspaceId, meetings).catch(() => ({}))
+      : {};
+    const response: MeetingsResponse = {
+      connected: true,
+      email: status.email,
+      syncedAt,
+      reason,
+      from,
+      to,
+      meetings: meetings.map((m) => ({ ...m, context: context[m.id] ?? [] })),
+    };
+    return ok(response);
   }
 
   if (req.method === 'POST' && resource === 'capture' && !resourceId) {

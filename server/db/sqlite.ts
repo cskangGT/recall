@@ -30,8 +30,9 @@ const { DatabaseSync } = nodeRequire('node:sqlite') as {
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge,
 } from '../../src/core/types.ts';
+import type { Attendee, Meeting } from '../../src/core/meetingTypes.ts';
 import type {
-  MemoryAssignment, ReorgEventRow, Repository, SourceRow,
+  GoogleTokenRow, MemoryAssignment, ReorgEventRow, Repository, SourceRow,
 } from './repository.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -669,6 +670,113 @@ export class SqliteRepository implements Repository {
         input.id, workspaceId, input.question, input.answer,
         JSON.stringify(input.citations), int(input.refused), new Date().toISOString(),
       );
+  }
+
+  // ---------------------------------------------------------------- google
+
+  getGoogleToken(workspaceId: string): GoogleTokenRow | null {
+    const row = this.db
+      .prepare(
+        `SELECT email, refresh_token, access_token, expires_at, scopes, connected_at
+         FROM google_tokens WHERE workspace_id = ?`,
+      )
+      .get(workspaceId) as GoogleTokenRow | undefined;
+    return row ?? null;
+  }
+
+  saveGoogleToken(workspaceId: string, row: GoogleTokenRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO google_tokens (workspace_id, email, refresh_token, access_token,
+                                    expires_at, scopes, connected_at)
+         VALUES (?,?,?,?,?,?,?)
+         ON CONFLICT(workspace_id) DO UPDATE SET
+           email         = excluded.email,
+           refresh_token = excluded.refresh_token,
+           access_token  = excluded.access_token,
+           expires_at    = excluded.expires_at,
+           scopes        = excluded.scopes,
+           connected_at  = excluded.connected_at`,
+      )
+      .run(
+        workspaceId, row.email, row.refresh_token, row.access_token,
+        row.expires_at, row.scopes, row.connected_at,
+      );
+  }
+
+  deleteGoogleToken(workspaceId: string): void {
+    this.db.prepare('DELETE FROM google_tokens WHERE workspace_id = ?').run(workspaceId);
+  }
+
+  // ---------------------------------------------------------------- meetings
+
+  replaceMeetings(
+    workspaceId: string,
+    from: string,
+    to: string,
+    rows: Meeting[],
+    syncedAt: string,
+  ): void {
+    // ISO-8601 UTC strings compare correctly as text, which is what makes a
+    // TEXT range scan on starts_at a real window rather than a coincidence.
+    const remove = this.db.prepare(
+      'DELETE FROM meetings WHERE workspace_id = ? AND starts_at >= ? AND starts_at < ?',
+    );
+    // OR REPLACE: Google returns an event that *overlaps* the window even
+    // when it started before `from`, and a row outside the window survives
+    // the delete above — the next sync must overwrite it, not collide.
+    const insert = this.db.prepare(
+      `INSERT OR REPLACE INTO meetings (id, workspace_id, title, starts_at, ends_at, all_day,
+                                        location, description, meet_link, html_link,
+                                        attendees, synced_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    );
+    const stamp = this.db.prepare(
+      `INSERT INTO meeting_sync (workspace_id, synced_at) VALUES (?, ?)
+       ON CONFLICT(workspace_id) DO UPDATE SET synced_at = excluded.synced_at`,
+    );
+    this.transaction(() => {
+      remove.run(workspaceId, from, to);
+      for (const m of rows) {
+        insert.run(
+          m.id, workspaceId, m.title, m.startsAt, m.endsAt, int(m.allDay),
+          m.location, m.description, m.meetLink, m.htmlLink,
+          JSON.stringify(m.attendees), syncedAt,
+        );
+      }
+      stamp.run(workspaceId, syncedAt);
+    });
+  }
+
+  listMeetings(workspaceId: string, from: string, to: string): Meeting[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, title, starts_at, ends_at, all_day, location, description,
+                meet_link, html_link, attendees
+         FROM meetings
+         WHERE workspace_id = ? AND starts_at >= ? AND starts_at < ?
+         ORDER BY starts_at, id`,
+      )
+      .all(workspaceId, from, to) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      startsAt: r.starts_at as string,
+      endsAt: r.ends_at as string,
+      allDay: bool(r.all_day),
+      location: (r.location as string | null) ?? null,
+      description: (r.description as string | null) ?? null,
+      meetLink: (r.meet_link as string | null) ?? null,
+      htmlLink: (r.html_link as string | null) ?? null,
+      attendees: json<Attendee[]>(r.attendees, []),
+    }));
+  }
+
+  meetingsSyncedAt(workspaceId: string): string | null {
+    const row = this.db
+      .prepare('SELECT synced_at FROM meeting_sync WHERE workspace_id = ?')
+      .get(workspaceId) as { synced_at: string } | undefined;
+    return row?.synced_at ?? null;
   }
 
   // ---------------------------------------------------------------- lifecycle

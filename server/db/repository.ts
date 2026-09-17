@@ -1,6 +1,7 @@
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge, Source,
 } from '../../src/core/types.ts';
+import type { Meeting } from '../../src/core/meetingTypes.ts';
 
 /**
  * The storage seam.
@@ -31,6 +32,24 @@ export interface CurationRow {
   verdict: 'keep' | 'discard' | 'edit';
   edited_text: string | null;
   created_at: string;
+}
+
+/**
+ * The Google credential for one workspace. `refresh_token` is the durable
+ * half; `access_token`/`expires_at` are the cache in front of it. Rows of
+ * this shape never leave the server — not in the graph payload, not in any
+ * response; `GoogleAuth.status` is the only reader that talks outward, and
+ * it reports the email alone.
+ */
+export interface GoogleTokenRow {
+  email: string | null;
+  refresh_token: string;
+  access_token: string | null;
+  /** ISO. Null means "unknown — refresh before use". */
+  expires_at: string | null;
+  /** The scopes granted, space-separated, as Google reported them. */
+  scopes: string;
+  connected_at: string;
 }
 
 export interface MemoryAssignment {
@@ -167,6 +186,25 @@ export interface Repository {
     id: string; question: string; answer: string | null;
     citations: unknown; refused: boolean;
   }): void;
+
+  // ------------------------------------------------------------- google
+  getGoogleToken(workspaceId: string): GoogleTokenRow | null;
+  /** Upsert: a reconnect replaces the row rather than sitting beside it. */
+  saveGoogleToken(workspaceId: string, row: GoogleTokenRow): void;
+  deleteGoogleToken(workspaceId: string): void;
+
+  // ------------------------------------------------------------- meetings
+  /**
+   * One transaction: every row of this workspace starting in [from, to) goes,
+   * the given rows come in, and the sync clock is stamped. Replacing the
+   * window rather than merging is what makes a meeting deleted at Google
+   * disappear here too.
+   */
+  replaceMeetings(workspaceId: string, from: string, to: string, rows: Meeting[], syncedAt: string): void;
+  /** Rows starting in [from, to), earliest first. */
+  listMeetings(workspaceId: string, from: string, to: string): Meeting[];
+  /** When the window was last read successfully, or null before the first time. */
+  meetingsSyncedAt(workspaceId: string): string | null;
 
   /** All-or-nothing. An ingest that half-applies is worse than one that fails. */
   transaction<T>(fn: () => T): T;
