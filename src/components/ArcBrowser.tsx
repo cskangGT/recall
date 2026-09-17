@@ -359,9 +359,11 @@ export function ArcBrowser() {
    * found something old overnight (morningCardOf's rules).
    */
   /*
-   * The sixty-second question (Duolingo-style, inline, ignorable): what has
-   * been piling up. The answer tailors the fill door's promise and survives
-   * reloads; skipping it costs nothing and is never asked again louder.
+   * What the person wants kept — screenshots, links, notes, thoughts. Pressing
+   * a kind on the first screen unfolds the way to bring that kind in, right
+   * beneath it; the press *is* the answer, so there is no question to confirm
+   * first. The pick survives reloads (it also words the composer's hint) and
+   * pressing the chosen kind again folds it away.
    */
   const [profile, setProfile] = useState<string[]>(() => {
     try {
@@ -371,26 +373,10 @@ export function ArcBrowser() {
       return [];
     }
   });
-  // One answer, like a radio: the only thing the answer changes is one line
-  // of hint, and a multi-select whose extra picks changed nothing read as
-  // dead clicks. Choosing again re-chooses; nothing toggles off.
   const chooseProfile = (kind: string) => {
-    const next = [kind];
+    const next = profile[0] === kind ? [] : [kind];
     setProfile(next);
     localStorage.setItem('mado.ob.profile', JSON.stringify(next));
-  };
-  /*
-   * The question is answered with a press, and the doors — the stars —
-   * rise only after it. Picking chips alone changed one hint, which read as
-   * nothing happening; an answer should visibly open the next step. Once
-   * answered (even with nothing picked), the stars are simply there.
-   */
-  const [profileDone, setProfileDone] = useState(
-    () => localStorage.getItem('mado.ob.profileDone') === '1',
-  );
-  const confirmProfile = () => {
-    localStorage.setItem('mado.ob.profileDone', '1');
-    setProfileDone(true);
   };
 
   const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
@@ -625,105 +611,7 @@ export function ArcBrowser() {
 
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
-  /*
-   * The fill door, shared by both greetings. On an empty workspace it is the
-   * whole point of the screen; on a seeded one it stands beside "look around".
-   * One door either way: when the local Mac server offers a second source it
-   * opens into the choice, otherwise it IS the file picker.
-   */
-  const fillDoor = profile[0] === 'thoughts' ? (
-    /*
-     * The fourth answer to "what has been piling up?" is thoughts — the
-     * kind nothing was ever saved from. Its door is not a file picker but
-     * today's page: the diary, folded into the welcome as an answer rather
-     * than standing beside it as a stranger.
-     */
-    <button
-      className="arc__door arc__door--fill"
-      style={{ '--i': 0 } as React.CSSProperties}
-      data-testid="door-diary"
-      onClick={() => useUiStore.getState().setView('diary')}
-    >
-      <span className="arc__door-star" aria-hidden="true" />
-      <span className="arc__door-name">{t('welcome.diary')}</span>
-      <span className="arc__door-hint">{t('welcome.fillHint.thoughts', { product: PRODUCT })}</span>
-    </button>
-  ) : (
-    <>
-      <button
-        className="arc__door arc__door--fill"
-        style={{ '--i': 0 } as React.CSSProperties}
-        data-testid="door-fill"
-        aria-expanded={hasSourceChoices ? fillOpen : undefined}
-        onClick={() => {
-          if (hasSourceChoices) setFillOpen((v) => !v);
-          else fileInputRef.current?.click();
-        }}
-      >
-        <span className="arc__door-star" aria-hidden="true" />
-        <span className="arc__door-name">{t('welcome.fill')}</span>
-        <span className="arc__door-hint">
-          {t(
-            profile[0] === 'shots' ? 'welcome.fillHint.shots'
-            : profile[0] === 'links' ? 'welcome.fillHint.links'
-            : profile[0] === 'notes' ? 'welcome.fillHint.notes'
-            : 'welcome.fillHint',
-            { product: PRODUCT },
-          )}
-        </span>
-      </button>
-    </>
-  );
-
-  // Asked once. Answered, the question folds into one quiet line in the same
-  // place — what was picked, and the way back — so the doors do not jump.
-  const profileRow = profileDone ? (
-    <div className="arc__profile arc__profile--answered" data-testid="welcome-profile-answered">
-      <span className="arc__profile-q">
-        {t('welcome.profileAnswered', {
-          kind:
-            profile[0] === 'shots' || profile[0] === 'links' || profile[0] === 'notes' || profile[0] === 'thoughts'
-              ? t(`welcome.profile.${profile[0]}`)
-              : t('welcome.profile.none'),
-        })}
-      </span>
-      <button
-        className="arc__profile-change"
-        data-testid="profile-change"
-        onClick={() => {
-          localStorage.removeItem('mado.ob.profileDone');
-          setProfileDone(false);
-        }}
-      >
-        {t('welcome.profileChange')}
-      </button>
-    </div>
-  ) : (
-    <div className="arc__profile" data-testid="welcome-profile" role="radiogroup">
-      <span className="arc__profile-q">{t('welcome.profileQ')}</span>
-      {(['shots', 'links', 'notes', 'thoughts'] as const).map((kind) => (
-        <button
-          key={kind}
-          className={`arc__profile-chip${profile[0] === kind ? ' arc__profile-chip--on' : ''}`}
-          data-testid={`profile-${kind}`}
-          role="radio"
-          aria-checked={profile[0] === kind}
-          onClick={() => chooseProfile(kind)}
-        >
-          {t(`welcome.profile.${kind}`)}
-        </button>
-      ))}
-      <button
-        className="arc__profile-confirm"
-        data-testid="profile-confirm"
-        onClick={confirmProfile}
-      >
-        {t('welcome.profileConfirm')}
-      </button>
-    </div>
-  );
-
-  const fillSources = fillOpen && hasSourceChoices && (
+  const sourceChips = (
     <div className="arc__sources" data-testid="fill-sources">
       {/* Each chip blooms a beat after the last — the menu unfolds from the
           link instead of popping in beside it. */}
@@ -777,6 +665,83 @@ export function ArcBrowser() {
     </div>
   );
 
+  const KINDS = ['shots', 'links', 'notes', 'thoughts'] as const;
+  type Kind = (typeof KINDS)[number];
+  const chosen: Kind | null = (KINDS as readonly string[]).includes(profile[0] ?? '')
+    ? (profile[0] as Kind)
+    : null;
+
+  /* The four kinds, as pressable words — the first screen's only question. */
+  const kindsRow = (
+    <div className="arc__kinds" data-testid="welcome-kinds">
+      {KINDS.map((kind) => (
+        <button
+          key={kind}
+          className={`arc__kind${chosen === kind ? ' arc__kind--on' : ''}`}
+          data-testid={`kind-${kind}`}
+          aria-pressed={chosen === kind}
+          onClick={() => chooseProfile(kind)}
+        >
+          {t(`welcome.profile.${kind}`)}
+        </button>
+      ))}
+    </div>
+  );
+
+  /*
+   * What unfolds beneath the chosen kind: the promise, and the way in.
+   * Screenshots and links are files and pastes; notes are the readers this
+   * server can open; thoughts are today's page or the add bar.
+   */
+  const unfold = chosen && (
+    <div className="arc__unfold" data-testid="welcome-unfold" key={chosen}>
+      <p className="arc__unfold-hint">{t(`welcome.fillHint.${chosen}`, { product: PRODUCT })}</p>
+      {chosen === 'shots' && (
+        <div className="arc__unfold-actions">
+          <button
+            className="arc__source"
+            data-testid="source-files"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {t('welcome.sourceFiles')}
+          </button>
+          <span className="arc__unfold-aside">{t('welcome.unfold.dropToo')}</span>
+        </div>
+      )}
+      {chosen === 'links' && (
+        <div className="arc__unfold-actions">
+          <button
+            className="arc__source"
+            data-testid="unfold-paste"
+            onClick={() => useUiStore.getState().setCaptureOpen(true)}
+          >
+            {t('welcome.unfold.pasteLink')}
+          </button>
+        </div>
+      )}
+      {chosen === 'notes' && sourceChips}
+      {chosen === 'thoughts' && (
+        <div className="arc__unfold-actions">
+          <button
+            className="arc__source"
+            data-testid="unfold-diary"
+            onClick={() => useUiStore.getState().setView('diary')}
+          >
+            {t('welcome.diary')}
+          </button>
+          <button
+            className="arc__source"
+            data-testid="unfold-think"
+            onClick={() => useUiStore.getState().setCaptureOpen(true)}
+          >
+            {t('arc.thinkLink')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const fillSources = fillOpen && hasSourceChoices && sourceChips;
   const fileInput = (
     <input
       ref={fileInputRef}
@@ -1193,67 +1158,26 @@ export function ArcBrowser() {
               possible first sentence for a product whose entire proposition is
               that it can be trusted to file things for you.
             */}
-            {payload.memories.length === 0 ? (
-              <>
-                <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
-                <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
-                {profileRow}
-                {profileDone && (
-                  <div className="arc__doors" data-testid="welcome-doors">
-                    {fillDoor}
-                    <button
-                      className="arc__door"
-                      style={{ '--i': 1 } as React.CSSProperties}
-                      data-testid="door-diary"
-                      onClick={() => useUiStore.getState().setView('diary')}
-                    >
-                      <span className="arc__door-star" aria-hidden="true" />
-                      <span className="arc__door-name">{t('welcome.diary')}</span>
-                      <span className="arc__door-hint">{t('welcome.diaryHint')}</span>
-                    </button>
-                  </div>
-                )}
-                {fillSources}
-                {fileInput}
-              </>
-            ) : (
-              <>
-                <p className="arc__greeting-line">{t('welcome.title')}</p>
-                {/* The scale belongs in the sentence, where the eye already is —
-                    the Inspector used to shout it from the corner instead. */}
-                <p className="arc__greeting-aside">
-                  {t('welcome.sub', {
-                    memories: payload.memories.length,
-                    sources: payload.sources.length,
-                  })}
-                </p>
-                {/*
-                  Two doors, because there are two kinds of first visit: someone
-                  ready to pour their own files in, and someone who wants to see
-                  what the tool even is before feeding it anything. The second
-                  door is the old Enter-to-look-around, given a surface.
-                */}
-                {profileRow}
-                {profileDone && (
-                  <div className="arc__doors" data-testid="welcome-doors">
-                    {fillDoor}
-                    <button
-                      className="arc__door"
-                      style={{ '--i': 1 } as React.CSSProperties}
-                      data-testid="door-browse"
-                      onClick={dismissWelcome}
-                    >
-                      <span className="arc__door-star" aria-hidden="true" />
-                      <span className="arc__door-name">{t('welcome.browse')}</span>
-                    </button>
-                    {/* No diary door here: it is not an answer to "what has been
-                        piling up?", and home keeps its own way to today's page. */}
-                  </div>
-                )}
-                {fillSources}
-                {fileInput}
-              </>
+            {/*
+              One greeting for both arrivals: what Mado is, what to hand it,
+              and the four kinds as the only question. A seeded workspace adds
+              the way to look around first, with what is already there as the
+              reason to. An empty one has nothing to look at yet, and says
+              nothing about it — the kinds are the whole screen.
+            */}
+            <p className="arc__greeting-line">{t('welcome.brain', { product: PRODUCT })}</p>
+            <p className="arc__greeting-aside">{t('welcome.putIn', { product: PRODUCT })}</p>
+            {kindsRow}
+            {unfold}
+            {payload.memories.length > 0 && (
+              <button className="arc__browse" data-testid="door-browse" onClick={dismissWelcome}>
+                <span className="arc__browse-name">{t('welcome.browse')}</span>
+                <span className="arc__browse-hint">
+                  {t('welcome.browseHint', { memories: payload.memories.length })}
+                </span>
+              </button>
             )}
+            {fileInput}
           </div>
         ))}
 

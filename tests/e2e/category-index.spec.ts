@@ -30,8 +30,6 @@ test('home shows the categories as an index, and a card opens one', async ({ pag
   // lands on the index again.
   await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
-  // A fresh visitor still owes the sixty-second question its press.
-  await page.getByTestId('profile-confirm').click();
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
 });

@@ -21,7 +21,6 @@ test('the first thought lands on the map, the second stays home', async ({ page 
   // start; a second thought does not hijack the view.
   await page.getByTestId('rail-home').click();
   await page.getByTestId('capture-story-close').click();
-  await page.getByTestId('profile-confirm').click();
   await page.getByTestId('door-browse').click();
   await page.getByTestId('home-think-link').click();
   await page.getByTestId('capture-input').fill('Zone 2 rides moved the resting heart rate more than intervals.');

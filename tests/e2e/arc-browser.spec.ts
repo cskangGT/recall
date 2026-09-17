@@ -456,7 +456,6 @@ test('the logo is the way home — pressed on instinct, and the instinct is righ
   // Home is the first screen — the greeting — and 'look around first' from
   // there is the browse start.
   await expect(page.getByTestId('welcome')).toBeVisible();
-  await page.getByTestId('profile-confirm').click();
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('arc-browser')).toContainText('Where would you like to look?');
 

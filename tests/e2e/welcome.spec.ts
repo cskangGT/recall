@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
 test('greets you on the app itself, with nothing on the arc yet', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('welcome')).toBeVisible();
-  await expect(page.getByText('Want to think something through?')).toBeVisible();
+  await expect(page.getByText('is your second brain')).toBeVisible();
   // The scene is already the app — no separate frame to leave.
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   // But the categories are not out yet. That is what looking around does.
