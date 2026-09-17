@@ -129,4 +129,19 @@ describe('morningCardOf', () => {
     const card = morningCardOf(payloadWith([]), NOW, [meeting('tmrw', 26, 27), meeting('done', -3, -2)]);
     expect(card).toBeNull();
   });
+
+  it('on the first day, says what the day made — before any other card', () => {
+    const card = morningCardOf(
+      payloadWith([mem('m_a', 'src_1', [1, 0], 2), mem('m_b', 'src_2', [0, 1], 3)]),
+      NOW,
+      [meeting('m1', 1, 2)],
+      localDay(NOW),
+    );
+    expect(card).toEqual({ kind: 'firstDay', count: 2 });
+  });
+
+  it('a first-day stamp from another day is silent', () => {
+    const card = morningCardOf(payloadWith([]), NOW, [], '2026-08-20');
+    expect(card).toBeNull();
+  });
 });

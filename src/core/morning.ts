@@ -19,9 +19,15 @@ export { localDay };
  * rereading your own evening is the stronger pull. The last two are computed
  * from the payload alone — no model, no request; the first needs the calendar
  * the store already holds.
+ *
+ * Before all of them, once: the first day. The hour the welcome ends, home is
+ * new ground, and the card says what the day made and where tomorrow starts.
+ * It reads the stamp the welcome left (`FIRST_DAY_KEY`) and speaks only on
+ * that calendar day.
  */
 
 export type MorningCard =
+  | { kind: 'firstDay'; count: number }
   | { kind: 'meetings'; count: number; first: Meeting }
   | { kind: 'diary'; sourceId: string; date: string }
   | { kind: 'link'; recent: Memory; older: Memory; similarity: number };
@@ -38,8 +44,13 @@ export function morningCardOf(
   payload: GraphPayload,
   now: Date,
   meetings: Meeting[] = [],
+  firstDayStamp: string | null = null,
 ): MorningCard | null {
   const today = localDay(now);
+  if (firstDayStamp === today) {
+    const count = payload.memories.filter((m) => localDay(new Date(m.created_at)) === today).length;
+    return { kind: 'firstDay', count };
+  }
   const ahead = meetings
     .filter((m) => meetingDay(m) === today && !isOver(m, now))
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));

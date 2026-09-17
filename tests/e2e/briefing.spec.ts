@@ -41,3 +41,47 @@ test('home is a briefing first, and every line is a door', async ({ page }) => {
   await brief.getByTestId('brief-awaiting').click();
   await expect(page.getByTestId('sources-view')).toBeVisible();
 });
+
+/**
+ * The same blocks, a different order by the hour. Mornings open on what is
+ * on the table, afternoons on what there is to sort — three at a time, not
+ * twenty-two — and evenings on what came in today and the page that closes
+ * the day. The clock is pinned in the suite's own zone (New York).
+ */
+const top = async (page: import('@playwright/test').Page, id: string) =>
+  (await page.getByTestId(id).boundingBox())!.y;
+
+test('the morning greets and leads with what is on the table', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-16T08:00:00-04:00'));
+  await page.goto('/?skipWelcome=1');
+  const brief = page.getByTestId('briefing');
+  await expect(brief).toHaveAttribute('data-daypart', 'morning');
+  await expect(page.getByTestId('brief-greeting')).toHaveText('Good morning.');
+  expect(await top(page, 'brief-concerns')).toBeLessThan(await top(page, 'brief-lately'));
+  await expect(page.getByTestId('brief-today-memories')).toHaveCount(0);
+});
+
+test('the afternoon leads with sorting — just three, the oldest first', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-16T14:00:00-04:00'));
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('briefing')).toHaveAttribute('data-daypart', 'day');
+  await expect(page.getByTestId('brief-greeting')).toHaveCount(0);
+  expect(await top(page, 'brief-organizing')).toBeLessThan(await top(page, 'brief-lately'));
+
+  await page.getByTestId('brief-review-three').click();
+  await expect(page.getByTestId('review-panel')).toContainText('1 of 3');
+});
+
+test('the evening closes the day: what came in, and the page to write', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-16T22:00:00-04:00'));
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('briefing')).toHaveAttribute('data-daypart', 'evening');
+  await expect(page.getByTestId('brief-greeting')).toHaveText('Time to close the day.');
+
+  // The seed is older than today, so the block says so — and still offers the page.
+  const today = page.getByTestId('brief-today-memories');
+  await expect(today).toContainText('Nothing came in today');
+  expect(await top(page, 'brief-today-memories')).toBeLessThan(await top(page, 'brief-concerns'));
+  await page.getByTestId('brief-write-today').click();
+  await expect(page.getByTestId('diary-view')).toBeVisible();
+});

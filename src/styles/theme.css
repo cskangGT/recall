@@ -4922,7 +4922,8 @@ body:lang(ko) {
 }
 
 .reading--index .arc__morning {
-  margin: 12px 0 2px;
+  /* First on the page now, so the air goes beneath it. */
+  margin: 0 0 16px;
   justify-content: flex-start;
   padding: 0 10px;
 }
@@ -5073,63 +5074,92 @@ body:lang(ko) {
   margin-top: 0;
 }
 
-/* ------------------------------------------------------------- welcome kinds */
+/* ------------------------------------------------------------- the first hour */
 
-/* The first screen's only question: four kinds, as pressable words. The
-   press is the answer, and what unfolds beneath is the way in. */
-.arc__kinds {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 24px;
+/* Which beat of the welcome this is — the quietest thing on the screen. */
+.welcome__step {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
 }
 
-.arc__kind {
-  padding: 7px 16px;
-  background: rgba(24, 17, 36, 0.3);
-  border: 1px solid rgba(236, 224, 246, 0.14);
-  border-radius: var(--radius-pill);
-  color: var(--text-dim);
-  font-size: var(--text-md);
-  cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
-}
-
-.arc__kind:hover {
+/* The one thing the first screen asks for: a thought, typed. */
+.welcome__input {
+  width: min(520px, 100% - 48px);
+  margin-top: 18px;
+  padding: 12px 14px;
+  background: rgba(24, 17, 36, 0.42);
+  border: 1px solid rgba(236, 224, 246, 0.16);
+  border-radius: var(--radius-md);
   color: var(--text);
-  border-color: rgba(236, 224, 246, 0.32);
-}
-
-.arc__kind--on {
-  color: var(--text);
-  border-color: var(--accent);
-  background: rgba(232, 163, 61, 0.12);
-}
-
-.arc__unfold {
-  width: min(560px, 100% - 48px);
-  margin: 18px auto 0;
-  text-align: center;
-  animation: rise 0.25s ease both;
-}
-
-.arc__unfold-hint {
-  margin: 0 0 12px;
-  color: var(--text-dim);
+  font: inherit;
   font-size: var(--text-md);
   line-height: 1.55;
+  resize: none;
+  outline: none;
+  transition: border-color 140ms ease;
 }
 
-.arc__unfold-actions {
+.welcome__input::placeholder {
+  color: var(--text-faint);
+}
+
+.welcome__input:focus {
+  border-color: var(--accent-dim);
+}
+
+/* What the memory says back — its own voice, so it reads as speech, not UI. */
+.welcome__reply {
+  width: min(520px, 100% - 48px);
+  margin-top: 18px;
+  text-align: left;
+  animation: rise 0.3s ease both;
+}
+
+.welcome__reply p {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  text-shadow: 0 1px 10px rgba(22, 13, 30, 0.7);
+}
+
+.welcome__reply p:last-child {
+  color: var(--text-dim);
+}
+
+.welcome__actions {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: wrap;
+  margin-top: 14px;
 }
 
-.arc__unfold .arc__sources {
-  margin-top: 0;
+.welcome__actions .arc__source:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.welcome__quiet {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.welcome__quiet:hover {
+  color: var(--text);
+}
+
+.arc__greeting .arc__sources {
+  margin-top: 18px;
 }
 
 .arc__unfold-aside {
@@ -5432,6 +5462,18 @@ body:lang(ko) {
   font-size: var(--text-lg);
   font-weight: 550;
   letter-spacing: -0.012em;
+}
+
+.brief__greeting {
+  margin-left: 10px;
+  color: var(--text-dim);
+  font-size: var(--text-md);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.brief__row--quiet .brief__text {
+  color: var(--text-dim);
 }
 
 .brief__block {

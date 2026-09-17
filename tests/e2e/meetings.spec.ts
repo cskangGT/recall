@@ -147,11 +147,12 @@ test('the calendar lays out by day — today first, the past week last', async (
     'https://meet.google.com/xyz-1234-abc',
   );
 
-  // The morning card is the door too: today's first meeting.
+  // Home says the day first: the briefing's own block is the door, and no
+  // card above it repeats the same meeting.
   await page.getByTestId('rail-tree').click();
-  await expect(page.getByTestId('morning-meetings')).toContainText('오늘 미팅 1개');
-  await expect(page.getByTestId('morning-meetings')).toContainText('나 + 김수진, 박준');
-  await page.getByTestId('morning-meetings').click();
+  await expect(page.getByTestId('morning-meetings')).toHaveCount(0);
+  await expect(page.getByTestId('brief-meeting-evt_today')).toContainText('김수진, 박준');
+  await page.getByTestId('brief-meeting-evt_today').click();
   await expect(page.getByTestId('meetings-view')).toBeVisible();
 });
 

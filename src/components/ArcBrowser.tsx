@@ -12,8 +12,9 @@ import { Composer } from './Composer';
 import { Briefing } from './Briefing';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
-import { importFiles } from '../capture/importFiles';
-import { importAppleNotesFlow, importNotionFlow, lastSyncOf } from '../capture/batchRun';
+import { Welcome } from './Welcome';
+import { SourceChips } from './SourceChips';
+import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep } from '../core/onboarding';
 import { runAsk } from '../ask/runAsk';
 import { morningCardOf, localDay, type MorningCard } from '../core/morning';
 import { attendeeLine, formatTime } from '../core/meetings';
@@ -79,13 +80,7 @@ export function ArcBrowser() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
   const [dragId, setDragId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fillOpen, setFillOpen] = useState(false);
-  const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
-  const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
-  // Always at least two: the file picker and the Instagram door — the latter
-  // marked 준비중, but standing where testers can see it's coming.
-  const hasSourceChoices = true;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -363,27 +358,6 @@ export function ArcBrowser() {
    * shown at most once per calendar day, and only when something new actually
    * found something old overnight (morningCardOf's rules).
    */
-  /*
-   * What the person wants kept — screenshots, links, notes, thoughts. Pressing
-   * a kind on the first screen unfolds the way to bring that kind in, right
-   * beneath it; the press *is* the answer, so there is no question to confirm
-   * first. The pick survives reloads (it also words the composer's hint) and
-   * pressing the chosen kind again folds it away.
-   */
-  const [profile, setProfile] = useState<string[]>(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('mado.ob.profile') ?? '[]');
-      return Array.isArray(stored) ? stored.filter((v): v is string => typeof v === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
-  const chooseProfile = (kind: string) => {
-    const next = profile[0] === kind ? [] : [kind];
-    setProfile(next);
-    localStorage.setItem('mado.ob.profile', JSON.stringify(next));
-  };
-
   const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
   /*
    * Computed against the first payload, and once more when the calendar
@@ -394,8 +368,25 @@ export function ArcBrowser() {
    */
   const meetingsWindow = useWorkspaceStore((s) => s.meetings);
   const morningSeen = useRef({ payload: false, meetings: false });
+  /*
+   * However the greeting was left — the last step's "not now", a bulk drop,
+   * "look around first", the map — this is where the first hour closes. If
+   * the hour had begun (a first thought was kept) and the day made memories,
+   * the day is stamped, and the card below says so instead of its usual line.
+   */
   useEffect(() => {
-    if (!payload) return;
+    if (!welcomeDismissed || !payload || readStep() === 'done') return;
+    const began = localStorage.getItem(STEP_KEY) !== null;
+    writeStep('done');
+    const today = localDay(new Date());
+    if (began && payload.memories.some((m) => localDay(new Date(m.created_at)) === today)) {
+      localStorage.setItem(FIRST_DAY_KEY, today);
+    }
+  }, [welcomeDismissed, payload]);
+  useEffect(() => {
+    // Not while the greeting is up: the card belongs to home, and the first
+    // day's stamp is only written as the greeting is left.
+    if (!payload || !welcomeDismissed) return;
     const seen = morningSeen.current;
     const calendar = meetingsWindow?.connected ? meetingsWindow.meetings : null;
     if (seen.payload && (seen.meetings || calendar === null)) return;
@@ -406,8 +397,17 @@ export function ArcBrowser() {
       setMorning(null);
       return;
     }
-    setMorning(morningCardOf(payload, new Date(), calendar ?? []));
-  }, [payload, meetingsWindow]);
+    setMorning(
+      // Where home opens on the briefing, today's meetings are its first
+      // block — a card above it saying the same thing is an echo, not a door.
+      morningCardOf(
+        payload,
+        new Date(),
+        homeIndexOpen(true, payload.memories.length) ? [] : (calendar ?? []),
+        localStorage.getItem(FIRST_DAY_KEY),
+      ),
+    );
+  }, [payload, meetingsWindow, welcomeDismissed]);
   const closeMorning = () => {
     localStorage.setItem('mado.ob.morning', localDay(new Date()));
     setMorning(null);
@@ -545,8 +545,13 @@ export function ArcBrowser() {
        */
       if (!welcomeDismissed) {
         if (e.key !== 'Enter') return;
-        e.preventDefault();
-        dismissWelcome();
+        // Enter on the greeting goes to the one thing it asks for. Not an
+        // autofocus: G, T, S and `,` must keep working on the first frame.
+        const first = document.getElementById('welcome-first-input');
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
         return;
       }
 
@@ -630,152 +635,7 @@ export function ArcBrowser() {
 
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
-  const sourceChips = (
-    <div className="arc__sources" data-testid="fill-sources">
-      {/* Each chip blooms a beat after the last — the menu unfolds from the
-          link instead of popping in beside it. */}
-      <button
-        className="arc__source"
-        style={{ '--i': 0 } as React.CSSProperties}
-        data-testid="source-files"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {t('welcome.sourceFiles')}
-      </button>
-      {/* Named but not yet open: the parser works, the guidance doesn't, and
-          a chip that opens a bare file picker loses people. The wizard ships;
-          until then the door says so honestly. */}
-      <button
-        className="arc__source arc__source--soon"
-        style={{ '--i': 1 } as React.CSSProperties}
-        data-testid="source-instagram"
-        aria-disabled="true"
-        onClick={() => useUiStore.getState().toast(t('toast.igSoon'))}
-      >
-        {t('welcome.instagram')}
-        <span className="arc__source-soon">{t('welcome.comingSoon')}</span>
-      </button>
-      {canImportNotes && (
-        <button
-          className="arc__source"
-          style={{ '--i': 2 } as React.CSSProperties}
-          data-testid="source-notes"
-          title={
-            lastSyncOf('notes')
-              ? t('welcome.syncTitle', { date: lastSyncOf('notes')!.slice(0, 10) })
-              : undefined
-          }
-          onClick={() => void importAppleNotesFlow()}
-        >
-          {t('welcome.notes')}
-          {lastSyncOf('notes') && <span className="arc__source-sync">{t('welcome.syncBadge')}</span>}
-        </button>
-      )}
-      {canImportNotion && (
-        <button
-          className="arc__source"
-          style={{ '--i': canImportNotes ? 3 : 2 } as React.CSSProperties}
-          data-testid="source-notion"
-          onClick={() => void importNotionFlow()}
-        >
-          {t('welcome.notion')}
-        </button>
-      )}
-    </div>
-  );
-
-  const KINDS = ['shots', 'links', 'notes', 'thoughts'] as const;
-  type Kind = (typeof KINDS)[number];
-  const chosen: Kind | null = (KINDS as readonly string[]).includes(profile[0] ?? '')
-    ? (profile[0] as Kind)
-    : null;
-
-  /* The four kinds, as pressable words — the first screen's only question. */
-  const kindsRow = (
-    <div className="arc__kinds" data-testid="welcome-kinds">
-      {KINDS.map((kind) => (
-        <button
-          key={kind}
-          className={`arc__kind${chosen === kind ? ' arc__kind--on' : ''}`}
-          data-testid={`kind-${kind}`}
-          aria-pressed={chosen === kind}
-          onClick={() => chooseProfile(kind)}
-        >
-          {t(`welcome.profile.${kind}`)}
-        </button>
-      ))}
-    </div>
-  );
-
-  /*
-   * What unfolds beneath the chosen kind: the promise, and the way in.
-   * Screenshots and links are files and pastes; notes are the readers this
-   * server can open; thoughts are today's page or the add bar.
-   */
-  const unfold = chosen && (
-    <div className="arc__unfold" data-testid="welcome-unfold" key={chosen}>
-      <p className="arc__unfold-hint">{t(`welcome.fillHint.${chosen}`, { product: PRODUCT })}</p>
-      {chosen === 'shots' && (
-        <div className="arc__unfold-actions">
-          <button
-            className="arc__source"
-            data-testid="source-files"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {t('welcome.sourceFiles')}
-          </button>
-          <span className="arc__unfold-aside">{t('welcome.unfold.dropToo')}</span>
-        </div>
-      )}
-      {chosen === 'links' && (
-        <div className="arc__unfold-actions">
-          <button
-            className="arc__source"
-            data-testid="unfold-paste"
-            onClick={() => useUiStore.getState().setCaptureOpen(true)}
-          >
-            {t('welcome.unfold.pasteLink')}
-          </button>
-        </div>
-      )}
-      {chosen === 'notes' && sourceChips}
-      {chosen === 'thoughts' && (
-        <div className="arc__unfold-actions">
-          <button
-            className="arc__source"
-            data-testid="unfold-diary"
-            onClick={() => useUiStore.getState().setView('diary')}
-          >
-            {t('welcome.diary')}
-          </button>
-          <button
-            className="arc__source"
-            data-testid="unfold-think"
-            onClick={() => useUiStore.getState().setCaptureOpen(true)}
-          >
-            {t('arc.thinkLink')}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  const fillSources = fillOpen && hasSourceChoices && sourceChips;
-  const fileInput = (
-    <input
-      ref={fileInputRef}
-      type="file"
-      multiple
-      hidden
-      data-testid="door-fill-input"
-      accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
-      onChange={(e) => {
-        const files = Array.from(e.target.files ?? []);
-        e.target.value = '';
-        if (files.length > 0) void importFiles(files);
-      }}
-    />
-  );
+  const fillSources = fillOpen && <SourceChips />;
 
   const heading = showingAnswer
     ? t('answer.heading')
@@ -1007,43 +867,8 @@ export function ArcBrowser() {
             data-testid={indexOpen ? 'category-index' : 'arc-home'}
             style={indexOpen ? { top: geometry.listTop } : undefined}
           >
-            {/* Home opens on the briefing — what Mado holds, said first — and
-                the prompt only where there is no index to brief about. */}
-            {indexOpen ? <Briefing /> : <p className="arc__prompt">{heading}</p>}
-            {/* The quiet door to today's page — home should always know the
-                way to the diary. */}
-            <span className="arc__homelinks">
-              <button
-                className="arc__diarylink"
-                data-testid="home-diary-link"
-                onClick={() => useUiStore.getState().setView('diary')}
-              >
-                ✎ {t('arc.diaryLink')}
-              </button>
-              {/* The import door must outlive the welcome — 'bring in my Mac
-                  notes' is a mid-session thought, not a first-visit one. */}
-              <button
-                className={`arc__diarylink${fillOpen ? ' arc__diarylink--open' : ''}`}
-                data-testid="home-import-link"
-                onClick={() => {
-                  if (hasSourceChoices) setFillOpen((v) => !v);
-                  else fileInputRef.current?.click();
-                }}
-              >
-                ⤓ {t('arc.importLink')}
-              </button>
-              {/* The third door: not a record of the day, not an import —
-                  a thought that needs a place. Opens the memory-add bar,
-                  where Mado reads and files what gets poured in. */}
-              <button
-                className="arc__diarylink"
-                data-testid="home-think-link"
-                onClick={() => useUiStore.getState().setCaptureOpen(true)}
-              >
-                ✦ {t('arc.thinkLink')}
-              </button>
-            </span>
-            {fillSources}
+            {/* What is said once a day is said first — under a long briefing the
+                card was below the fold, which is the same as not saying it. */}
             {morning && !fillOpen && (
               <div className="arc__morning" data-testid="morning-card">
                 <button
@@ -1051,6 +876,7 @@ export function ArcBrowser() {
                   onClick={() => {
                     closeMorning();
                     const ui = useUiStore.getState();
+                    if (morning.kind === 'firstDay') return;
                     if (morning.kind === 'meetings') {
                       ui.setView('meetings');
                     } else if (morning.kind === 'diary') {
@@ -1061,7 +887,11 @@ export function ArcBrowser() {
                     }
                   }}
                 >
-                  {morning.kind === 'meetings' ? (
+                  {morning.kind === 'firstDay' ? (
+                    <span className="arc__morning-line" data-testid="morning-first-day">
+                      {t('morning.firstDay', { count: morning.count, product: PRODUCT })}
+                    </span>
+                  ) : morning.kind === 'meetings' ? (
                     <span className="arc__morning-line" data-testid="morning-meetings">
                       {t(morning.count === 1 ? 'morning.meetings.one' : 'morning.meetings', {
                         count: morning.count,
@@ -1141,7 +971,40 @@ export function ArcBrowser() {
                 </button>
               </div>
             )}
-            {fileInput}
+            {/* Home opens on the briefing — what Mado holds, said first — and
+                the prompt only where there is no index to brief about. */}
+            {indexOpen ? <Briefing /> : <p className="arc__prompt">{heading}</p>}
+            {/* The quiet door to today's page — home should always know the
+                way to the diary. */}
+            <span className="arc__homelinks">
+              <button
+                className="arc__diarylink"
+                data-testid="home-diary-link"
+                onClick={() => useUiStore.getState().setView('diary')}
+              >
+                ✎ {t('arc.diaryLink')}
+              </button>
+              {/* The import door must outlive the welcome — 'bring in my Mac
+                  notes' is a mid-session thought, not a first-visit one. */}
+              <button
+                className={`arc__diarylink${fillOpen ? ' arc__diarylink--open' : ''}`}
+                data-testid="home-import-link"
+                onClick={() => setFillOpen((v) => !v)}
+              >
+                ⤓ {t('arc.importLink')}
+              </button>
+              {/* The third door: not a record of the day, not an import —
+                  a thought that needs a place. Opens the memory-add bar,
+                  where Mado reads and files what gets poured in. */}
+              <button
+                className="arc__diarylink"
+                data-testid="home-think-link"
+                onClick={() => useUiStore.getState().setCaptureOpen(true)}
+              >
+                ✦ {t('arc.thinkLink')}
+              </button>
+            </span>
+            {fillSources}
             {indexOpen && <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>}
             {indexOpen && (
               <div className="index" role="list">
@@ -1182,37 +1045,7 @@ export function ArcBrowser() {
             )}
           </div>
         ) : (
-          <div className="arc__greeting" data-testid="welcome">
-            {/*
-              Two greetings, because there are two ways to arrive.
-              The count was written for the seeded workspace, where it is the
-              whole pitch: value before you have typed anything. Against an
-              empty one it read "0 memories from 0 sources, already sorted" —
-              a claim about nothing, made confidently, which is the worst
-              possible first sentence for a product whose entire proposition is
-              that it can be trusted to file things for you.
-            */}
-            {/*
-              One greeting for both arrivals: what Mado is, what to hand it,
-              and the four kinds as the only question. A seeded workspace adds
-              the way to look around first, with what is already there as the
-              reason to. An empty one has nothing to look at yet, and says
-              nothing about it — the kinds are the whole screen.
-            */}
-            <p className="arc__greeting-line">{t('welcome.brain', { product: PRODUCT })}</p>
-            <p className="arc__greeting-aside">{t('welcome.putIn', { product: PRODUCT })}</p>
-            {kindsRow}
-            {unfold}
-            {payload.memories.length > 0 && (
-              <button className="arc__browse" data-testid="door-browse" onClick={dismissWelcome}>
-                <span className="arc__browse-name">{t('welcome.browse')}</span>
-                <span className="arc__browse-hint">
-                  {t('welcome.browseHint', { memories: payload.memories.length })}
-                </span>
-              </button>
-            )}
-            {fileInput}
-          </div>
+          <Welcome />
         ))}
 
       {/* The conversation never moves. It is docked here on the first frame and

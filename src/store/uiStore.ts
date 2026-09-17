@@ -1,3 +1,4 @@
+import { forgetStep } from '../core/onboarding';
 import { create } from 'zustand';
 import { t } from '../i18n';
 import type { Camera } from '../graph/camera';
@@ -304,6 +305,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   // stand on it again.
   welcomeAgain: () => {
     if (typeof localStorage !== 'undefined') localStorage.removeItem(WELCOMED_KEY);
+    // The first hour starts over with it — from the first thought.
+    forgetStep();
     set({
       view: 'browse',
       welcomeDismissed: false,

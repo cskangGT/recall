@@ -11,7 +11,8 @@ import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
 import { Settings } from './components/Settings';
 import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
-import { useUiStore } from './store/uiStore';
+import { readStep } from './core/onboarding';
+import { useUiStore, hasBeenWelcomed } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
 import { importFiles, isTextLike, isZip, titleFromFilename } from './capture/importFiles';
@@ -135,7 +136,10 @@ export function App() {
       const ui = useUiStore.getState();
       if (google === 'connected') {
         ui.toast(t('toast.googleConnected'));
-        ui.setView('meetings');
+        // Mid-welcome, the return lands back on the calendar beat — the week
+        // is read out there. Anywhere else, it opens the meetings page.
+        const midWelcome = !hasBeenWelcomed() && readStep() === 'calendar';
+        if (!midWelcome) ui.setView('meetings');
       } else if (google === 'failed') {
         ui.toast(t('toast.googleFailed'));
       }
