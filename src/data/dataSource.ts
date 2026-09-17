@@ -1,4 +1,5 @@
 import type { GraphPayload } from '../core/types';
+import type { GoogleStatus, MeetingsResponse } from '../core/meetingTypes';
 import { currentLocale } from '../i18n';
 import { validateSeed } from './validateSeed';
 import workspaceJson from '../../seed/workspace.json';
@@ -151,6 +152,17 @@ export interface DataSource {
    * The plan flips when the server's webhook confirms payment, never client-side.
    */
   upgrade?(returnUrl: string): Promise<{ url: string }>;
+  /**
+   * Google Calendar. All four are closed by the probe on a server without an
+   * OAuth client — the rail draws the meetings door only while `listMeetings`
+   * is here, so a server that cannot open it never shows it.
+   */
+  googleStatus?(): Promise<GoogleStatus>;
+  /** Starts the OAuth dance; the caller sends the browser to `url`. */
+  connectGoogle?(): Promise<{ url: string }>;
+  disconnectGoogle?(): Promise<void>;
+  /** The synced window, with what Mado remembers attached. `refresh` re-reads the calendar. */
+  listMeetings?(refresh?: boolean): Promise<MeetingsResponse>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -295,10 +307,17 @@ export class ApiDataSource implements DataSource {
         appleNotes?: boolean;
         notion?: boolean;
         condense?: boolean;
+        google?: boolean;
       };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
       if (!caps.condense) this.condenseSource = undefined;
+      if (!caps.google) {
+        this.listMeetings = undefined;
+        this.googleStatus = undefined;
+        this.connectGoogle = undefined;
+        this.disconnectGoogle = undefined;
+      }
     } catch {
       // Leave the doors as they are.
     }
@@ -447,6 +466,19 @@ export class ApiDataSource implements DataSource {
     this.post<{ text: string }>(`/sources/${encodeURIComponent(sourceId)}/condense-preview`, {
       locale: currentLocale(),
     });
+
+  // The calendar door, assigned for the same reason.
+  googleStatus?: () => Promise<GoogleStatus> = () => this.request<GoogleStatus>('/google');
+
+  connectGoogle?: () => Promise<{ url: string }> = () =>
+    this.post<{ url: string }>('/google/connect');
+
+  disconnectGoogle?: () => Promise<void> = async () => {
+    await this.post<{ disconnected: boolean }>('/google/disconnect');
+  };
+
+  listMeetings?: (refresh?: boolean) => Promise<MeetingsResponse> = (refresh = false) =>
+    this.request<MeetingsResponse>(`/meetings${refresh ? '?refresh=1' : ''}`);
 
   async moveMemory(memoryId: string, categoryId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(

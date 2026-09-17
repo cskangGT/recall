@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { GraphPayload, GraphNode, GraphEdge } from '../core/types';
+import type { MeetingsResponse } from '../core/meetingTypes';
 import { selectDataSource, type DataSource } from '../data/dataSource';
 import { buildGraph } from '../graph/buildGraph';
 import { runLayout } from '../graph/layout';
@@ -10,7 +11,18 @@ interface WorkspaceState {
   edges: GraphEdge[];
   loading: boolean;
   source: DataSource;
+  /**
+   * The calendar window, once it has been asked for. Null before the first
+   * answer and on a source that has no calendar door — the meetings view
+   * reads null as "not connected", which is also what it is.
+   */
+  meetings: MeetingsResponse | null;
   load: () => Promise<void>;
+  /**
+   * Asks for the window. A failure keeps what was already here rather than
+   * blanking it: a list that was true a minute ago beats an empty page.
+   */
+  loadMeetings: (refresh?: boolean) => Promise<void>;
   applyPayload: (payload: GraphPayload) => void;
   /** User re-categorizes a memory. The assignment locks — see spec 6.3. */
   moveMemory: (memoryId: string, categoryId: string) => void;
@@ -30,6 +42,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   edges: [],
   loading: true,
   source: selectDataSource(),
+  meetings: null,
+
+  loadMeetings: async (refresh = false) => {
+    const { source } = get();
+    if (!source.listMeetings) return;
+    try {
+      const meetings = await source.listMeetings(refresh);
+      set({ meetings });
+    } catch {
+      // Keep the previous window.
+    }
+  },
 
   load: async () => {
     const payload = await get().source.load();

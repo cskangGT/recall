@@ -1,5 +1,9 @@
 import type { GraphPayload, Memory } from './types';
+import type { Meeting } from './meetingTypes';
 import { relatedMemories } from './related';
+import { localDay, meetingDay, isOver } from './meetings';
+
+export { localDay };
 
 /**
  * The morning card — the second wow, the day after.
@@ -9,22 +13,18 @@ import { relatedMemories } from './related';
  * overnight, something new found something old. The card says that once a
  * day, only when it is actually true, and never twice for the same morning.
  *
- * Two shapes, diary first: a page written yesterday outranks a vector link,
- * because rereading your own evening is the stronger pull. Both are computed
- * from the payload alone — no model, no request.
+ * Three shapes. Today's meetings first — the day ahead is the strongest pull
+ * of all, and the card is the door to what Mado remembers about the people in
+ * it. Then the diary: a page written yesterday outranks a vector link, because
+ * rereading your own evening is the stronger pull. The last two are computed
+ * from the payload alone — no model, no request; the first needs the calendar
+ * the store already holds.
  */
 
 export type MorningCard =
+  | { kind: 'meetings'; count: number; first: Meeting }
   | { kind: 'diary'; sourceId: string; date: string }
   | { kind: 'link'; recent: Memory; older: Memory; similarity: number };
-
-/** A Date as the local calendar day it belongs to (YYYY-MM-DD). */
-export function localDay(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 const HOURS = 3600_000;
 /** How fresh the new end of the link must be. */
@@ -34,7 +34,18 @@ const OLDER_THAN_MS = 7 * 24 * HOURS;
 /** Recent memories examined, newest first — enough for one good pair. */
 const RECENT_CAP = 30;
 
-export function morningCardOf(payload: GraphPayload, now: Date): MorningCard | null {
+export function morningCardOf(
+  payload: GraphPayload,
+  now: Date,
+  meetings: Meeting[] = [],
+): MorningCard | null {
+  const today = localDay(now);
+  const ahead = meetings
+    .filter((m) => meetingDay(m) === today && !isOver(m, now))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const first = ahead[0];
+  if (first) return { kind: 'meetings', count: ahead.length, first };
+
   const yesterday = localDay(new Date(now.getTime() - 24 * HOURS));
   const diary = payload.sources.find((s) => s.diary_date === yesterday);
   if (diary) return { kind: 'diary', sourceId: diary.id, date: yesterday };

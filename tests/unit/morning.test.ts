@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { morningCardOf, localDay } from '../../src/core/morning';
 import type { GraphPayload } from '../../src/core/types';
+import type { Meeting } from '../../src/core/meetingTypes';
 
 /**
  * The morning card speaks at most once a day and only when it is true:
  * yesterday's diary page first, otherwise the best overnight link between a
- * fresh memory (≤48h) and a settled one (≥7d). No candidate, no card.
+ * fresh memory (≤48h) and a settled one (≥7d). No candidate, no card. A
+ * meeting still ahead today outranks both — the day ahead is the strongest pull.
  */
 
 const NOW = new Date('2026-08-21T09:00:00');
@@ -29,6 +31,20 @@ const mem = (id: string, src: string, vector: number[], createdHoursAgo: number)
 
 const payloadWith = (memories: unknown[], sources: unknown[] = []) =>
   ({ memories, sources, categories: [], entities: [] }) as unknown as GraphPayload;
+
+const hoursFromNow = (h: number) => new Date(NOW.getTime() + h * 3600_000).toISOString();
+const meeting = (id: string, startH: number, endH: number): Meeting => ({
+  id,
+  title: `meeting ${id}`,
+  startsAt: hoursFromNow(startH),
+  endsAt: hoursFromNow(endH),
+  allDay: false,
+  location: null,
+  description: null,
+  meetLink: null,
+  htmlLink: null,
+  attendees: [],
+});
 
 describe('morningCardOf', () => {
   it('links a fresh memory to a settled one it points at', () => {
@@ -89,5 +105,28 @@ describe('morningCardOf', () => {
       NOW,
     );
     expect(card).toEqual({ kind: 'diary', sourceId: 'src_d', date: yesterday });
+  });
+
+  it("today's meetings still ahead outrank the diary and the link", () => {
+    const yesterday = localDay(new Date(NOW.getTime() - 24 * 3600_000));
+    const card = morningCardOf(
+      payloadWith(
+        [mem('m_new', 'src_1', [1, 0], 10), mem('m_old', 'src_2', [0.95, 0.3], 24 * 30)],
+        [{ id: 'src_d', diary_date: yesterday }],
+      ),
+      NOW,
+      // 09:00 now: one ended at 08:30, one runs 10:00–11:00, one at 14:00.
+      [meeting('later', 5, 6), meeting('done', -1, -0.5), meeting('next', 1, 2)],
+    );
+    expect(card?.kind).toBe('meetings');
+    if (card?.kind === 'meetings') {
+      expect(card.count).toBe(2);
+      expect(card.first.id).toBe('next');
+    }
+  });
+
+  it('a meeting tomorrow, or one already over, is no reason for a card', () => {
+    const card = morningCardOf(payloadWith([]), NOW, [meeting('tmrw', 26, 27), meeting('done', -3, -2)]);
+    expect(card).toBeNull();
   });
 });

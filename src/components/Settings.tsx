@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
 import { effectivePlan, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { t, currentLocale, chooseLocale } from '../i18n';
+import type { GoogleStatus } from '../core/meetingTypes';
 
 /**
  * Settings, kept deliberately small.
@@ -25,6 +27,47 @@ export function Settings() {
   const load = useWorkspaceStore((s) => s.load);
 
   const auto = payload?.workspace.auto_reorganize ?? true;
+
+  /*
+   * The calendar's row, only where the server has a door for it. The status
+   * is asked for on open — the settings panel is where you come to check a
+   * connection, so the answer should be the server's, not a cached one.
+   */
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const hasGoogle = Boolean(source.googleStatus);
+  useEffect(() => {
+    if (!source.googleStatus) return;
+    let live = true;
+    void source
+      .googleStatus()
+      .then((status) => {
+        if (live) setGoogle(status);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [source]);
+
+  const toggleGoogle = async () => {
+    if (googleBusy) return;
+    setGoogleBusy(true);
+    try {
+      if (google?.connected) {
+        await source.disconnectGoogle?.();
+        setGoogle({ configured: true, connected: false, email: null });
+        await useWorkspaceStore.getState().loadMeetings();
+      } else if (source.connectGoogle) {
+        const { url } = await source.connectGoogle();
+        window.location.assign(url);
+        return;
+      }
+    } catch {
+      toast(t('toast.googleFailed'));
+    }
+    setGoogleBusy(false);
+  };
   const offline = isOffline();
   const mode = offline ? t('settings.source.offline') : source.mode;
 
@@ -86,6 +129,29 @@ export function Settings() {
             </a>
           )}
         </div>
+
+        {hasGoogle && (
+          <div className="settings__row">
+            <span className="settings__body">
+              <span className="settings__label">{t('settings.google.label')}</span>
+              <span className="settings__hint" data-testid="settings-google-status">
+                {google?.connected
+                  ? t('settings.google.connected', { email: google.email ?? 'Google' })
+                  : t('settings.google.off')}
+              </span>
+            </span>
+            {google !== null && (
+              <button
+                className="settings__action"
+                data-testid="settings-google"
+                disabled={googleBusy}
+                onClick={() => void toggleGoogle()}
+              >
+                {google.connected ? t('settings.google.disconnect') : t('settings.google.connect')}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="settings__row">
           <span className="settings__body">

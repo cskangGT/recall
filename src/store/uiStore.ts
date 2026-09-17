@@ -47,7 +47,7 @@ export interface Toast {
   text: string;
 }
 
-export type View = 'map' | 'browse' | 'sources' | 'diary';
+export type View = 'map' | 'browse' | 'sources' | 'diary' | 'meetings';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
 /**

@@ -15,7 +15,8 @@ import { importFiles } from '../capture/importFiles';
 import { importAppleNotesFlow, importNotionFlow, lastSyncOf } from '../capture/batchRun';
 import { runAsk } from '../ask/runAsk';
 import { morningCardOf, localDay, type MorningCard } from '../core/morning';
-import { t, PRODUCT } from '../i18n';
+import { attendeeLine, formatTime } from '../core/meetings';
+import { t, PRODUCT, currentLocale } from '../i18n';
 import type { SourceType } from '../core/types';
 
 /**
@@ -380,15 +381,29 @@ export function ArcBrowser() {
   };
 
   const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
+  /*
+   * Computed against the first payload, and once more when the calendar
+   * arrives — it comes a beat after the graph, and a meeting today outranks
+   * whatever the graph alone had to say. Never again after that: a capture
+   * mid-session must not conjure a card. A dismissal is remembered by the
+   * day, so the second computation cannot bring back what was put away.
+   */
+  const meetingsWindow = useWorkspaceStore((s) => s.meetings);
+  const morningSeen = useRef({ payload: false, meetings: false });
   useEffect(() => {
-    if (morning !== undefined || !payload) return;
+    if (!payload) return;
+    const seen = morningSeen.current;
+    const calendar = meetingsWindow?.connected ? meetingsWindow.meetings : null;
+    if (seen.payload && (seen.meetings || calendar === null)) return;
+    seen.payload = true;
+    if (calendar !== null) seen.meetings = true;
     const today = localDay(new Date());
     if (localStorage.getItem('mado.ob.morning') === today) {
       setMorning(null);
       return;
     }
-    setMorning(morningCardOf(payload, new Date()));
-  }, [payload, morning]);
+    setMorning(morningCardOf(payload, new Date(), calendar ?? []));
+  }, [payload, meetingsWindow]);
   const closeMorning = () => {
     localStorage.setItem('mado.ob.morning', localDay(new Date()));
     setMorning(null);
@@ -1030,7 +1045,9 @@ export function ArcBrowser() {
                   onClick={() => {
                     closeMorning();
                     const ui = useUiStore.getState();
-                    if (morning.kind === 'diary') {
+                    if (morning.kind === 'meetings') {
+                      ui.setView('meetings');
+                    } else if (morning.kind === 'diary') {
                       ui.setView('diary');
                     } else {
                       ui.openCategory(morning.recent.category_id);
@@ -1038,7 +1055,17 @@ export function ArcBrowser() {
                     }
                   }}
                 >
-                  {morning.kind === 'diary' ? (
+                  {morning.kind === 'meetings' ? (
+                    <span className="arc__morning-line" data-testid="morning-meetings">
+                      {t(morning.count === 1 ? 'morning.meetings.one' : 'morning.meetings', {
+                        count: morning.count,
+                        time: formatTime(morning.first, currentLocale()),
+                        who: attendeeLine(morning.first)
+                          ? t('meetings.attendees', { names: attendeeLine(morning.first) })
+                          : morning.first.title,
+                      })}
+                    </span>
+                  ) : morning.kind === 'diary' ? (
                     <span className="arc__morning-line">{t('morning.diary')}</span>
                   ) : (
                     <>

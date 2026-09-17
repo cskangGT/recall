@@ -4,6 +4,7 @@ import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
 import { DiaryView } from './components/DiaryView';
+import { MeetingsView } from './components/MeetingsView';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -115,6 +116,31 @@ export function App() {
   useEffect(() => {
     if (loading) return;
     revealOnReturn();
+  }, [loading]);
+
+  /*
+   * The calendar comes a beat after the graph, and only where the server has
+   * a door for it (loadMeetings is a no-op otherwise). Back from Google the
+   * link says how it went: the param is stripped so a reload does not say it
+   * twice, and a success opens the meetings page on a fresh read.
+   */
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const google = params.get('google');
+    if (google !== null) {
+      params.delete('google');
+      const query = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+      const ui = useUiStore.getState();
+      if (google === 'connected') {
+        ui.toast(t('toast.googleConnected'));
+        ui.setView('meetings');
+      } else if (google === 'failed') {
+        ui.toast(t('toast.googleFailed'));
+      }
+    }
+    void useWorkspaceStore.getState().loadMeetings(google === 'connected');
   }, [loading]);
 
   useEffect(() => {
@@ -263,6 +289,11 @@ export function App() {
         ui.setView('diary');
         return;
       }
+      // Only where the door is drawn; elsewhere the key does nothing.
+      if ((e.key === 'm' || e.key === 'M') && useWorkspaceStore.getState().source.listMeetings) {
+        ui.setView('meetings');
+        return;
+      }
       /*
        * Backspace deletes what is selected (spec 6.1). It was bound only inside
        * the arc, where it climbs a level, and nowhere else — so the keyboard
@@ -321,7 +352,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' ? ' shell--diary sky sky--dusk' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' || view === 'meetings' ? ' shell--diary sky sky--dusk' : ''}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.
@@ -405,6 +436,8 @@ export function App() {
           <SourcesView />
         ) : view === 'diary' ? (
           <DiaryView />
+        ) : view === 'meetings' ? (
+          <MeetingsView />
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}

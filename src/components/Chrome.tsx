@@ -53,6 +53,8 @@ export function LeftRail() {
   const setAskOpen = useUiStore((s) => s.setAskOpen);
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+  // The calendar door is drawn only where a server can open it.
+  const hasMeetings = useWorkspaceStore((s) => Boolean(s.source.listMeetings));
 
   return (
     /*
@@ -88,6 +90,19 @@ export function LeftRail() {
         <span aria-hidden="true">✎</span>
         <span className="rail__label" aria-hidden="true">{t('rail.label.diary')}</span>
       </button>
+      {hasMeetings && (
+        <button
+          className={`rail__btn${view === 'meetings' ? ' rail__btn--active' : ''}`}
+          data-tip={t('rail.meetings.tip')}
+          aria-label={t('rail.meetings')}
+          aria-current={view === 'meetings' ? 'page' : undefined}
+          data-testid="rail-meetings"
+          onClick={() => setView('meetings')}
+        >
+          <span aria-hidden="true">◷</span>
+          <span className="rail__label" aria-hidden="true">{t('rail.label.meetings')}</span>
+        </button>
+      )}
       <button
         className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.map.tip')}
