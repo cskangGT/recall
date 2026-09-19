@@ -69,20 +69,18 @@ export function TopBar() {
 
   return (
     <div className="topbar topbar--lenses">
-      <span className="topbar__here">
-        {here !== null && (
-          <>
-            <span className="topbar__root">{t('topbar.everything')} › </span>
-            {here}
-          </>
-        )}
-      </span>
       <div className="lenses" role="tablist" aria-label={t('lens.aria')} data-testid="memory-lenses">
         {lens('browse', t('lens.browse'), 'T')}
         {lens('map', t('lens.map'), 'G')}
         {lens('sources', t('lens.sources'), 'S')}
       </div>
-      <span />
+      {/* Where you are inside Browse, read after the lens that holds it. */}
+      {here !== null && (
+        <span className="topbar__here">
+          <span className="topbar__root">{t('topbar.everything')} › </span>
+          {here}
+        </span>
+      )}
     </div>
   );
 }

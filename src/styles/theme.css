@@ -5855,13 +5855,14 @@ button.brief__line:hover {
    looking happens — top centre — as words, not icons: the difference between
    the lenses is what you do in them, and only a word can say that. */
 .topbar--lenses {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* Top left, beside the rail's Memory button they belong to — and out of
+     the sky's centre, where the switch sat on top of the arc's highest star. */
+  display: flex;
   align-items: center;
-  /* Symmetric, so the switch sits at the window's centre in all three lenses
-     and does not jump when the lens changes. */
-  left: var(--inspector-w);
-  right: var(--inspector-w);
+  gap: 18px;
+  left: calc(var(--rail-w) + 20px);
+  right: auto;
+  top: 16px;
 }
 
 .lenses {
