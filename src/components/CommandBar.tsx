@@ -1,3 +1,4 @@
+import { imageDataUrl } from '../capture/images';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
@@ -18,10 +19,18 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
   const hasImage = image !== null;
   const fileRef = useRef<HTMLInputElement>(null);
   const readImage = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string' && setImage(reader.result);
-    reader.readAsDataURL(file);
+    // Scaled down when large, so a full-size retina capture still arrives.
+    void imageDataUrl(file).then(setImage, () =>
+      useUiStore.getState().toast(t('toast.captureFailed')),
+    );
   };
+  // A picture dropped on the window or picked from the fill door arrives here.
+  const pendingImage = useUiStore((st) => st.pendingImage);
+  useEffect(() => {
+    if (!pendingImage) return;
+    setImage(pendingImage);
+    useUiStore.getState().setPendingImage(null);
+  }, [pendingImage]);
   /*
    * The look-before-keeping step for links. A pasted URL is not yet a memory:
    * the server reads the page, this card shows what it found, and the person

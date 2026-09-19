@@ -3,6 +3,7 @@ import { ingestBatch } from './batchRun';
 import { parseInstagramZip, IMPORT_WINDOW_DAYS } from './instagramZip';
 import { t } from '../i18n';
 import type { BatchItem } from './batch';
+import { isPdf, takeImages } from './images';
 
 /**
  * Files in, reveal out — shared by every way files arrive.
@@ -54,7 +55,9 @@ export async function importFiles(files: File[]): Promise<void> {
 
   const textFiles = files.filter(isTextLike);
   if (textFiles.length === 0) {
-    ui.toast(t('toast.nothingReadable'));
+    // Screenshots are kept as screenshots; a PDF is named, not called unreadable.
+    if (await takeImages(files)) return;
+    ui.toast(files.some(isPdf) ? t('toast.pdfNotYet') : t('toast.nothingReadable'));
     return;
   }
 

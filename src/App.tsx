@@ -5,6 +5,7 @@ import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
 import { DiaryView } from './components/DiaryView';
 import { MeetingsView } from './components/MeetingsView';
+import { isImage, isPdf, takeImages } from './capture/images';
 import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
@@ -386,6 +387,21 @@ export function App() {
          * pick can never behave differently. `busy` still guards both paths.
          */
         const files = Array.from(e.dataTransfer.files);
+        /*
+         * A screenshot dropped on the window is a screenshot to keep. Against
+         * a live server it used to be refused as "unreadable" — the one kind
+         * of file people drag most. (In seed mode a bare drop is still the
+         * rehearsal's demo, unless the add bar is open to receive it.)
+         */
+        const live = useWorkspaceStore.getState().source.mode === 'api';
+        if (files.some(isImage) && (live || useUiStore.getState().captureOpen)) {
+          void takeImages(files);
+          return;
+        }
+        if (live && files.some(isPdf) && !files.some(isZip) && !files.some(isTextLike)) {
+          useUiStore.getState().toast(t('toast.pdfNotYet'));
+          return;
+        }
         if (files.some(isZip) || files.filter(isTextLike).length >= 2) {
           if (busy.current) return;
           busy.current = true;
