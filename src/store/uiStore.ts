@@ -317,8 +317,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   archiveQuery: '',
   pendingImage: null,
   setPendingImage: (pendingImage) => set({ pendingImage }),
-  // Browsing is a conversation; the map and the archive are for finding.
-  findMode: { browse: 'ask', map: 'search', sources: 'search' },
+  // Browsing and brainstorming are conversations; the archive is for finding.
+  findMode: { browse: 'ask', map: 'ask', sources: 'search' },
   setFindMode: (lens, verb) => set((s) => ({ findMode: { ...s.findMode, [lens]: verb } })),
   setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
   place: 'home',
@@ -333,6 +333,10 @@ export const useUiStore = create<UiState>((set, get) => ({
       // What was found belongs to the lens it was found in; an answer travels.
       ...(s.answer?.found ? { answer: null, openCategoryId: null, highlightedIds: [] } : {}),
       centerOnId: view === 'map' ? s.selectedId : null,
+      // Arriving at the map mid-conversation: go to what is being talked about.
+      ...(view === 'map' && s.selectedId === null && s.answer && !s.answer.found && s.answer.citations.length > 0
+        ? { zoomToIds: s.answer.citations.map((c) => c.memory_id) }
+        : {}),
       // Leaving for the map or the sources list *is* looking around, so coming
       // back cannot land on a greeting that asks whether you would like to.
       // Worse, the top bar renders over it offering "See the big picture" —

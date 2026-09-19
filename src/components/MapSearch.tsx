@@ -4,6 +4,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { matchedLabelNodes, search } from '../search/search';
 import { FindMode } from './FindMode';
+import { MapConversation } from './MapConversation';
 import { runAsk } from '../ask/runAsk';
 import type { SourceType } from '../core/types';
 
@@ -110,6 +111,7 @@ export function MapSearch() {
 
   return (
     <div className="mapsearch" data-testid="map-search">
+      <MapConversation />
       <div className="mapsearch__row">
         <FindMode lens="map" />
         <span className="mapsearch__glyph" aria-hidden="true">

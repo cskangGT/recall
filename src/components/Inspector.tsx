@@ -466,6 +466,61 @@ export function DeleteButton({
   );
 }
 
+/**
+ * Beside the map: what Mado took out to answer.
+ *
+ * The talk itself rises from the bar; this column is the evidence it stands
+ * on — each memory in full, numbered the way the answer and the map number
+ * it, with where it is filed and what it came from. A row goes to that memory
+ * on the map.
+ */
+function UsedMemories() {
+  const answer = useUiStore((s) => s.answer);
+  const asking = useUiStore((s) => s.asking);
+  const payload = useWorkspaceStore((s) => s.payload)!;
+  const citations = answer && !answer.found ? answer.citations : [];
+
+  return (
+    <div data-testid="used-memories">
+      <div className="inspector__eyebrow">
+        {t('mapchat.used')}
+        {citations.length > 0 ? ` · ${citations.length}` : ''}
+      </div>
+      {citations.length === 0 && (
+        <p className="stats">{asking ? t('mapchat.looking') : t('mapchat.usedNone')}</p>
+      )}
+      {citations.map((c) => {
+        const memory = payload.memories.find((m) => m.id === c.memory_id);
+        const source = payload.sources.find((src) => src.id === c.source_id);
+        if (!memory) return null;
+        const category = payload.categories.find((cat) => cat.id === memory.category_id);
+        return (
+          <button
+            key={c.n}
+            className="used"
+            data-testid={`used-memory-${c.n}`}
+            onClick={() => {
+              const ui = useUiStore.getState();
+              ui.select(memory.id);
+              ui.requestZoomTo([memory.id]);
+            }}
+          >
+            <span className="used__n">[{c.n}]</span>
+            <span className="used__body">
+              <span className="used__text">{memory.text}</span>
+              <span className="used__meta">
+                {[category?.name, source ? `${SOURCE_LABEL[source.type]} · ${source.title}` : null, relativeDate(memory.created_at)]
+                  .filter(Boolean)
+                  .join(' — ')}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function AnswerDetail({ compact = false }: { compact?: boolean }) {
   const answer = useUiStore((s) => s.answer)!;
   const select = useUiStore((s) => s.select);
@@ -730,10 +785,14 @@ export function Inspector() {
   // it here would be the third column saying what the second one just said.
   const answerShownInBrowser = view === 'browse' && openCategoryId === ANSWER_FOLDER_ID;
   const showAnswerHere = answer !== null && !answerShownInBrowser;
+  // On the map the panel is the conversation — even before the first answer lands.
+  const talking = useUiStore((st) => st.asking && st.answerDraft !== null);
 
   return (
     <aside className="inspector" data-testid="inspector">
-      {showAnswerHere && !selectedId ? (
+      {view === 'map' && !selectedId && (answer !== null || talking) ? (
+        <UsedMemories />
+      ) : showAnswerHere && !selectedId ? (
         <AnswerDetail />
       ) : category ? (
         <CategoryDetail

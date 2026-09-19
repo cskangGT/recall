@@ -26,6 +26,11 @@ export interface FrameState {
   scaleOverrides?: Map<string, number>;
   /** Nodes rendered desaturated during the reorganization sequence. */
   desaturatedIds?: string[];
+  /**
+   * Memories the conversation is about, named on the map: a memory dot has no
+   * label of its own, and "look at these while we talk" needs to say which.
+   */
+  callouts?: { id: string; text: string }[];
   /** Ghost node position while an item is processing. */
   ghost?: { x: number; y: number; pulse: number } | null;
   /**
@@ -307,4 +312,25 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     );
     ctx.fillText(text, sx, y);
   }
+
+  // The conversation's memories, said by number and first words — above the
+  // category names, because right now they are what the map is for.
+  (s.callouts ?? []).forEach((callout, i) => {
+    const n = byId.get(callout.id);
+    if (!n) return;
+    const { sx, sy } = worldToScreen(n, camera, viewport);
+    // Cited memories are often neighbours; alternating sides keeps two
+    // names from being written over each other.
+    const gap = screenRadius(n.kind, n.radius, camera.zoom) + 14;
+    const y = i % 2 === 0 ? sy + gap : sy - gap;
+    ctx.font = '500 12px Inter, system-ui, -apple-system, sans-serif';
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = withAlpha('#07070a', 0.9);
+    ctx.strokeText(callout.text, sx, y);
+    ctx.restore();
+    ctx.fillStyle = COLORS.label;
+    ctx.fillText(callout.text, sx, y);
+  });
 }

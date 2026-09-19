@@ -28,6 +28,9 @@ const toMap = async (page: Page) => {
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+  // Brainstorming starts as a conversation; these are about the other side of
+  // the switch — searching the map.
+  await page.getByTestId('find-mode-search').click();
 };
 
 test('the map carries a search bar where browsing carries its composer', async ({ page }) => {
@@ -129,6 +132,7 @@ test('Enter regroups the results into a fresh constellation, and ← dissolves i
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await page.getByTestId('find-mode-search').click();
 
   await page.getByTestId('map-search-input').fill('eval');
   await expect(page.getByTestId('map-search-count')).toBeVisible();
@@ -155,6 +159,7 @@ test('clearing the query dissolves the constellation too', async ({ page }) => {
   await expect(page.getByTestId('arc-browser')).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await page.getByTestId('find-mode-search').click();
 
   await page.getByTestId('map-search-input').fill('eval');
   await page.getByTestId('map-search-input').press('Enter');

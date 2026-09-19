@@ -203,9 +203,19 @@ export function MapCanvas({
         const targets = current.nodes.filter((n) => zoomIds.includes(n.id));
         if (targets.length > 0) {
           ui.pushCameraHistory(camera);
-          const fit = fitToBounds(targets, viewport, 0.35);
+          /*
+           * While a conversation is standing on the map, its panel covers the
+           * lower part of the canvas — so what is being talked about is fitted
+           * into the sky above it, not centred underneath the words.
+           */
+          const talking = ui.findMode.map === 'ask' && ui.answer !== null && !ui.answer.found;
+          // The lens switch sits across the top; the panel takes the lower half.
+          const top = talking ? 70 : 0;
+          const freeH = talking ? viewport.h * 0.5 - top : viewport.h;
+          const fit = fitToBounds(targets, { w: viewport.w, h: freeH }, 0.35);
+          const zoom = Math.min(fit.zoom, 2.2);
           panFrom.current = camera;
-          panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.2) };
+          panTo.current = { ...fit, zoom, y: fit.y + (viewport.h / 2 - (top + freeH / 2)) / zoom };
           panStart.current = now;
         }
       }
@@ -399,6 +409,14 @@ export function MapCanvas({
         ghost,
         bloom,
         dissolving,
+        // What Mado's answer leaned on, numbered the way the panel numbers it.
+        callouts:
+          ui.answer && !ui.answer.found
+            ? ui.answer.citations.map((c) => {
+                const label = renderNodes.find((n) => n.id === c.memory_id)?.label ?? '';
+                return { id: c.memory_id, text: `[${c.n}] ${label.length > 34 ? `${label.slice(0, 33)}…` : label}` };
+              })
+            : [],
       });
     };
 

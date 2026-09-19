@@ -77,4 +77,11 @@ test('a dropped PDF goes to the server whole, as a text source named for the fil
   expect(sent!.type).toBe('text');
   expect(sent!.title).toBe('seed round memo');
   expect(sent!.fileData).toMatch(/^data:application\/pdf;base64,/);
+
+  // "Kept two memories" is not where it ends: the original opens as its page,
+  // with what was taken from it and the way to check them.
+  const sourcePage = page.getByTestId('source-page');
+  await expect(sourcePage).toBeVisible();
+  await expect(sourcePage.locator('.memory-row')).toHaveCount(await sourcePage.locator('.memory-row').count());
+  expect(await sourcePage.locator('.memory-row').count()).toBeGreaterThan(0);
 });

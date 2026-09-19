@@ -83,6 +83,7 @@ export async function takeImages(files: File[]): Promise<boolean> {
     }
     ui.setCaptureStage('reading');
     let kept = 0;
+    const keptSources: string[] = [];
     for (const file of images) {
       const result = await store.source.capture({
         type: 'screenshot',
@@ -92,9 +93,12 @@ export async function takeImages(files: File[]): Promise<boolean> {
       });
       useWorkspaceStore.getState().applyPayload(result.graph);
       kept += 1;
+      const sid = sourceOf(result);
+      if (sid) keptSources.push(sid);
     }
     ui.dismissWelcome();
     ui.toast(t('toast.imagesKept', { count: kept }));
+    showWhatWasKept(keptSources);
   } catch (err) {
     ui.toast(
       err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'),
@@ -103,6 +107,26 @@ export async function takeImages(files: File[]): Promise<boolean> {
     ui.setCaptureStage('idle');
   }
   return true;
+}
+
+/**
+ * Where a hand-over ends. "Kept ten memories" and then nothing was a sentence
+ * with no door in it: the person had to go looking for what was just read.
+ * One original opens as its page — the text, the memories taken from it, and
+ * the way to check them; several land in the archive, newest first.
+ */
+function showWhatWasKept(sourceIds: string[]): void {
+  const ui = useUiStore.getState();
+  const ids = [...new Set(sourceIds)];
+  if (ids.length === 1) ui.openSourcePage(ids[0]!);
+  else if (ids.length > 1) ui.setView('sources');
+}
+
+/** The source a capture made, read off the memories it added (or, with none, the newest source). */
+function sourceOf(result: { addedMemoryIds: string[]; graph: { memories: { id: string; source_id: string }[]; sources: { id: string; created_at: string }[] } }): string | null {
+  const added = result.graph.memories.find((m) => result.addedMemoryIds.includes(m.id));
+  if (added) return added.source_id;
+  return [...result.graph.sources].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]?.id ?? null;
 }
 
 /** The server's own limit (saveImage) — said here first, so a large file is refused before it is read. */
@@ -129,6 +153,7 @@ export async function takePdfs(files: File[]): Promise<boolean> {
   ui.toast(t('toast.pdfReading', { count: pdfs.length }));
   let kept = 0;
   let memories = 0;
+  const keptSources: string[] = [];
   try {
     for (const file of pdfs) {
       if (file.size > MAX_PDF_BYTES) {
@@ -144,10 +169,13 @@ export async function takePdfs(files: File[]): Promise<boolean> {
       useWorkspaceStore.getState().applyPayload(result.graph);
       kept += 1;
       memories += result.addedMemoryIds?.length ?? 0;
+      const sid = sourceOf(result);
+      if (sid) keptSources.push(sid);
     }
     if (kept > 0) {
       ui.dismissWelcome();
       ui.toast(t('toast.pdfKept', { count: kept, memories }));
+      showWhatWasKept(keptSources);
     }
   } catch (err) {
     ui.toast(

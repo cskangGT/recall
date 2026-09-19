@@ -36,6 +36,7 @@ test('write a day, see it marked, and its thoughts join the corpus', async ({ pa
   // …and the extracted memory is now part of the corpus (search finds it).
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await page.getByTestId('find-mode-search').click();
   await page.getByTestId('map-search-input').fill('인터벌');
   await expect(page.getByTestId('map-search-count')).toContainText('1');
 });
