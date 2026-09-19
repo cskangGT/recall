@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runAsk } from '../ask/runAsk';
-import { isQuestion } from '../ask/scriptedAsk';
+import { FindMode } from './FindMode';
 import { search } from '../search/search';
 import { t } from '../i18n';
 
@@ -30,11 +30,14 @@ export function Composer({
   onSubmitted,
   onLookAround,
   placeholder,
+  modes = false,
 }: {
   firstRun?: boolean;
   onSubmitted?: () => void;
   /** The greeting's empty Enter: "look around" — which means the categories, not home's doors. */
   onLookAround?: () => void;
+  /** Inside Memory the bar carries the search/ask switch; at home and today it only asks. */
+  modes?: boolean;
   /**
    * A context-aware suggestion — the placeholder is the one place the app can
    * recommend a question without taking up any room. ArcBrowser passes one
@@ -49,6 +52,8 @@ export function Composer({
   const thinking = useUiStore((s) => s.asking);
 
   const [text, setText] = useState('');
+  const verb = useUiStore((s) => s.findMode.browse);
+  const searching = modes && !firstRun && verb === 'search';
 
   /*
    * The recommendation is a question you can actually ask. When the box is
@@ -57,7 +62,7 @@ export function Composer({
    * first. The greeting's empty Enter still means "look around", so this
    * never applies on the first run.
    */
-  const suggestion = !firstRun && placeholder && text.length === 0 ? placeholder : undefined;
+  const suggestion = !firstRun && !searching && placeholder && text.length === 0 ? placeholder : undefined;
 
   const submit = async () => {
     const question = text.trim() || suggestion || '';
@@ -66,12 +71,11 @@ export function Composer({
       return;
     }
     /*
-     * One bar, two verbs — the same rule the ⌘/ bar has always used. A
-     * question is asked; anything else is looked for, and what is found opens
-     * in the answer's place as rows to read, without joining the conversation.
-     * A recommended question (the placeholder) is always asked.
+     * One bar, two verbs, and the switch says which. Searching shows what was
+     * kept — rows to read, in the answer's place, without joining the
+     * conversation. Asking has the memory answer.
      */
-    if (!firstRun && text.trim() && !isQuestion(question)) {
+    if (searching) {
       const ui = useUiStore.getState();
       const hits = search(payload, question).slice(0, 40);
       if (hits.length === 0) {
@@ -95,7 +99,7 @@ export function Composer({
   };
 
   return (
-    <div className="composer composer--docked" data-testid="composer">
+    <div className={`composer composer--docked${modes && !firstRun ? ' composer--modes' : ''}`} data-testid="composer">
       {/*
         Saving, given its own door. The input used to promise both jobs
         ("ask anything, or drop a screenshot") while Enter only ever asked —
@@ -119,13 +123,14 @@ export function Composer({
         handler steps aside for INPUT targets — a focused composer would swallow
         every one of them and type the letter.
       */}
+      {modes && !firstRun && <FindMode lens="browse" />}
       <input
         data-testid={firstRun ? 'welcome-input' : 'composer-input'}
         /* A placeholder is not a name. It disappears the moment you type, and
            several readers do not announce it at all — this input had no
            accessible name whatsoever. */
         aria-label={t('composer.ask')}
-        placeholder={placeholder ?? (firstRun ? t('composer.placeholder') : t('find.placeholder'))}
+        placeholder={searching ? t('find.ph.search') : (placeholder ?? (modes ? t('find.ph.ask') : t('composer.placeholder')))}
         value={text}
         /*
          * Never disabled. Disabling blurs, and losing focus mid-think hands
@@ -163,11 +168,6 @@ export function Composer({
           if (!thinking) void submit();
         }}
       />
-      {!firstRun && text.trim() && (
-        <span className="composer__mode" data-testid="find-mode">
-          {isQuestion(text) ? t('find.mode.ask') : t('find.mode.find')}
-        </span>
-      )}
       {suggestion && (
         <kbd className="composer__kbd" data-testid="composer-kbd" title={t('composer.suggestKbd')}>
           <span aria-hidden="true">↵</span>
@@ -197,9 +197,9 @@ export function Composer({
         {thinking
           ? t('composer.thinking')
           : text.trim()
-            ? isQuestion(text) || firstRun
-              ? t('composer.askAction')
-              : t('find.mode.find')
+            ? searching
+              ? t('find.mode.find')
+              : t('composer.askAction')
             : '↵'}
       </button>
     </div>

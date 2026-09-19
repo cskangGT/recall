@@ -3,7 +3,7 @@ import { t, type StringKey } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { matchedLabelNodes, search } from '../search/search';
-import { isQuestion } from '../ask/scriptedAsk';
+import { FindMode } from './FindMode';
 import { runAsk } from '../ask/runAsk';
 import type { SourceType } from '../core/types';
 
@@ -44,6 +44,7 @@ export function MapSearch() {
   const select = useUiStore((s) => s.select);
 
   const [query, setQuery] = useState('');
+  const asking = useUiStore((s) => s.findMode.map === 'ask');
   const [filter, setFilter] = useState<SourceType | 'all'>('all');
 
   const results = useMemo(() => {
@@ -51,22 +52,23 @@ export function MapSearch() {
     // A filter on its own is a legitimate query — "show me every screenshot" is
     // a question about the map, and it should not need a word typed at it.
     const hits =
-      query.trim().length > 0
+      query.trim().length > 0 && !asking
         ? search(payload, query)
         : payload.memories.map((memory) => ({
             memory,
             sourceType: payload.sources.find((s) => s.id === memory.source_id)?.type ?? 'text',
           }));
     return hits.filter((r) => filter === 'all' || r.sourceType === filter);
-  }, [payload, query, filter]);
+  }, [payload, query, filter, asking]);
 
-  const searching = query.trim().length > 0 || filter !== 'all';
+  // While the bar is set to ask, what is typed is a question — it lights nothing.
+  const searching = (!asking && query.trim().length > 0) || filter !== 'all';
 
   // The word the user typed may BE a label on the map — a category name or an
   // entity. Those nodes light up too, so the thing they are looking at answers.
   const labelIds = useMemo(
-    () => (payload && query.trim().length > 0 ? matchedLabelNodes(payload, query) : []),
-    [payload, query],
+    () => (payload && !asking && query.trim().length > 0 ? matchedLabelNodes(payload, query) : []),
+    [payload, query, asking],
   );
 
   /*
@@ -109,13 +111,14 @@ export function MapSearch() {
   return (
     <div className="mapsearch" data-testid="map-search">
       <div className="mapsearch__row">
+        <FindMode lens="map" />
         <span className="mapsearch__glyph" aria-hidden="true">
           ⌕
         </span>
         <input
           data-testid="map-search-input"
           aria-label={t('map.search.label')}
-          placeholder={t('find.placeholder')}
+          placeholder={asking ? t('find.ph.ask') : t('find.ph.search')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -126,7 +129,7 @@ export function MapSearch() {
              */
             // The same bar in every lens: a question is asked — the answer
             // lights its memories on the map and reads in the panel beside it.
-            if (e.key === 'Enter' && isQuestion(query)) {
+            if (e.key === 'Enter' && asking && query.trim()) {
               const question = query;
               setQuery('');
               void runAsk(question);
@@ -148,11 +151,6 @@ export function MapSearch() {
             else e.currentTarget.blur();
           }}
         />
-        {query.trim() && (
-          <span className="composer__mode" data-testid="find-mode">
-            {isQuestion(query) ? t('find.mode.ask') : t('find.mode.find')}
-          </span>
-        )}
         {searching && (
           <span className="mapsearch__count" data-testid="map-search-count">
             {results.length} of {payload.memories.length}
@@ -176,6 +174,8 @@ export function MapSearch() {
         </button>
       )}
 
+      {/* The type filters narrow a search; a question has no use for them. */}
+      {!asking && (
       <div className="mapsearch__filters" role="group" aria-label="Filter by source type">
         {FILTERS.map((f) => (
           <button
@@ -192,6 +192,7 @@ export function MapSearch() {
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

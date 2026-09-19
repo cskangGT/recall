@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
-import { isQuestion } from '../ask/scriptedAsk';
+import { FindMode } from './FindMode';
 import { runAsk } from '../ask/runAsk';
 
 /**
@@ -14,6 +14,7 @@ import { runAsk } from '../ask/runAsk';
 export function ArchiveFind() {
   const query = useUiStore((s) => s.archiveQuery);
   const setQuery = useUiStore((s) => s.setArchiveQuery);
+  const asking = useUiStore((s) => s.findMode.sources === 'ask');
 
   // A narrowing nobody can see must not outlive the bar that made it.
   useEffect(() => () => useUiStore.getState().setArchiveQuery(''), []);
@@ -21,17 +22,18 @@ export function ArchiveFind() {
   return (
     <div className="mapsearch" data-testid="archive-find">
       <div className="mapsearch__row">
+        <FindMode lens="sources" />
         <span className="mapsearch__glyph" aria-hidden="true">
           ⌕
         </span>
         <input
           data-testid="archive-find-input"
-          aria-label={t('find.placeholder')}
-          placeholder={t('find.placeholder')}
+          aria-label={asking ? t('find.ph.ask') : t('find.ph.search')}
+          placeholder={asking ? t('find.ph.ask') : t('find.ph.search')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && isQuestion(query)) {
+            if (e.key === 'Enter' && asking && query.trim()) {
               const question = query;
               setQuery('');
               void runAsk(question);
@@ -43,11 +45,6 @@ export function ArchiveFind() {
             else e.currentTarget.blur();
           }}
         />
-        {query.trim() && (
-          <span className="composer__mode" data-testid="find-mode">
-            {isQuestion(query) ? t('find.mode.ask') : t('find.mode.find')}
-          </span>
-        )}
       </div>
     </div>
   );

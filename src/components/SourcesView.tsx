@@ -1,4 +1,3 @@
-import { isQuestion } from '../ask/scriptedAsk';
 import { useMemo, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
@@ -147,15 +146,16 @@ export function SourcesView() {
   // The find bar narrows the ledger to the originals that carry the word —
   // in the title or in the text itself. A question is not a filter.
   const archiveQuery = useUiStore((s) => s.archiveQuery);
+  const archiveAsking = useUiStore((s) => s.findMode.sources === 'ask');
   const rows = useMemo(() => {
     if (!payload) return [];
     const all = buildSourceRows(payload, filter);
     const q = archiveQuery.trim().toLowerCase();
-    if (!q || isQuestion(archiveQuery)) return all;
+    if (!q || archiveAsking) return all;
     return all.filter(
       (r) => r.source.title.toLowerCase().includes(q) || r.source.raw_content.toLowerCase().includes(q),
     );
-  }, [payload, filter, archiveQuery]);
+  }, [payload, filter, archiveQuery, archiveAsking]);
 
   if (!payload) return <div className="sources" data-testid="sources-view" />;
 

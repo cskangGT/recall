@@ -1114,6 +1114,7 @@ export function ArcBrowser() {
         firstRun={!welcomeDismissed}
         onSubmitted={dismissWelcome}
         onLookAround={() => useUiStore.getState().goBrowse()}
+        modes={welcomeDismissed && (isOpen || place === 'browse')}
         placeholder={composerHint}
       />
 

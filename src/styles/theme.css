@@ -5971,3 +5971,64 @@ button.brief__line:hover {
 .index__head .index__eyebrow {
   margin: 0;
 }
+
+
+/* Search | Ask Mado — the switch that is the whole rule. Two words in one
+   pill; the chosen one is lit, the other stays readable. */
+.findmode {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+}
+
+.findmode__opt {
+  padding: 4px 11px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.findmode__opt:hover {
+  color: var(--text);
+}
+
+.findmode__opt--on {
+  color: var(--text);
+  background: rgba(240, 232, 250, 0.14);
+}
+
+
+/* Inside Memory the bar carries the switch as well, so it takes the reading
+   column's width — the input is what must not be squeezed. */
+.composer--modes {
+  width: min(720px, calc(100% - 140px));
+}
+
+.mapsearch:has(.findmode) {
+  width: min(680px, calc(100% - 140px));
+}
+
+/* For a reader, not for the eye. The class was used and never defined, so the
+   composer's Enter/Tab hint was printing its whole sentence inside the key cap
+   — three hundred pixels of it, squeezing the input beside it to nothing. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

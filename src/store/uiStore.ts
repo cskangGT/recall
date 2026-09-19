@@ -48,6 +48,10 @@ export interface Toast {
   text: string;
 }
 
+/** Memory's three lenses, and which verb each one's bar is set to. */
+export type Lens = 'browse' | 'map' | 'sources';
+export type FindVerb = 'search' | 'ask';
+
 /** Where in the browse view one stands — see `place` on the state. */
 export type Place = 'home' | 'today' | 'browse';
 
@@ -222,6 +226,9 @@ interface UiState {
   setAnswer: (a: (ScriptedAnswer & { question: string; found?: boolean }) | null) => void;
   /** What the archive's find bar is narrowing the list to. */
   archiveQuery: string;
+  /** Search, or ask Mado — chosen on the bar, remembered per lens. */
+  findMode: Record<Lens, FindVerb>;
+  setFindMode: (lens: Lens, verb: FindVerb) => void;
   setArchiveQuery: (q: string) => void;
   setAsking: (asking: boolean) => void;
   setAnswerDraft: (draft: { question: string; text: string } | null) => void;
@@ -305,6 +312,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   sourcePage: null,
   retroRange: null,
   archiveQuery: '',
+  // Browsing is a conversation; the map and the archive are for finding.
+  findMode: { browse: 'ask', map: 'search', sources: 'search' },
+  setFindMode: (lens, verb) => set((s) => ({ findMode: { ...s.findMode, [lens]: verb } })),
   setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
   place: 'home',
   toasts: [],
