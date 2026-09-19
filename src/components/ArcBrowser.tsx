@@ -13,6 +13,8 @@ import { Briefing } from './Briefing';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
 import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
 import { Welcome } from './Welcome';
+import { Home } from './Home';
+import { FolderView } from './FolderView';
 import { SourceChips } from './SourceChips';
 import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep } from '../core/onboarding';
 import { runAsk } from '../ask/runAsk';
@@ -157,11 +159,18 @@ export function ArcBrowser() {
    * state makes. An empty workspace has nothing to index and keeps its
    * invitation.
    */
-  const indexOpen = !isOpen && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
+  // Three places share this sky (uiStore.place): home is the scene and its
+  // doors, with the arc put away like the greeting's; today is the day's
+  // sheet; browse is the categories, walked by hand.
+  const place = useUiStore((s) => s.place);
+  const browseMode = useUiStore((s) => s.browseMode);
+  const setBrowseMode = useUiStore((s) => s.setBrowseMode);
+  const homeScene = welcomeDismissed && place === 'home' && !isOpen;
+  const sceneUp = !welcomeDismissed || homeScene;
+  const indexOpen =
+    !isOpen && !homeScene && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
   const laidOpen = isOpen || indexOpen;
-  // Browse is the categories alone; the briefing, the day's card and the
-  // three doors belong to home (see uiStore.atHome).
-  const atHome = useUiStore((s) => s.atHome);
+  const atHome = place === 'today';
   const homeParts = !indexOpen || atHome;
 
   const geometry = useMemo(
@@ -553,7 +562,7 @@ export function ArcBrowser() {
        * for INPUT targets, so a focused composer would swallow all four and type
        * the letters instead. Handling Enter here keeps both.
        */
-      if (!welcomeDismissed) {
+      if (sceneUp) {
         if (e.key !== 'Enter') return;
         // Enter on the greeting goes to the one thing it asks for. Not an
         // autofocus: G, T, S and `,` must keep working on the first frame.
@@ -595,7 +604,7 @@ export function ArcBrowser() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, openCategoryId, arcLevelId, categoryRows, welcomeDismissed, dismissWelcome]);
+  }, [nodes, openCategoryId, arcLevelId, categoryRows, sceneUp, dismissWelcome]);
 
   // ----------------------------------------------------------------- drag
   const finishDrop = (node: ArcNode) => {
@@ -648,7 +657,9 @@ export function ArcBrowser() {
   const fillSources = fillOpen && <SourceChips />;
 
   const heading = showingAnswer
-    ? t('answer.heading')
+    ? answer?.found
+      ? t('find.heading')
+      : t('answer.heading')
     : openRow
       ? openRow.label
       : payload && payload.memories.length === 0
@@ -760,7 +771,7 @@ export function ArcBrowser() {
           already standing under, which is what makes "look around" mean looking
           rather than navigating.
         */}
-        {(welcomeDismissed ? nodes : []).map((node, i) => {
+        {(sceneUp ? [] : nodes).map((node, i) => {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
@@ -871,11 +882,12 @@ export function ArcBrowser() {
       )}
 
       {!isOpen &&
-        (welcomeDismissed ? (
+        (homeScene ? (
+          <Home />
+        ) : welcomeDismissed ? (
           <div
             className={indexOpen ? 'reading reading--index' : 'arc__home'}
-            data-testid={indexOpen ? 'category-index' : 'arc-home'}
-            data-home={atHome ? 'yes' : 'no'}
+            data-testid={indexOpen ? (atHome ? 'today' : 'category-index') : 'arc-home'}
             style={indexOpen ? { top: geometry.listTop } : undefined}
           >
             {/* What is said once a day is said first — under a long briefing the
@@ -996,7 +1008,10 @@ export function ArcBrowser() {
             {indexOpen ? atHome && <Briefing /> : <p className="arc__prompt">{heading}</p>}
             {/* The quiet door to today's page — home should always know the
                 way to the diary. */}
-            {homeParts && (
+            {/* The three doors stand only where there is no briefing to hold
+                them — home keeps the diary in its mind line and the import
+                door in its pile. */}
+            {!indexOpen && (
             <span className="arc__homelinks">
               <button
                 className="arc__diarylink"
@@ -1026,9 +1041,32 @@ export function ArcBrowser() {
               </button>
             </span>
             )}
-            {homeParts && fillSources}
-            {indexOpen && <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>}
-            {indexOpen && (
+            {!indexOpen && fillSources}
+            {/* The categories are Browse's page; at home the arc above already
+                names them, and a second list of them was the page's heaviest echo. */}
+            {indexOpen && !atHome && (
+              <div className="index__head">
+                <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>
+                {/* Two ways to walk the same categories: the index under the
+                    stars, or folders in a window — the desktop grammar some
+                    hands already know. A taste, remembered. */}
+                <div className="sources__modes" role="group" aria-label={t('browse.mode.aria')}>
+                  {(['index', 'folders'] as const).map((m) => (
+                    <button
+                      key={m}
+                      className={`sources__mode${browseMode === m ? ' sources__mode--on' : ''}`}
+                      data-testid={`browse-mode-${m}`}
+                      aria-pressed={browseMode === m}
+                      onClick={() => setBrowseMode(m)}
+                    >
+                      {t(m === 'index' ? 'browse.mode.index' : 'sources.mode.folders')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {indexOpen && !atHome && browseMode === 'folders' && <FolderView />}
+            {indexOpen && !atHome && browseMode === 'index' && (
               <div className="index" role="list">
                 {indexRows.map((row) => {
                   const inside = payload!.memories
@@ -1075,6 +1113,7 @@ export function ArcBrowser() {
       <Composer
         firstRun={!welcomeDismissed}
         onSubmitted={dismissWelcome}
+        onLookAround={() => useUiStore.getState().goBrowse()}
         placeholder={composerHint}
       />
 

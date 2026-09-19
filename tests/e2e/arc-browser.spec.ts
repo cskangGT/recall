@@ -359,7 +359,8 @@ test('the capture affordance is in the composer, not floating, while browsing', 
 
 test('the map is still one labelled click away from its new home', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
-  await page.getByTestId('go-map').click();
+  // The corner link became a lens, named for what you do there.
+  await page.getByTestId('lens-map').click();
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });
 
@@ -453,16 +454,14 @@ test('the logo is the way home — pressed on instinct, and the instinct is righ
 
   await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('reading-list')).toHaveCount(0);
-  // For someone who has been here (skipWelcome counts), home is the index —
-  // the greeting is the first visit's.
-  await expect(page.getByTestId('category-index')).toBeVisible();
-  // Home opens on the briefing now, not on a prompt.
-  await expect(page.getByTestId('briefing')).toBeVisible();
+  // Home is the quiet room the doors open from — not the index, not a report.
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByTestId('door-today')).toBeVisible();
 
   // From the map too — the logo means home, wherever you were.
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('category-index')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
 });
 

@@ -5,6 +5,7 @@ import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
 import { DiaryView } from './components/DiaryView';
 import { MeetingsView } from './components/MeetingsView';
+import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
@@ -59,6 +60,7 @@ export function App() {
   const view = useUiStore((s) => s.view);
   const openCategoryId = useUiStore((s) => s.openCategoryId);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const place = useUiStore((s) => s.place);
   const memoryCount = useWorkspaceStore((s) => s.payload?.memories.length ?? 0);
   const dropActive = useUiStore((s) => s.dropActive);
 
@@ -76,8 +78,10 @@ export function App() {
   // `?skipWelcome=1` exists for the rehearsal script and the E2E suite, which
   // must not spend a keystroke on a greeting to reach the thing under test.
   useEffect(() => {
+    // It lands in Browse, categories out — past the greeting *and* past home's
+    // doors, because what the rehearsal and the suite want is the corpus.
     if (new URLSearchParams(window.location.search).get('skipWelcome') === '1') {
-      useUiStore.getState().dismissWelcome();
+      useUiStore.getState().goBrowse();
     }
   }, []);
 
@@ -357,7 +361,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' || view === 'meetings' ? ' shell--diary sky sky--dusk' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' || view === 'meetings' ? ' shell--diary sky sky--dusk' : ' shell--diary shell--lens sky sky--dusk'}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.
@@ -423,7 +427,7 @@ export function App() {
       */}
       {view === 'browse' && (
         <Sky
-          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.home : FOCUS_FRACTION.closed)}%`}
+          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : place !== 'home' && homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.home : FOCUS_FRACTION.closed)}%`}
         />
       )}
 
@@ -433,7 +437,7 @@ export function App() {
         </div>
       )}
       <LeftRail />
-      {view === 'browse' && <TopBar />}
+      <TopBar />
       <div className="canvas-wrap">
         {view === 'browse' ? (
           <ArcBrowser />
@@ -449,6 +453,7 @@ export function App() {
         {/* The map is everything at once, so it needs a way to find one thing
             in it. Browse has the composer in the same slot. */}
         {view === 'map' && nodes.length > 0 && <MapSearch />}
+        {view === 'sources' && <ArchiveFind />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
             <h2>{t('map.empty.title')}</h2>

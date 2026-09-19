@@ -131,11 +131,12 @@ test('the calendar lays out by day — today first, the past week last', async (
   await page.goto('/?api=1&skipWelcome=1&lang=ko');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 
-  await expect(page.getByTestId('rail-meetings')).toBeVisible();
-  await expect(page.getByTestId('rail-meetings').locator('.rail__label')).toHaveText('미팅');
+  // The calendar lives inside today — no rail button of its own. M still opens
+  // it, and today stays lit while you are in it.
+  await expect(page.getByTestId('rail-meetings')).toHaveCount(0);
   await page.keyboard.press('m');
   await expect(page.getByTestId('meetings-view')).toBeVisible();
-  await expect(page.getByTestId('rail-meetings')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-today')).toHaveAttribute('aria-current', 'page');
 
   await expect(page.locator('.meetings__eyebrow')).toHaveText(['오늘', '내일', '지난 일주일']);
   await expect(page.getByTestId('meetings-synced')).toContainText('기준');
@@ -147,12 +148,17 @@ test('the calendar lays out by day — today first, the past week last', async (
     'https://meet.google.com/xyz-1234-abc',
   );
 
-  // Home says the day first: the briefing's own block is the door, and no
-  // card above it repeats the same meeting.
+  // Home's first door counts the day; today's schedule line holds it, and no
+  // card above repeats the same meeting.
   await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('door-today')).toContainText('미팅 1개');
+  await page.getByTestId('door-today').click();
   await expect(page.getByTestId('morning-meetings')).toHaveCount(0);
+  const schedule = page.getByTestId('brief-row-schedule');
+  await expect(schedule).toContainText('미팅 1개');
+  if ((await schedule.getAttribute('aria-expanded')) !== 'true') await schedule.click();
   await expect(page.getByTestId('brief-meeting-evt_today')).toContainText('김수진, 박준');
-  await page.getByTestId('brief-meeting-evt_today').click();
+  await page.getByTestId('brief-all-meetings').click();
   await expect(page.getByTestId('meetings-view')).toBeVisible();
 });
 
@@ -160,7 +166,7 @@ test('a row opens to what Mado remembers, and the memory opens as a page', async
   await mockServer(page, { connected: true, google: true });
   await page.goto('/?api=1&skipWelcome=1&lang=ko');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
-  await page.getByTestId('rail-meetings').click();
+  await page.keyboard.press('m');
 
   await expect(page.getByTestId('meeting-evt_today-context')).toHaveCount(0);
   await page.getByTestId('meeting-evt_today').getByRole('button').click();
@@ -252,7 +258,7 @@ test('a finished meeting keeps one line, with the people written into the origin
     });
   });
   await page.goto('/?api=1&skipWelcome=1&lang=ko');
-  await page.getByTestId('rail-meetings').click();
+  await page.keyboard.press('m');
 
   await page.getByTestId('meeting-evt_tomorrow').getByRole('button').first().click();
   await expect(page.getByTestId('meeting-evt_tomorrow-note')).toHaveCount(0);

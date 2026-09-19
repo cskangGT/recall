@@ -479,7 +479,7 @@ function AnswerDetail({ compact = false }: { compact?: boolean }) {
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.answer')}</div>
+      <div className="inspector__eyebrow">{answer.found ? t('find.heading') : t('inspector.answer')}</div>
       <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }} data-testid={compact ? 'inspector-answer' : undefined}>
         {answer.question}
       </h2>
@@ -552,12 +552,16 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
   const history = useUiStore((s) => s.reorgHistory);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const view = useUiStore((s) => s.view);
+  // Home says its own counts, in its own three lines; a fourth set beside it
+  // was one more thing to read. The panel speaks again once you browse.
+  const atHome = useUiStore((s) => s.view === 'browse' && s.place !== 'browse');
   if (!welcomeDismissed) return null;
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.workspace')}</div>
+      {!atHome && <div className="inspector__eyebrow">{t('inspector.workspace')}</div>}
       {/* Home already says the totals in its own way; beside it the panel says
           what moved instead — the fortnight's arrivals. Elsewhere, the scale. */}
+      {!atHome && (
       <div className="stats" data-testid="inspector-stats">
         {view === 'browse'
           ? (() => {
@@ -573,6 +577,7 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
               categories: payload.categories.length,
             })}
       </div>
+      )}
       {/* The plan, where the scale already is: a trial counts down, and on
           free the sleeping count is the quiet standing door to waking. */}
       {(() => {

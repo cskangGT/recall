@@ -69,8 +69,11 @@ test('the memory page can move and delete, not only show', async ({ page }) => {
 });
 
 test('the rail names its views', async ({ page }) => {
-  await expect(page.getByTestId('rail-tree').locator('.rail__label')).toHaveText('둘러보기');
-  await expect(page.getByTestId('rail-map').locator('.rail__label')).toHaveText('지도');
-  await expect(page.getByTestId('rail-sources').locator('.rail__label')).toHaveText('원본');
+  await expect(page.getByTestId('rail-today').locator('.rail__label')).toHaveText('오늘');
+  await expect(page.getByTestId('rail-tree').locator('.rail__label')).toHaveText('기억');
   await expect(page.getByTestId('rail-diary').locator('.rail__label')).toHaveText('일기');
+  // Memory's three lenses are named where the looking happens.
+  await expect(page.getByTestId('memory-lenses')).toContainText('둘러보기');
+  await expect(page.getByTestId('memory-lenses')).toContainText('브레인스토밍');
+  await expect(page.getByTestId('memory-lenses')).toContainText('기억자료실');
 });

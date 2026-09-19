@@ -1,89 +1,87 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Home opens on a briefing, not a filing cabinet: the day, what has been on
- * the table lately, the questions and decisions of the fortnight, where the
- * thinking has been growing, what is still waiting to be checked — and only
- * then the categories. Everything in it is a door: a concern opens as a
- * page, a growing category opens its reading list.
+ * Today — the page home's first door opens.
+ *
+ * One sentence, and three lines. The sentence is whatever this hour is about
+ * and is itself a door; the lines — schedule, mind, pile — are counts until
+ * pressed, one open at a time, and the hour opens one of them. The seed has
+ * no calendar door, so here there are two lines and the morning opens on the
+ * mind. The clock is pinned in the suite's own zone (New York).
  */
-test('home is a briefing first, and every line is a door', async ({ page }) => {
+async function today(page: Page, at: string) {
+  await page.clock.setFixedTime(new Date(at));
   await page.goto('/?skipWelcome=1');
-  await expect(page.getByTestId('category-index')).toBeVisible();
+  await page.getByTestId('rail-today').click();
+  await expect(page.getByTestId('briefing')).toBeVisible();
+}
 
-  const brief = page.getByTestId('briefing');
-  await expect(brief).toBeVisible();
-  // The briefing stands above the categories.
-  const briefBox = (await brief.boundingBox())!;
-  const firstCard = (await page.locator('[data-testid^="index-card-"]').first().boundingBox())!;
-  expect(briefBox.y).toBeLessThan(firstCard.y);
-
-  // Lately, in the memory's voice, from the seed's own counts — and the
-  // memories it leaned on, one press away.
-  await expect(brief.getByTestId('brief-lately')).toContainText(/Lately/);
-  await brief.getByTestId('brief-evidence').click();
-  expect(await brief.getByTestId('brief-evidence-rows').locator('.memory-row').count()).toBeGreaterThan(0);
-
-  // The fortnight's decisions, newest first, each a door to its page.
-  const concerns = brief.locator('[data-testid^="brief-concern-"]');
-  expect(await concerns.count()).toBeGreaterThan(0);
-  await concerns.first().click();
-  await expect(page.getByTestId('memory-page')).toBeVisible();
-  await page.keyboard.press('Escape');
-
-  // Where the thinking has been growing — a category, one press away.
-  await brief.getByTestId('brief-growing-cat_ai_tooling').click();
-  await expect(page.getByTestId('reading-list')).toContainText('AI Tooling');
-
-  // What is waiting: the originals not yet checked, and the way to them.
+test('home is the scene, and its first door opens today', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
   await page.getByTestId('rail-home').click();
-  await expect(brief.getByTestId('brief-awaiting')).toContainText(/22/);
-  await brief.getByTestId('brief-awaiting').click();
-  await expect(page.getByTestId('sources-view')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByTestId('briefing')).toHaveCount(0);
+  // The door says what is behind it in a couple of counts.
+  await expect(page.getByTestId('door-today')).toContainText('on the table');
+
+  await page.getByTestId('door-today').click();
+  await expect(page.getByTestId('briefing')).toBeVisible();
+  await expect(page.getByTestId('rail-today')).toHaveAttribute('aria-current', 'page');
+  // No calendar in the seed: two lines, not three.
+  await expect(page.getByTestId('brief-row-schedule')).toHaveCount(0);
 });
 
-/**
- * The same blocks, a different order by the hour. Mornings open on what is
- * on the table, afternoons on what there is to sort — three at a time, not
- * twenty-two — and evenings on what came in today and the page that closes
- * the day. The clock is pinned in the suite's own zone (New York).
- */
-const top = async (page: import('@playwright/test').Page, id: string) =>
-  (await page.getByTestId(id).boundingBox())!.y;
+test('the morning is about what is held, and opens the mind', async ({ page }) => {
+  await today(page, '2026-09-16T08:00:00-04:00');
+  await expect(page.getByTestId('briefing')).toHaveAttribute('data-daypart', 'morning');
+  await expect(page.getByTestId('brief-head')).toContainText('2 things are still on the table');
+  await expect(page.getByTestId('brief-row-mind')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('brief-row-info')).toHaveAttribute('aria-expanded', 'false');
 
-test('the morning greets and leads with what is on the table', async ({ page }) => {
-  await page.clock.setFixedTime(new Date('2026-09-16T08:00:00-04:00'));
-  await page.goto('/?skipWelcome=1');
-  const brief = page.getByTestId('briefing');
-  await expect(brief).toHaveAttribute('data-daypart', 'morning');
-  await expect(page.getByTestId('brief-greeting')).toHaveText('Good morning.');
-  expect(await top(page, 'brief-concerns')).toBeLessThan(await top(page, 'brief-lately'));
-  await expect(page.getByTestId('brief-today-memories')).toHaveCount(0);
+  // Each concern is a door to its page.
+  await page.locator('[data-testid^="brief-concern-"]').first().click();
+  await expect(page.getByTestId('memory-page')).toBeVisible();
 });
 
-test('the afternoon leads with sorting — just three, the oldest first', async ({ page }) => {
-  await page.clock.setFixedTime(new Date('2026-09-16T14:00:00-04:00'));
-  await page.goto('/?skipWelcome=1');
-  await expect(page.getByTestId('briefing')).toHaveAttribute('data-daypart', 'day');
-  await expect(page.getByTestId('brief-greeting')).toHaveCount(0);
-  expect(await top(page, 'brief-organizing')).toBeLessThan(await top(page, 'brief-lately'));
+test('the afternoon is about the pile — and the sentence itself starts on three', async ({ page }) => {
+  await today(page, '2026-09-16T14:00:00-04:00');
+  await expect(page.getByTestId('brief-head')).toContainText('22 originals are waiting');
+  await expect(page.getByTestId('brief-row-info')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('brief-review-three')).toBeVisible();
 
-  await page.getByTestId('brief-review-three').click();
+  await page.getByTestId('brief-head').click();
   await expect(page.getByTestId('review-panel')).toContainText('1 of 3');
 });
 
 test('the evening closes the day: what came in, and the page to write', async ({ page }) => {
-  await page.clock.setFixedTime(new Date('2026-09-16T22:00:00-04:00'));
-  await page.goto('/?skipWelcome=1');
-  await expect(page.getByTestId('briefing')).toHaveAttribute('data-daypart', 'evening');
-  await expect(page.getByTestId('brief-greeting')).toHaveText('Time to close the day.');
-
-  // The seed is older than today, so the block says so — and still offers the page.
-  const today = page.getByTestId('brief-today-memories');
-  await expect(today).toContainText('Nothing came in today');
-  expect(await top(page, 'brief-today-memories')).toBeLessThan(await top(page, 'brief-concerns'));
+  await today(page, '2026-09-16T22:00:00-04:00');
+  // The seed is older than today, so the sentence says so — and still points at the page.
+  await expect(page.getByTestId('brief-head')).toContainText('Nothing came in today');
+  await expect(page.getByTestId('brief-row-mind')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('brief-today-memories')).toBeVisible();
   await page.getByTestId('brief-write-today').click();
   await expect(page.getByTestId('diary-view')).toBeVisible();
+});
+
+test('one line open at a time, and the pile holds lately, its evidence and the way in', async ({ page }) => {
+  await today(page, '2026-09-16T08:00:00-04:00');
+  await page.getByTestId('brief-row-info').click();
+  await expect(page.getByTestId('brief-row-info')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('brief-row-mind')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('brief-concerns')).toHaveCount(0);
+
+  // Lately, in the memory's voice — and the memories it leaned on, one press away.
+  await expect(page.getByTestId('brief-lately')).toContainText(/Lately/);
+  await page.getByTestId('brief-evidence').click();
+  expect(await page.getByTestId('brief-evidence-rows').locator('.memory-row').count()).toBeGreaterThan(0);
+
+  // What is waiting, and the door to all of it.
+  await expect(page.getByTestId('brief-awaiting')).toContainText(/22/);
+  // The import door outlived the welcome; it lives with the pile it feeds.
+  await page.getByTestId('home-import-link').click();
+  await expect(page.getByTestId('fill-sources')).toBeVisible();
+  await page.getByTestId('brief-awaiting').click();
+  await expect(page.getByTestId('sources-view')).toBeVisible();
 });
 
 /**
@@ -91,7 +89,7 @@ test('the evening closes the day: what came in, and the page to write', async ({
  * where it was filed, and its page is where it can be picked back up.
  */
 test('a concern can be put down and picked back up — the memory never leaves', async ({ page }) => {
-  await page.goto('/?skipWelcome=1');
+  await today(page, '2026-09-16T08:00:00-04:00');
   const row = page.getByTestId('brief-concern-mem_11');
   await expect(row).toBeVisible();
 
@@ -100,8 +98,6 @@ test('a concern can be put down and picked back up — the memory never leaves',
   await expect(row).toHaveCount(0);
   await expect(page.locator('.toast').last()).toContainText('put down');
 
-  // The page is the other place to do it, and the way back: put down there,
-  // it says so; picked back up, the row is still on the table.
   await page.getByTestId('brief-concern-mem_22').click();
   await page.getByTestId('memory-page-settle').click();
   await expect(page.getByTestId('memory-page-settled')).toContainText('Put down');

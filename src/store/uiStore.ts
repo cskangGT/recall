@@ -48,6 +48,9 @@ export interface Toast {
   text: string;
 }
 
+/** Where in the browse view one stands — see `place` on the state. */
+export type Place = 'home' | 'today' | 'browse';
+
 export type View = 'map' | 'browse' | 'sources' | 'diary' | 'meetings';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
@@ -65,7 +68,8 @@ interface UiState {
   view: View;
   sourceFilter: SourceFilter;
   /** Sources view mode: the ledger list, or the desktop-window folder grid. */
-  sourcesMode: 'list' | 'folders';
+  /** How Browse lays the categories out: the index under the stars, or folders in a window. */
+  browseMode: 'index' | 'folders';
   /**
    * Which folder's memories the reading list is showing. Separate from
    * `selectedId` because clicking a memory in the list must not close the
@@ -109,7 +113,7 @@ interface UiState {
   settingsOpen: boolean;
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
-  answer: (ScriptedAnswer & { question: string }) | null;
+  answer: (ScriptedAnswer & { question: string; found?: boolean }) | null;
   /**
    * The conversation so far — answered questions, oldest first, capped at
    * three. Sent with the next question so a follow-up ("which of those?") has
@@ -170,12 +174,13 @@ interface UiState {
    */
   retroRange: { from: string; to: string } | null;
   /**
-   * Home and Browse share a view and are two places. Home — the logo — is
-   * the briefing, with the categories beneath it; Browse is the categories
-   * alone. Both used to be one screen with the Browse button lit, so the
-   * logo looked like it had taken you to Browse.
+   * The browse view is three places. `home` — the logo, and where the app
+   * opens — is the scene and its few doors. `today` is the page one of those
+   * doors opens: the day, the mind, the pile. `browse` is the first lens of
+   * Memory, the categories walked by hand. They share a view because they
+   * share the sky; they are told apart here.
    */
-  atHome: boolean;
+  place: Place;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -186,7 +191,7 @@ interface UiState {
    */
   goBrowse: () => void;
   setSourceFilter: (filter: SourceFilter) => void;
-  setSourcesMode: (mode: 'list' | 'folders') => void;
+  setBrowseMode: (mode: 'index' | 'folders') => void;
   openCategory: (id: string | null) => void;
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
@@ -206,13 +211,18 @@ interface UiState {
   setMapFocus: (focus: { ids: string[] } | null) => void;
   /** The logo's promise: back to the start, everything closed, nothing lost. */
   goHome: () => void;
+  goToday: () => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setCaptureStage: (s: CaptureStage) => void;
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
-  setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  /** `found` marks a search result shown in the answer's place — it is not a turn of conversation. */
+  setAnswer: (a: (ScriptedAnswer & { question: string; found?: boolean }) | null) => void;
+  /** What the archive's find bar is narrowing the list to. */
+  archiveQuery: string;
+  setArchiveQuery: (q: string) => void;
   setAsking: (asking: boolean) => void;
   setAnswerDraft: (draft: { question: string; text: string } | null) => void;
   /** Ends the conversation without touching the answer on screen. */
@@ -238,15 +248,31 @@ interface UiState {
   escape: () => void;
 }
 
+/** What going somewhere fresh puts away — nothing of the corpus, only what was open over it. */
+const CLEARED = {
+  openCategoryId: null,
+  arcLevelId: null,
+  selectedId: null,
+  highlightedIds: [] as string[],
+  answer: null,
+  answerDraft: null,
+  askThread: [] as { question: string; answer: string }[],
+  mapFocus: null,
+  review: null,
+  memoryPage: null,
+  sourcePage: null,
+  cameraHistory: [] as Camera[],
+};
+
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'browse',
   sourceFilter: 'all',
-  sourcesMode:
-    (typeof localStorage !== 'undefined' && localStorage.getItem('mado.sourcesMode')) === 'folders'
+  browseMode:
+    (typeof localStorage !== 'undefined' && localStorage.getItem('mado.browseMode')) === 'folders'
       ? 'folders'
-      : 'list',
+      : 'index',
   openCategoryId: null,
   arcLevelId: null,
   welcomeDismissed: hasBeenWelcomed(),
@@ -278,7 +304,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   memoryPage: null,
   sourcePage: null,
   retroRange: null,
-  atHome: true,
+  archiveQuery: '',
+  setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
+  place: 'home',
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -287,6 +315,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (view !== 'browse') rememberWelcomed();
     set((s) => ({
       view,
+      // What was found belongs to the lens it was found in; an answer travels.
+      ...(s.answer?.found ? { answer: null, openCategoryId: null, highlightedIds: [] } : {}),
       centerOnId: view === 'map' ? s.selectedId : null,
       // Leaving for the map or the sources list *is* looking around, so coming
       // back cannot land on a greeting that asks whether you would like to.
@@ -300,14 +330,14 @@ export const useUiStore = create<UiState>((set, get) => ({
     rememberWelcomed();
     set((s) =>
       s.view === 'browse'
-        ? { atHome: false, openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
-        : { atHome: false, view: 'browse', centerOnId: null, welcomeDismissed: true },
+        ? { place: 'browse', openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
+        : { place: 'browse', view: 'browse', centerOnId: null, welcomeDismissed: true },
     );
   },
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
-  setSourcesMode: (sourcesMode) => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('mado.sourcesMode', sourcesMode);
-    set({ sourcesMode });
+  setBrowseMode: (browseMode) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('mado.browseMode', browseMode);
+    set({ browseMode });
   },
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
@@ -365,23 +395,12 @@ export const useUiStore = create<UiState>((set, get) => ({
   // its doors — not merely the browser's index. "Look around first" from
   // there is one press away, and the press means what it says.
   goHome: () =>
-    set({
-      atHome: true,
-      view: 'browse',
-      welcomeDismissed: hasBeenWelcomed(),
-      openCategoryId: null,
-      arcLevelId: null,
-      selectedId: null,
-      highlightedIds: [],
-      answer: null,
-      answerDraft: null,
-      askThread: [],
-      mapFocus: null,
-      review: null,
-      memoryPage: null,
-      sourcePage: null,
-      cameraHistory: [],
-    }),
+    set({ ...CLEARED, place: 'home', view: 'browse', welcomeDismissed: hasBeenWelcomed() }),
+  // The page home's first door opens: the day on one sheet.
+  goToday: () => {
+    rememberWelcomed();
+    set({ ...CLEARED, place: 'today', view: 'browse', welcomeDismissed: true });
+  },
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
@@ -409,7 +428,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       askThread:
         answer === null
           ? []
-          : answer.refused
+          : answer.refused || answer.found
             ? s.askThread
             : [...s.askThread, { question: answer.question, answer: answer.answer }].slice(-3),
       openCategoryId:

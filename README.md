@@ -181,15 +181,21 @@ grey while you are looking something up, amber the moment you press `G`.
 **Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
 and the only surface where a reorganization is animated.
 
-## The day, not the views
+## Four places
 
-The features are arranged along a day rather than across a menu.
+The rail has four places, and they are told apart by what you do there, not by how they draw the corpus.
 
-- **The first hour.** The greeting asks for one thought, typed, and the memory answers it in its own voice — what it kept and where. Then the calendar (only where the server has that door) and what has piled up. However the greeting is left, home says the first day once. Settings → *The first screen* plays it again.
-- **Home reads by the hour.** The briefing keeps its blocks and changes their order (`src/core/dayPart.ts`): mornings open on the day's meetings, afternoons on sorting — three originals at a time, the oldest first — and evenings on what came in today and the diary page that closes it.
-- **Put down, not deleted.** A question, decision or task on the briefing can be put down (`settled_at`, `PATCH /api/workspaces/:id/memories/:memoryId`). The memory stays where it was filed; its page is where it is picked back up.
-- **A meeting keeps a line.** A meeting that has begun takes one line in the meetings view. It is an ordinary note with the meeting and the people written into the original, so the attendee match brings it back the next time they are in the room.
-- **Once a week**, where the server can look back, the first visit offers "the you of last week" — the diary's look-back over the previous Monday to Sunday.
+- **Home** — the logo, and where the app opens. The sky, one question, and four doors hung in it as stars: start today, fill your memory, find a memory, write today. Nothing here is a report.
+- **Today** — the page home's first door opens. One sentence about whatever this hour is about (the day's meetings in the morning, the pile in the afternoon, what came in at night), itself a door; then three lines — schedule, mind, pile — that are counts until pressed, one open at a time, the hour opening one (`src/core/dayPart.ts`). The calendar lives inside the schedule line; there is no meetings button on the rail (M still opens the full list).
+- **Memory** — one place, three lenses, switched at the top: **Browse** (T) walks the categories by hand, as an index or as folders; **Brainstorm** (G) spreads everything out as a map; **Archive** (S) is the ledger of what was handed over. All three stand under the same dusk sky, and all three carry the same bar at the bottom: a word finds within the lens you are in, a question (end it with `?`) is asked.
+- **Diary** — the page that closes the day.
+
+Around them:
+
+- **The first hour.** A first visit is asked for one thought, typed, and the memory answers it in its own voice — what it kept and where. Then the calendar (only where the server has that door) and what has piled up. However the greeting is left, today says the first day once. Settings → *The first screen* plays it again.
+- **Put down, not deleted.** A question, decision or task on today's mind line can be put down (`settled_at`, `PATCH /api/workspaces/:id/memories/:memoryId`). The memory stays where it was filed; its page is where it is picked back up.
+- **A meeting keeps a line.** A meeting that has begun takes one line in the meetings list. It is an ordinary note with the meeting and the people written into the original, so the attendee match brings it back the next time they are in the room.
+- **Once a week**, where the server can look back, today offers "the you of last week" — the diary's look-back over the previous Monday to Sunday.
 
 Deliberately absent: to-do checkboxes, streaks, push reminders, colour that changes with the hour.
 

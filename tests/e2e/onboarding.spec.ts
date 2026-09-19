@@ -35,13 +35,14 @@ test('one thought in, the memory answers, and home opens on the first day', asyn
   await expect(page.getByTestId('fill-sources')).toBeVisible();
   await page.getByTestId('welcome-finish').click();
 
-  // Home, with the first day said once.
-  await expect(page.getByTestId('category-index')).toBeVisible();
+  // The hour ends at home; today, behind its first door, says the first day once.
+  await expect(page.getByTestId('home')).toBeVisible();
+  await page.getByTestId('door-today').click();
   await expect(page.getByTestId('morning-first-day')).toContainText('came to Mado today');
 
   // Next visit: straight to home, no greeting.
   await page.reload();
-  await expect(page.getByTestId('category-index')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
 });
 
@@ -59,17 +60,19 @@ test('Enter on the greeting goes to the thought box, and the shortcuts still wor
 
 test('looking around first skips the hour — home, the logo, and the way back', async ({ page }) => {
   await page.goto('/');
+  // "Look around" means it: the categories, not another set of doors.
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
-  // Nothing was handed over, so there is no first day to announce.
-  await expect(page.getByTestId('morning-first-day')).toHaveCount(0);
 
   // The logo, for someone who has been here, is home — not the greeting.
   await page.getByTestId('index-card-cat_ai_tooling').click();
   await expect(page.getByTestId('reading-list')).toContainText('AI Tooling');
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('category-index')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
+  // Nothing was handed over, so there is no first day to announce.
+  await page.getByTestId('door-today').click();
+  await expect(page.getByTestId('morning-first-day')).toHaveCount(0);
 
   // Settings keeps the way back, and the hour starts over from its first beat.
   await page.keyboard.press(',');

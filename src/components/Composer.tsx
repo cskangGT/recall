@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runAsk } from '../ask/runAsk';
+import { isQuestion } from '../ask/scriptedAsk';
+import { search } from '../search/search';
 import { t } from '../i18n';
 
 /**
@@ -26,10 +28,13 @@ import { t } from '../i18n';
 export function Composer({
   firstRun = false,
   onSubmitted,
+  onLookAround,
   placeholder,
 }: {
   firstRun?: boolean;
   onSubmitted?: () => void;
+  /** The greeting's empty Enter: "look around" — which means the categories, not home's doors. */
+  onLookAround?: () => void;
   /**
    * A context-aware suggestion — the placeholder is the one place the app can
    * recommend a question without taking up any room. ArcBrowser passes one
@@ -57,6 +62,31 @@ export function Composer({
   const submit = async () => {
     const question = text.trim() || suggestion || '';
     if (!question || !payload) {
+      (firstRun ? (onLookAround ?? onSubmitted) : onSubmitted)?.();
+      return;
+    }
+    /*
+     * One bar, two verbs — the same rule the ⌘/ bar has always used. A
+     * question is asked; anything else is looked for, and what is found opens
+     * in the answer's place as rows to read, without joining the conversation.
+     * A recommended question (the placeholder) is always asked.
+     */
+    if (!firstRun && text.trim() && !isQuestion(question)) {
+      const ui = useUiStore.getState();
+      const hits = search(payload, question).slice(0, 40);
+      if (hits.length === 0) {
+        ui.toast(t('find.none', { q: question }));
+      } else {
+        ui.setAnswer({
+          question,
+          found: true,
+          answer: t('find.found', { q: question, count: hits.length }),
+          citations: hits.map((h, i) => ({ n: i + 1, memory_id: h.memory.id, source_id: h.memory.source_id })),
+          highlighted_node_ids: hits.map((h) => h.memory.id),
+          refused: false,
+        });
+        setText('');
+      }
       onSubmitted?.();
       return;
     }
@@ -95,7 +125,7 @@ export function Composer({
            several readers do not announce it at all — this input had no
            accessible name whatsoever. */
         aria-label={t('composer.ask')}
-        placeholder={placeholder ?? t('composer.placeholder')}
+        placeholder={placeholder ?? (firstRun ? t('composer.placeholder') : t('find.placeholder'))}
         value={text}
         /*
          * Never disabled. Disabling blurs, and losing focus mid-think hands
@@ -133,6 +163,11 @@ export function Composer({
           if (!thinking) void submit();
         }}
       />
+      {!firstRun && text.trim() && (
+        <span className="composer__mode" data-testid="find-mode">
+          {isQuestion(text) ? t('find.mode.ask') : t('find.mode.find')}
+        </span>
+      )}
       {suggestion && (
         <kbd className="composer__kbd" data-testid="composer-kbd" title={t('composer.suggestKbd')}>
           <span aria-hidden="true">↵</span>
@@ -162,7 +197,9 @@ export function Composer({
         {thinking
           ? t('composer.thinking')
           : text.trim()
-            ? t('composer.askAction')
+            ? isQuestion(text) || firstRun
+              ? t('composer.askAction')
+              : t('find.mode.find')
             : '↵'}
       </button>
     </div>

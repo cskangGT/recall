@@ -10,7 +10,7 @@ test('the first thought lands on the map, the second stays home', async ({ page 
   await page.goto('/?skipWelcome=1');
   await page.getByTestId('arc-browser').waitFor();
 
-  await page.getByTestId('home-think-link').click();
+  await page.getByTestId('composer-add').click();
   await page.getByTestId('capture-input').fill('Braintrust is the strongest option for agent evals right now.');
   await page.keyboard.press('Enter');
 
@@ -18,9 +18,9 @@ test('the first thought lands on the map, the second stays home', async ({ page 
   await expect(page.getByTestId('map-canvas')).toBeVisible({ timeout: 10000 });
 
   // Back home; a second thought does not hijack the view.
-  await page.getByTestId('rail-home').click();
+  await page.getByTestId('rail-tree').click();
   await page.getByTestId('capture-story-close').click();
-  await page.getByTestId('home-think-link').click();
+  await page.getByTestId('composer-add').click();
   await page.getByTestId('capture-input').fill('Zone 2 rides moved the resting heart rate more than intervals.');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(2600);

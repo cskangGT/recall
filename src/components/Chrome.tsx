@@ -15,24 +15,60 @@ import { useWorkspaceStore } from '../store/workspaceStore';
  * header link to it was a second door onto the same room, and the rail still
  * has `?` for anyone who wants a button.
  */
+/** The rail's four places, read off the store. */
+export function whereabouts(st: {
+  view: string;
+  place: string;
+  openCategoryId: string | null;
+  answer: unknown;
+}): 'home' | 'today' | 'memory' | 'diary' | 'other' {
+  if (st.view === 'map' || st.view === 'sources') return 'memory';
+  if (st.view === 'meetings') return 'today';
+  if (st.view === 'diary') return 'diary';
+  if (st.view !== 'browse') return 'other';
+  if (st.openCategoryId !== null || st.answer !== null) return 'memory';
+  return st.place === 'browse' ? 'memory' : st.place === 'today' ? 'today' : 'home';
+}
+
+/**
+ * Memory is one place with three lenses: walk the categories, spread it all
+ * out to brainstorm, or open the archive of what was handed over. They used
+ * to be three rail buttons, told apart by how they drew the same corpus; a
+ * person thinks "find that thing", not "which rendering". So the rail has
+ * one Memory, and the lens is chosen here, where the looking happens. The
+ * same find-or-ask bar opens from all three.
+ */
 export function TopBar() {
   const arcLevelId = useUiStore((s) => s.arcLevelId);
-  const setView = useUiStore((s) => s.setView);
+  const view = useUiStore((s) => s.view);
   const payload = useWorkspaceStore((s) => s.payload);
+  const inMemory = useUiStore((s) => whereabouts(s) === 'memory');
+  if (!inMemory) return null;
 
-  /*
-   * The breadcrumb speaks only once there is a journey: at the top level it
-   * said '전체' — a location label for a walk not yet taken, which read as a
-   * mystery word (the user asked why it was there). Inside a category it
-   * names where you are, prefixed by the way back.
-   */
   const here =
-    arcLevelId === null
+    view !== 'browse' || arcLevelId === null
       ? null
       : (payload?.categories.find((c) => c.id === arcLevelId)?.name ?? null);
 
+  const lens = (id: 'browse' | 'map' | 'sources', label: string, key: string) => (
+    <button
+      className={`lens${view === id ? ' lens--on' : ''}`}
+      role="tab"
+      aria-selected={view === id}
+      data-testid={`lens-${id}`}
+      onClick={() => {
+        const ui = useUiStore.getState();
+        if (id === 'browse') ui.goBrowse();
+        else ui.setView(id);
+      }}
+    >
+      {label}
+      <kbd className="lens__key" aria-hidden="true">{key}</kbd>
+    </button>
+  );
+
   return (
-    <div className="topbar">
+    <div className="topbar topbar--lenses">
       <span className="topbar__here">
         {here !== null && (
           <>
@@ -41,26 +77,27 @@ export function TopBar() {
           </>
         )}
       </span>
-      <button className="topbar__link" data-testid="go-map" onClick={() => setView('map')}>
-        {t('topbar.bigPicture')}
-      </button>
+      <div className="lenses" role="tablist" aria-label={t('lens.aria')} data-testid="memory-lenses">
+        {lens('browse', t('lens.browse'), 'T')}
+        {lens('map', t('lens.map'), 'G')}
+        {lens('sources', t('lens.sources'), 'S')}
+      </div>
+      <span />
     </div>
   );
 }
 
 export function LeftRail() {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
-  const setAskOpen = useUiStore((s) => s.setAskOpen);
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
-  // The calendar door is drawn only where a server can open it.
-  const hasMeetings = useWorkspaceStore((s) => Boolean(s.source.listMeetings));
 
-  // Home is its own place on the rail: the briefing, with nothing open over
-  // it. Anything opened from there — a category, an answer — is browsing.
-  const home = useUiStore(
-    (st) => st.view === 'browse' && st.atHome && st.openCategoryId === null && st.answer === null,
-  );
+  // Where one stands, for the rail's sake. Anything opened over home or
+  // today — a category, an answer — is the memory being read.
+  const spot = useUiStore((st) => whereabouts(st));
+  const home = spot === 'home';
+  const today = spot === 'today';
+  const memory = spot === 'memory';
   return (
     /*
      * Six glyphs are the entire navigation of this app, and to a screen reader
@@ -86,53 +123,30 @@ export function LeftRail() {
       >
         M
       </button>
-      {/* In the order of a day: what is on, what is held, the big picture,
-          the originals — and the page that closes it, last. */}
-      {hasMeetings && (
-        <button
-          className={`rail__btn${view === 'meetings' ? ' rail__btn--active' : ''}`}
-          data-tip={t('rail.meetings.tip')}
-          aria-label={t('rail.meetings')}
-          aria-current={view === 'meetings' ? 'page' : undefined}
-          data-testid="rail-meetings"
-          onClick={() => setView('meetings')}
-        >
-          <span aria-hidden="true">◷</span>
-          <span className="rail__label" aria-hidden="true">{t('rail.label.meetings')}</span>
-        </button>
-      )}
+      {/* Four places, in the order of a day: the day's sheet, the memory
+          (one place, three lenses — see MemoryLenses), and the page that
+          closes it. The calendar lives inside today. */}
       <button
-        className={`rail__btn${view === 'browse' && !home ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.browse.tip')}
-        aria-label={t('rail.browse')}
-        aria-current={view === 'browse' && !home ? 'page' : undefined}
+        className={`rail__btn${today ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.today.tip')}
+        aria-label={t('rail.today')}
+        aria-current={today ? 'page' : undefined}
+        data-testid="rail-today"
+        onClick={() => useUiStore.getState().goToday()}
+      >
+        <span aria-hidden="true">◐</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.today')}</span>
+      </button>
+      <button
+        className={`rail__btn${memory ? ' rail__btn--active' : ''}`}
+        data-tip={t('rail.memory.tip')}
+        aria-label={t('rail.memory')}
+        aria-current={memory ? 'page' : undefined}
         data-testid="rail-tree"
         onClick={() => useUiStore.getState().goBrowse()}
       >
         <span aria-hidden="true">⊞</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.browse')}</span>
-      </button>
-      <button
-        className={`rail__btn${view === 'map' ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.map.tip')}
-        aria-label={t('rail.map')}
-        aria-current={view === 'map' ? 'page' : undefined}
-        data-testid="rail-map"
-        onClick={() => setView('map')}
-      >
-        <span aria-hidden="true">◍</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.map')}</span>
-      </button>
-      <button
-        className={`rail__btn${view === 'sources' ? ' rail__btn--active' : ''}`}
-        data-tip={t('rail.sources.tip')}
-        aria-label={t('rail.sources')}
-        aria-current={view === 'sources' ? 'page' : undefined}
-        data-testid="rail-sources"
-        onClick={() => setView('sources')}
-      >
-        <span aria-hidden="true">▤</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.sources')}</span>
+        <span className="rail__label" aria-hidden="true">{t('rail.label.memory')}</span>
       </button>
       <button
         className={`rail__btn${view === 'diary' ? ' rail__btn--active' : ''}`}
@@ -143,16 +157,6 @@ export function LeftRail() {
       >
         <span aria-hidden="true">✎</span>
         <span className="rail__label" aria-hidden="true">{t('rail.label.diary')}</span>
-      </button>
-      <button
-        className="rail__btn"
-        data-tip={t('rail.ask.tip')}
-        aria-label={t('rail.ask')}
-        data-testid="rail-ask"
-        onClick={() => setAskOpen(true)}
-      >
-        <span aria-hidden="true">?</span>
-        <span className="rail__label" aria-hidden="true">{t('rail.label.ask')}</span>
       </button>
       <div className="rail__spacer" />
       <button

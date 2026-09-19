@@ -68,8 +68,9 @@ const desaturate = (hex: string): string => {
 export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
   const { camera, viewport } = s;
 
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, viewport.w, viewport.h);
+  // The map stands under the same dusk sky as every other page now, so the
+  // frame is cleared, not painted: the ground is the shell's, not the canvas's.
+  ctx.clearRect(0, 0, viewport.w, viewport.h);
 
   const byId = new Map(s.nodes.map((n) => [n.id, n]));
   const highlighting = s.highlightedIds.length > 0;
@@ -252,7 +253,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     viewport.w / 2, viewport.h / 2, Math.max(viewport.w, viewport.h) * 0.78,
   );
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+  vignette.addColorStop(1, 'rgba(14,9,22,0.4)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, viewport.w, viewport.h);
 

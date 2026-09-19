@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dayPartOf, briefingOrder } from '../../src/core/dayPart';
+import { dayPartOf, leadRow } from '../../src/core/dayPart';
 
 /**
  * Home leads with a different block by the hour: the day ahead in the
@@ -22,21 +22,14 @@ describe('dayPartOf', () => {
   });
 });
 
-describe('briefingOrder', () => {
-  it('opens the morning on the day, the afternoon on sorting, the evening on what came in', () => {
-    expect(briefingOrder('morning')[0]).toBe('today');
-    expect(briefingOrder('day').slice(0, 2)).toEqual(['today', 'organizing']);
-    expect(briefingOrder('evening')[0]).toBe('todayMemories');
+describe('leadRow', () => {
+  it('opens the day in the morning, the pile in the afternoon, the mind at night', () => {
+    expect(leadRow('morning', true)).toBe('schedule');
+    expect(leadRow('day', true)).toBe('info');
+    expect(leadRow('evening', true)).toBe('mind');
   });
 
-  it('names every block exactly once in each order, and only the evening has the day’s memories', () => {
-    for (const part of ['morning', 'day', 'evening'] as const) {
-      const order = briefingOrder(part);
-      expect(new Set(order).size).toBe(order.length);
-      expect(order.includes('todayMemories')).toBe(part === 'evening');
-      for (const block of ['today', 'lately', 'concerns', 'growing', 'organizing']) {
-        expect(order).toContain(block);
-      }
-    }
+  it('without a calendar door the morning opens on the mind', () => {
+    expect(leadRow('morning', false)).toBe('mind');
   });
 });

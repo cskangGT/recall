@@ -33,6 +33,7 @@ test('last week is offered once, and opens the diary on its look-back', async ({
   await page.clock.setFixedTime(new Date('2026-09-16T09:00:00-04:00'));
   await mockServer(page);
   await page.goto('/?api=1&skipWelcome=1');
+  await page.getByTestId('rail-today').click();
 
   const card = page.getByTestId('morning-week');
   await expect(card).toContainText('2 diary days');
@@ -45,6 +46,7 @@ test('last week is offered once, and opens the diary on its look-back', async ({
 
   // Not again this week.
   await page.reload();
+  await page.getByTestId('rail-today').click();
   await expect(page.getByTestId('briefing')).toBeVisible();
   await expect(page.getByTestId('morning-week')).toHaveCount(0);
 });
@@ -52,6 +54,7 @@ test('last week is offered once, and opens the diary on its look-back', async ({
 test('seed mode has no look-back door, so no weekly card', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-09-16T09:00:00-04:00'));
   await page.goto('/?skipWelcome=1');
+  await page.getByTestId('rail-today').click();
   await expect(page.getByTestId('briefing')).toBeVisible();
   await expect(page.getByTestId('morning-week')).toHaveCount(0);
 });

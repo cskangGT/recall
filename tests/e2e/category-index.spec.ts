@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * constellation stays above as the way to move between them, but the index
  * is what says "these are your categories" in words the eye can read.
  */
-test('home shows the categories as an index, and a card opens one', async ({ page }) => {
+test('Browse shows the categories as an index, and a card opens one', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 
@@ -26,17 +26,9 @@ test('home shows the categories as an index, and a card opens one', async ({ pag
   await expect(page.locator('.reading .item').first()).toBeVisible();
   await expect(index).toHaveCount(0);
 
-  // The logo is the way home — and for anyone past the greeting, home is
-  // the index again.
-  await page.getByTestId('rail-home').click();
+  // Memory on the rail is the way back to the index.
+  await page.getByTestId('rail-tree').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
-});
-
-test('the home doors stand with the index', async ({ page }) => {
-  await page.goto('/?skipWelcome=1');
-  await expect(page.getByTestId('category-index')).toBeVisible();
-  await expect(page.getByTestId('home-diary-link')).toBeVisible();
-  await expect(page.getByTestId('home-import-link')).toBeVisible();
 });
 
 test('the Browse rail button, pressed inside a category, returns to the index', async ({ page }) => {
@@ -53,29 +45,26 @@ test('the Browse rail button, pressed inside a category, returns to the index', 
 });
 
 /**
- * Home and Browse are two places. The logo is home — the briefing, with the
- * categories beneath it — and says so on the rail. Browse is the categories
- * alone. They used to be one screen with Browse lit, so pressing the logo
- * looked like being sent to Browse.
+ * Home, today and Memory are different places. The logo is home — the scene
+ * and its doors; Memory is the categories, with no report laid over them.
  */
-test('the logo is home and Browse is the categories alone', async ({ page }) => {
+test('the logo is home and Memory is the categories alone', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
-  await expect(page.getByTestId('briefing')).toBeVisible();
-  await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
-
-  await page.getByTestId('rail-tree').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
   await expect(page.getByTestId('briefing')).toHaveCount(0);
-  await expect(page.getByTestId('home-diary-link')).toHaveCount(0);
   await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
 
-  // From anywhere — a category, another view — the logo is the briefing again.
+  // From anywhere — a category, another lens — the logo is home again.
   await page.getByTestId('index-card-cat_ai_tooling').click();
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('briefing')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.locator('[data-testid^="arc-node-"]')).toHaveCount(0);
   await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('s');
   await page.getByTestId('rail-home').click();
-  await expect(page.getByTestId('briefing')).toBeVisible();
-  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('home')).toBeVisible();
+
+  // And home's third door is Memory.
+  await page.getByTestId('door-memory').click();
+  await expect(page.getByTestId('category-index')).toBeVisible();
 });

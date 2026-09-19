@@ -42,8 +42,8 @@ test('looking around fans the categories in without changing screen', async ({ p
   // Same element, still mounted — the reveal is content, not navigation.
   await expect(browser).toBeVisible();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
-  // Home says what it holds first — the briefing — and the arc is out above it.
-  await expect(page.getByTestId('briefing')).toBeVisible();
+  // Looking around is the categories — the index, with the arc out above it.
+  await expect(page.getByTestId('category-index')).toBeVisible();
   await expect(page.locator('[data-testid^="arc-node-"]').first()).toBeVisible();
   await expect(page.getByTestId('browser-answer')).toHaveCount(0);
 });

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { t } from '../i18n';
+import { t, type StringKey } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { matchedLabelNodes, search } from '../search/search';
+import { isQuestion } from '../ask/scriptedAsk';
+import { runAsk } from '../ask/runAsk';
 import type { SourceType } from '../core/types';
 
 /**
@@ -27,11 +29,11 @@ import type { SourceType } from '../core/types';
  * its URL. When it does, this is where the chips go.
  */
 
-const FILTERS: { id: SourceType | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'text', label: 'Notes' },
-  { id: 'link', label: 'Links' },
-  { id: 'screenshot', label: 'Screenshots' },
+const FILTERS: { id: SourceType | 'all'; label: StringKey }[] = [
+  { id: 'all', label: 'sources.filter.all' },
+  { id: 'text', label: 'type.text' },
+  { id: 'link', label: 'type.link' },
+  { id: 'screenshot', label: 'type.screenshot' },
 ];
 
 export function MapSearch() {
@@ -113,7 +115,7 @@ export function MapSearch() {
         <input
           data-testid="map-search-input"
           aria-label={t('map.search.label')}
-          placeholder={t('map.search.placeholder')}
+          placeholder={t('find.placeholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -122,6 +124,14 @@ export function MapSearch() {
              * up — memories and the labels themselves — so "search, then see
              * them together" is one keystroke. ← walks back out.
              */
+            // The same bar in every lens: a question is asked — the answer
+            // lights its memories on the map and reads in the panel beside it.
+            if (e.key === 'Enter' && isQuestion(query)) {
+              const question = query;
+              setQuery('');
+              void runAsk(question);
+              return;
+            }
             if (e.key === 'Enter' && searching && results.length + labelIds.length > 0) {
               // 2안: not a zoom to where they scattered — a regrouped view of
               // just what matched, clustered fresh by category.
@@ -138,6 +148,11 @@ export function MapSearch() {
             else e.currentTarget.blur();
           }}
         />
+        {query.trim() && (
+          <span className="composer__mode" data-testid="find-mode">
+            {isQuestion(query) ? t('find.mode.ask') : t('find.mode.find')}
+          </span>
+        )}
         {searching && (
           <span className="mapsearch__count" data-testid="map-search-count">
             {results.length} of {payload.memories.length}
@@ -173,7 +188,7 @@ export function MapSearch() {
               select(null);
             }}
           >
-            {f.label}
+            {t(f.label)}
           </button>
         ))}
       </div>

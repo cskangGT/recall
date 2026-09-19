@@ -1,7 +1,7 @@
+import { isQuestion } from '../ask/scriptedAsk';
 import { useMemo, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { useUiStore } from '../store/uiStore';
-import { FolderView } from './FolderView';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { effectivePlan, freeCutoff, isArchivedByPlan } from '../core/plan';
 import type { GraphPayload, Source, SourceType } from '../core/types';
@@ -103,8 +103,6 @@ export function SourcesView() {
   const payload = useWorkspaceStore((s) => s.payload);
   const selectedId = useUiStore((s) => s.selectedId);
   const filter = useUiStore((s) => s.sourceFilter);
-  const mode = useUiStore((s) => s.sourcesMode);
-  const setMode = useUiStore((s) => s.setSourcesMode);
   const setFilter = useUiStore((s) => s.setSourceFilter);
 
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -146,10 +144,18 @@ export function SourcesView() {
     return map;
   }, [payload]);
 
-  const rows = useMemo(
-    () => (payload ? buildSourceRows(payload, filter) : []),
-    [payload, filter],
-  );
+  // The find bar narrows the ledger to the originals that carry the word —
+  // in the title or in the text itself. A question is not a filter.
+  const archiveQuery = useUiStore((s) => s.archiveQuery);
+  const rows = useMemo(() => {
+    if (!payload) return [];
+    const all = buildSourceRows(payload, filter);
+    const q = archiveQuery.trim().toLowerCase();
+    if (!q || isQuestion(archiveQuery)) return all;
+    return all.filter(
+      (r) => r.source.title.toLowerCase().includes(q) || r.source.raw_content.toLowerCase().includes(q),
+    );
+  }, [payload, filter, archiveQuery]);
 
   if (!payload) return <div className="sources" data-testid="sources-view" />;
 
@@ -157,25 +163,9 @@ export function SourcesView() {
     <div className="sources" data-testid="sources-view">
       <div className="sources__head">
         <span>{t('sources.title')}</span>
-        {/* One control in the head, and only one: the mode. It reads as a
-            single segmented piece, not a crowd of pills — the type filters
-            live a row below, and only where they apply. */}
-        <div className="sources__modes" role="group" aria-label={t('sources.mode.aria')}>
-          {(['list', 'folders'] as const).map((m) => (
-            <button
-              key={m}
-              className={`sources__mode${mode === m ? ' sources__mode--on' : ''}`}
-              data-testid={`sources-mode-${m}`}
-              aria-pressed={mode === m}
-              onClick={() => setMode(m)}
-            >
-              {t(m === 'list' ? 'sources.mode.list' : 'sources.mode.folders')}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {mode === 'list' && (
+      {(
         <div className="sources__subbar">
           {(['all', 'text', 'link', 'screenshot'] as const).map((f) => (
             <button
@@ -190,20 +180,18 @@ export function SourcesView() {
         </div>
       )}
 
-      {mode === 'folders' && <FolderView />}
-      {mode === 'list' && rows.length === 0 && (
+      {rows.length === 0 && (
         <p className="sources__empty">{t('sources.empty')}</p>
       )}
 
       {/* The migration story in one line: what's here is held, whole. */}
-      {mode === 'list' && rows.some((r) => r.safe) && (
+      {rows.some((r) => r.safe) && (
         <p className="sources__held-summary" data-testid="sources-held-summary">
           {t('sources.safeSummary', { n: rows.filter((r) => r.safe).length })}
         </p>
       )}
 
-      {mode === 'list' &&
-        rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
+      {rows.map(({ source, memoryCount, empty, failed, error, safe }) => (
         <div
           key={source.id}
           data-testid={`source-row-${source.id}`}

@@ -23,8 +23,12 @@ test('write a day, see it marked, and its thoughts join the corpus', async ({ pa
   await expect(page.locator('[data-testid^="diary-entry-"]').first()).toContainText('인터벌');
 
   // …the calendar marks the day…
-  const today = new Date();
-  const key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  // The day is the browser's, not the runner's: the suite pins New York, and
+  // between nine and midnight Pacific the two disagree about what today is.
+  const key = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   await expect(page.getByTestId(`diary-day-${key}`).locator('.diary__mark-entry')).toBeVisible();
 
   // …and the extracted memory is now part of the corpus (search finds it).

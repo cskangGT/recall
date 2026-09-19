@@ -5740,3 +5740,234 @@ button.brief__line:hover {
   flex-direction: column;
   margin-top: 4px;
 }
+
+
+/* ------------------------------------------------------------------- home
+   One sentence, and three lines. The sentence is the page — large, alone,
+   the only thing the eye has to read. The lines are counts until pressed;
+   hairlines between them are the one place home draws a rule, because three
+   collapsed lines without one read as a paragraph. */
+.home {
+  gap: 0;
+  padding: 6px 10px 8px;
+}
+
+.home__date {
+  margin: 0 0 10px;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  letter-spacing: 0.02em;
+}
+
+.home__head {
+  display: block;
+  width: 100%;
+  margin: 0 0 30px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  text-align: left;
+  text-wrap: balance;
+  cursor: pointer;
+}
+
+.home__head:hover {
+  color: var(--accent);
+}
+
+.home__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.home__row + .home__row {
+  border-top: 1px solid var(--edge);
+}
+
+.home__rowhead {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home__rowlabel {
+  flex: none;
+  min-width: 44px;
+  font-size: var(--text-lg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.home__rowsum {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: var(--text-md);
+  text-align: right;
+}
+
+.home__rowhead:hover .home__rowsum {
+  color: var(--text);
+}
+
+.home__chev {
+  flex: none;
+  width: 14px;
+  color: var(--text-faint);
+  font-size: var(--text-md);
+  text-align: center;
+}
+
+.home__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 0 20px;
+  animation: rise 0.22s ease both;
+}
+
+.home__inline {
+  display: flex;
+  gap: 16px;
+}
+
+.home__body .arc__sources {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------ memory lenses
+   One Memory, three ways to look through it. The switch sits where the
+   looking happens — top centre — as words, not icons: the difference between
+   the lenses is what you do in them, and only a word can say that. */
+.topbar--lenses {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  /* Symmetric, so the switch sits at the window's centre in all three lenses
+     and does not jump when the lens changes. */
+  left: var(--inspector-w);
+  right: var(--inspector-w);
+}
+
+.lenses {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  border: 1px solid var(--edge);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.lens {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.lens:hover {
+  color: var(--text);
+}
+
+.lens--on {
+  color: var(--text);
+  background: rgba(240, 232, 250, 0.1);
+}
+
+.lens__key {
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.topbar__find {
+  justify-self: end;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-base);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.topbar__find:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+/* The archive starts below the lens bar it now shares the top with. */
+.sources {
+  padding-top: 76px;
+}
+
+/* Home hangs four doors where the greeting hung three. */
+.arc__greeting--home .arc__doors {
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.arc__greeting--home .arc__door {
+  width: 164px;
+}
+
+.arc__greeting--home .arc__sources {
+  margin-top: 20px;
+}
+
+
+/* Which verb the bar will use on Enter — the same word in every lens. */
+.composer__mode {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
+
+/* The categories' head: their name, and the two ways to walk them. */
+.index__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 4px;
+  padding-right: 10px;
+}
+
+.index__head .index__eyebrow {
+  margin: 0;
+}

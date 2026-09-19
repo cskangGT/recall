@@ -277,7 +277,7 @@ export function Welcome() {
       )}
 
       {current === 'thought' && !reply && payload.memories.length > 0 && (
-        <button className="arc__browse" data-testid="door-browse" onClick={dismissWelcome}>
+        <button className="arc__browse" data-testid="door-browse" onClick={() => useUiStore.getState().goBrowse()}>
           <span className="arc__browse-name">{t('welcome.browse')}</span>
           <span className="arc__browse-hint">
             {t('welcome.browseHint', { memories: payload.memories.length })}

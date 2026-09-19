@@ -11,7 +11,9 @@ export const COLORS = {
   childCategory: '#B0782E',
   memory: '#C9C9CE',
   entity: '#5B8FB0',
-  edge: '#26262A',
+  // Chosen against near-black once; on the dusk sky a near-black line is a
+  // crack, so the edge is a light hairline like every other rule here.
+  edge: 'rgba(236, 224, 246, 0.16)',
   /** The lit end of a `contains` edge, where it leaves its category. */
   edgeBright: '#5A4A32',
   edgeActive: '#E8A33D',

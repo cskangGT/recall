@@ -19,9 +19,9 @@ test.beforeEach(async ({ page }) => {
 test('the placeholder recommends a question about the open category', async ({ page }) => {
   const input = page.getByTestId('composer-input');
 
-  // Before anything is open, the invitation is generic — and it only ever
-  // promises asking: saving has its own labeled door beside the input.
-  await expect(input).toHaveAttribute('placeholder', /Ask your memory/);
+  // Before anything is open, the invitation is generic — find, or ask. Saving
+  // has its own labeled door beside the input.
+  await expect(input).toHaveAttribute('placeholder', /Find a memory, or ask/);
 
   await named(page, 'AI Tooling').click();
   await expect(input).toHaveAttribute('placeholder', /AI Tooling/);

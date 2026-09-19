@@ -37,8 +37,13 @@ test('the navigation says what it is, not which glyph it drew', async ({ page })
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 
-  for (const name of ['Map (G)', 'Browse (T)', 'Sources (S)', 'Ask (⌘/)', 'Settings (,)', 'Add (⌘K)']) {
+  // Four places and two tools. Memory is one button; its three lenses are
+  // named where the looking happens.
+  for (const name of ['Home', 'Today', 'Memory (T)', 'Settings (,)', 'Add (⌘K)']) {
     await expect(page.getByRole('button', { name })).toBeVisible();
+  }
+  for (const name of ['Browse', 'Brainstorm', 'Archive']) {
+    await expect(page.getByRole('tab', { name: new RegExp(name) })).toBeVisible();
   }
   // The shortcut stays in the name: a keyboard user is exactly who benefits.
   await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible();
@@ -46,15 +51,20 @@ test('the navigation says what it is, not which glyph it drew', async ({ page })
 
 test('the current view is marked for a reader, not only in CSS', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
-  // The app opens at home, and home is a place on the rail: the mark says so.
+  // Home is a place on the rail: the mark says so, and nothing else is lit.
+  await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await page.getByTestId('rail-today').click();
+  await expect(page.getByTestId('rail-today')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-home')).not.toHaveAttribute('aria-current', 'page');
+  // Memory stays lit across its three lenses; the lens says which one.
   await page.keyboard.press('t');
   await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByTestId('rail-home')).not.toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('g');
-  await expect(page.getByTestId('rail-map')).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('lens-map')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('lens-browse')).toHaveAttribute('aria-selected', 'false');
 });
 
 test('the chat box has a name — a placeholder is not one', async ({ page }) => {
