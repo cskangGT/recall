@@ -46,7 +46,12 @@ test('the navigation says what it is, not which glyph it drew', async ({ page })
 
 test('the current view is marked for a reader, not only in CSS', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
+  // The app opens at home, and home is a place on the rail: the mark says so.
+  await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('t');
   await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-home')).not.toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('g');
   await expect(page.getByTestId('rail-map')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');

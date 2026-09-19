@@ -36,7 +36,7 @@ test('home is a briefing first, and every line is a door', async ({ page }) => {
   await expect(page.getByTestId('reading-list')).toContainText('AI Tooling');
 
   // What is waiting: the originals not yet checked, and the way to them.
-  await page.getByTestId('rail-tree').click();
+  await page.getByTestId('rail-home').click();
   await expect(brief.getByTestId('brief-awaiting')).toContainText(/22/);
   await brief.getByTestId('brief-awaiting').click();
   await expect(page.getByTestId('sources-view')).toBeVisible();

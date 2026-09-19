@@ -149,7 +149,7 @@ test('the calendar lays out by day — today first, the past week last', async (
 
   // Home says the day first: the briefing's own block is the door, and no
   // card above it repeats the same meeting.
-  await page.getByTestId('rail-tree').click();
+  await page.getByTestId('rail-home').click();
   await expect(page.getByTestId('morning-meetings')).toHaveCount(0);
   await expect(page.getByTestId('brief-meeting-evt_today')).toContainText('김수진, 박준');
   await page.getByTestId('brief-meeting-evt_today').click();

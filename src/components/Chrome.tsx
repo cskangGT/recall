@@ -56,6 +56,11 @@ export function LeftRail() {
   // The calendar door is drawn only where a server can open it.
   const hasMeetings = useWorkspaceStore((s) => Boolean(s.source.listMeetings));
 
+  // Home is its own place on the rail: the briefing, with nothing open over
+  // it. Anything opened from there — a category, an answer — is browsing.
+  const home = useUiStore(
+    (st) => st.view === 'browse' && st.atHome && st.openCategoryId === null && st.answer === null,
+  );
   return (
     /*
      * Six glyphs are the entire navigation of this app, and to a screen reader
@@ -74,6 +79,7 @@ export function LeftRail() {
       <button
         className="rail__mark"
         data-testid="rail-home"
+        aria-current={home ? 'page' : undefined}
         aria-label={t('rail.home')}
         data-tip={t('rail.home.tip')}
         onClick={() => useUiStore.getState().goHome()}
@@ -96,10 +102,10 @@ export function LeftRail() {
         </button>
       )}
       <button
-        className={`rail__btn${view === 'browse' ? ' rail__btn--active' : ''}`}
+        className={`rail__btn${view === 'browse' && !home ? ' rail__btn--active' : ''}`}
         data-tip={t('rail.browse.tip')}
         aria-label={t('rail.browse')}
-        aria-current={view === 'browse' ? 'page' : undefined}
+        aria-current={view === 'browse' && !home ? 'page' : undefined}
         data-testid="rail-tree"
         onClick={() => useUiStore.getState().goBrowse()}
       >

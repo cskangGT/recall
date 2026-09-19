@@ -159,6 +159,10 @@ export function ArcBrowser() {
    */
   const indexOpen = !isOpen && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
   const laidOpen = isOpen || indexOpen;
+  // Browse is the categories alone; the briefing, the day's card and the
+  // three doors belong to home (see uiStore.atHome).
+  const atHome = useUiStore((s) => s.atHome);
+  const homeParts = !indexOpen || atHome;
 
   const geometry = useMemo(
     () => fitArc(viewport, laidOpen, indexOpen),
@@ -871,11 +875,12 @@ export function ArcBrowser() {
           <div
             className={indexOpen ? 'reading reading--index' : 'arc__home'}
             data-testid={indexOpen ? 'category-index' : 'arc-home'}
+            data-home={atHome ? 'yes' : 'no'}
             style={indexOpen ? { top: geometry.listTop } : undefined}
           >
             {/* What is said once a day is said first — under a long briefing the
                 card was below the fold, which is the same as not saying it. */}
-            {morning && !fillOpen && (
+            {morning && !fillOpen && homeParts && (
               <div className="arc__morning" data-testid="morning-card">
                 <button
                   className="arc__morning-body"
@@ -988,9 +993,10 @@ export function ArcBrowser() {
             )}
             {/* Home opens on the briefing — what Mado holds, said first — and
                 the prompt only where there is no index to brief about. */}
-            {indexOpen ? <Briefing /> : <p className="arc__prompt">{heading}</p>}
+            {indexOpen ? atHome && <Briefing /> : <p className="arc__prompt">{heading}</p>}
             {/* The quiet door to today's page — home should always know the
                 way to the diary. */}
+            {homeParts && (
             <span className="arc__homelinks">
               <button
                 className="arc__diarylink"
@@ -1019,7 +1025,8 @@ export function ArcBrowser() {
                 ✦ {t('arc.thinkLink')}
               </button>
             </span>
-            {fillSources}
+            )}
+            {homeParts && fillSources}
             {indexOpen && <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>}
             {indexOpen && (
               <div className="index" role="list">

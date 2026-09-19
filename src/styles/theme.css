@@ -3719,6 +3719,13 @@ body:lang(ko) {
   position: relative;
 }
 
+/* Home is a place on the rail like the others: when you are there, the mark
+   says so — a ring, not a new colour. */
+.rail__mark[aria-current='page'] {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 2px;
+}
+
 .rail__mark[data-tip]::after {
   content: attr(data-tip);
   position: absolute;

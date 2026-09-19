@@ -169,6 +169,13 @@ interface UiState {
    * and cleared by the diary when it mounts. A request, not a state.
    */
   retroRange: { from: string; to: string } | null;
+  /**
+   * Home and Browse share a view and are two places. Home — the logo — is
+   * the briefing, with the categories beneath it; Browse is the categories
+   * alone. Both used to be one screen with the Browse button lit, so the
+   * logo looked like it had taken you to Browse.
+   */
+  atHome: boolean;
   toasts: Toast[];
 
   setView: (view: View) => void;
@@ -271,6 +278,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   memoryPage: null,
   sourcePage: null,
   retroRange: null,
+  atHome: true,
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
@@ -292,8 +300,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     rememberWelcomed();
     set((s) =>
       s.view === 'browse'
-        ? { openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
-        : { view: 'browse', centerOnId: null, welcomeDismissed: true },
+        ? { atHome: false, openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
+        : { atHome: false, view: 'browse', centerOnId: null, welcomeDismissed: true },
     );
   },
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
@@ -358,6 +366,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   // there is one press away, and the press means what it says.
   goHome: () =>
     set({
+      atHome: true,
       view: 'browse',
       welcomeDismissed: hasBeenWelcomed(),
       openCategoryId: null,

@@ -51,3 +51,31 @@ test('the Browse rail button, pressed inside a category, returns to the index', 
   await page.keyboard.press('t');
   await expect(page.getByTestId('category-index')).toBeVisible();
 });
+
+/**
+ * Home and Browse are two places. The logo is home — the briefing, with the
+ * categories beneath it — and says so on the rail. Browse is the categories
+ * alone. They used to be one screen with Browse lit, so pressing the logo
+ * looked like being sent to Browse.
+ */
+test('the logo is home and Browse is the categories alone', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await expect(page.getByTestId('briefing')).toBeVisible();
+  await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
+
+  await page.getByTestId('rail-tree').click();
+  await expect(page.getByTestId('category-index')).toBeVisible();
+  await expect(page.getByTestId('briefing')).toHaveCount(0);
+  await expect(page.getByTestId('home-diary-link')).toHaveCount(0);
+  await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
+
+  // From anywhere — a category, another view — the logo is the briefing again.
+  await page.getByTestId('index-card-cat_ai_tooling').click();
+  await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('briefing')).toBeVisible();
+  await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('s');
+  await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('briefing')).toBeVisible();
+  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+});
