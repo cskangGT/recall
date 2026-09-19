@@ -12,6 +12,8 @@ test('write a day, see it marked, and its thoughts join the corpus', async ({ pa
 
   await page.keyboard.press('d');
   await expect(page.getByTestId('diary-view')).toBeVisible();
+  // The page is its own place to write: no second `+` floats under it.
+  await expect(page.getByTestId('fab')).toHaveCount(0);
 
   await page.getByTestId('diary-editor').fill(
     '오늘 하프마라톤 대비 인터벌을 뛰었다. 400미터 열 세트가 처음으로 편안했다.',

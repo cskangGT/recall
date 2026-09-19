@@ -475,10 +475,11 @@ export function App() {
         */}
         {view !== 'browse' && <StatusTicker />}
         <Toasts />
-        {/* Map and Sources have no composer, so they still need a visible way
-            in. Browse has one in the composer, and two `+` on one screen is the
-            duplication this change exists to remove. */}
-        {view !== 'browse' && (
+        {/* The map and the archive have no composer, so they keep a visible way
+            in. Browse has one in the composer; the diary and the meetings have
+            their own place to write, and a second `+` floating under it was a
+            button with nothing to say. The rail's `+` is on every page. */}
+        {(view === 'map' || view === 'sources') && (
           <button
             className="fab"
             data-testid="fab"
