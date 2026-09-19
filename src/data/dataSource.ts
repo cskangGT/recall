@@ -23,6 +23,8 @@ export interface CaptureInput {
   /** The photo itself, as a data URL — the server stores it and reads it back. */
   imageData?: string;
   referencedUrls?: string[];
+  /** A PDF as a data URL — the server keeps it and has the model read it out. */
+  fileData?: string;
   /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
   diaryDate?: string;
 }
@@ -83,6 +85,8 @@ export interface AskTurn {
 
 export interface DataSource {
   readonly mode: 'seed' | 'api';
+  /** The server can take a PDF (capture with `fileData`). Absent or false: the door is not drawn. */
+  readsPdf?: boolean;
   load(): Promise<GraphPayload>;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
@@ -297,6 +301,9 @@ export class ApiDataSource implements DataSource {
    * paint that could draw them. Doors default to open: only a server that
    * answers "no" closes one, so a failed probe never hides a working door.
    */
+  /** Whether this server can keep a PDF and has a model that reads one. Closed until the probe says so. */
+  readsPdf = false;
+
   private probed = false;
 
   private async probe(): Promise<void> {
@@ -310,10 +317,12 @@ export class ApiDataSource implements DataSource {
         notion?: boolean;
         condense?: boolean;
         google?: boolean;
+        pdf?: boolean;
       };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
       if (!caps.condense) this.condenseSource = undefined;
+      this.readsPdf = caps.pdf === true;
       if (!caps.google) {
         this.listMeetings = undefined;
         this.googleStatus = undefined;

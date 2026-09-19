@@ -74,7 +74,7 @@ export function SourceChips() {
         multiple
         hidden
         data-testid="door-fill-input"
-        accept=".txt,.md,.markdown,.csv,.json,.zip,text/*,image/png,image/jpeg,image/webp,image/gif"
+        accept=".txt,.md,.markdown,.csv,.json,.zip,text/*,image/png,image/jpeg,image/webp,image/gif,.pdf,application/pdf"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = '';

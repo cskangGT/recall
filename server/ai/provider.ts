@@ -15,6 +15,7 @@ export interface NormalizeInput {
   type: SourceType;
   /** Raw pasted text, fetched article body, or an image reference. */
   text?: string;
+  /** A kept image — or a kept PDF, told apart by its extension. */
   imagePath?: string;
 }
 
@@ -131,6 +132,8 @@ export interface EmbeddingProvider {
 
 export interface AiProvider {
   readonly name: string;
+  /** The model behind this provider takes a PDF as a document. */
+  readonly readsPdf?: boolean;
   /** Screenshots only; text and link sources skip it (spec §10.1). */
   normalize(input: NormalizeInput): Promise<NormalizeResult>;
   extract(input: {

@@ -1,3 +1,4 @@
+import { isPdfPath } from '../link/saveImage.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
 import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
@@ -381,12 +382,27 @@ export class IngestPipeline {
       // ---- 2. Normalize (screenshots only — spec §10.1)
       let content = input.content ?? '';
       let sceneDescription: string | undefined;
-      if (input.type === 'screenshot') {
+      // A kept PDF is normalized too, whatever its type: the model reads the
+      // document out, and what it read becomes the source's own text — the
+      // original a person can open later is the words, not a file path.
+      const pdf = isPdfPath(input.imagePath);
+      if (input.type === 'screenshot' || pdf) {
         const normalized = await this.ai.normalize({
           type: input.type, text: input.content, imagePath: input.imagePath,
         });
-        content = normalized.ocr_text || input.content || '';
+        if (pdf && !normalized.ocr_text.trim()) {
+          throw new Error('nothing could be read out of that PDF');
+        }
+        content = pdf
+          ? [input.content?.trim(), normalized.ocr_text].filter(Boolean).join('\n\n')
+          : normalized.ocr_text || input.content || '';
         sceneDescription = normalized.scene_description;
+        this.repo.updateSourceContent(sourceId, {
+          // A screenshot keeps the words written beside it; only an empty one
+          // takes what was read, so its page has something to show.
+          raw_content: pdf || !input.content?.trim() ? content : null,
+          scene_description: sceneDescription || null,
+        });
       }
 
       // ---- 3. Extract
@@ -873,6 +889,11 @@ export class IngestPipeline {
   /** Whether the wired model can explain and draft a merge at all. */
   canMerge(): boolean {
     return typeof this.ai.mergeMemories === 'function';
+  }
+
+  /** Whether the wired model takes a PDF as a document. */
+  canReadPdf(): boolean {
+    return this.ai.readsPdf === true;
   }
 
   canCondense(): boolean {

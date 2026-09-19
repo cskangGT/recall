@@ -9,7 +9,7 @@ import type {
 } from './provider.ts';
 import {
   answerSchema, answerSoFar, buildAnswerPrompt, buildCondensePrompt, buildExtractPrompt,
-  buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildRetroPrompt, coerceCondense,
+  buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
   coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
   mergeSchema, nameByFallback, nameSchema,
   normalizeSchema, resolveAnswer, resolveNames, retroSchema,
@@ -188,6 +188,8 @@ const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 /** Strong instruction-following, and the "returning none is valid" line in the
  *  extract prompt needs a model that will actually return none. */
 export const CHAT_MODEL = 'gpt-4.1';
+/** A document is read out at length; a screenshot is not. */
+const PDF_MAX_TOKENS = 12_000;
 
 const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -199,6 +201,7 @@ const MIME: Record<string, string> = {
 
 export class OpenAiProvider implements AiProvider {
   readonly name = 'openai';
+  readonly readsPdf = true;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly fetchImpl: typeof fetch;
@@ -253,6 +256,19 @@ export class OpenAiProvider implements AiProvider {
     }
 
     const ext = path.extname(input.imagePath).toLowerCase();
+    if (ext === '.pdf') {
+      // Chat Completions takes a PDF as a file part: the model gets each
+      // page's text and its image, so scans and slides read too.
+      const pdf = await readFile(input.imagePath, { encoding: 'base64' });
+      const content = [
+        { type: 'text', text: buildPdfNormalizePrompt(input) },
+        {
+          type: 'file',
+          file: { filename: path.basename(input.imagePath), file_data: `data:application/pdf;base64,${pdf}` },
+        },
+      ];
+      return coerceNormalize(await this.json(content, 'normalize', normalizeSchema, PDF_MAX_TOKENS));
+    }
     const mediaType = MIME[ext];
     if (!mediaType) throw new Error(`Unsupported image type: ${ext || input.imagePath}`);
     const data = await readFile(input.imagePath, { encoding: 'base64' });

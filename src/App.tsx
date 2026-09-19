@@ -5,7 +5,7 @@ import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
 import { DiaryView } from './components/DiaryView';
 import { MeetingsView } from './components/MeetingsView';
-import { isImage, isPdf, takeImages } from './capture/images';
+import { isImage, isPdf, takeImages, takePdfs } from './capture/images';
 import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
 import { Inspector } from './components/Inspector';
@@ -399,7 +399,7 @@ export function App() {
           return;
         }
         if (live && files.some(isPdf) && !files.some(isZip) && !files.some(isTextLike)) {
-          useUiStore.getState().toast(t('toast.pdfNotYet'));
+          void takePdfs(files);
           return;
         }
         if (files.some(isZip) || files.filter(isTextLike).length >= 2) {

@@ -190,6 +190,19 @@ export class SqliteRepository implements Repository {
       );
   }
 
+  updateSourceContent(
+    id: string,
+    fields: { raw_content?: string | null; scene_description?: string | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE sources SET raw_content = COALESCE(?, raw_content),
+           scene_description = COALESCE(?, scene_description)
+         WHERE id = ?`,
+      )
+      .run(fields.raw_content ?? null, fields.scene_description ?? null, id);
+  }
+
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],

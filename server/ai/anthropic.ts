@@ -9,7 +9,7 @@ import type {
 } from './provider.ts';
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
-  buildNormalizePrompt, coerceExtract, coerceNormalize, extractSchema, nameByFallback,
+  buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, coerceNormalize, extractSchema, nameByFallback,
   nameSchema, normalizeSchema, resolveAnswer, resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
@@ -37,6 +37,7 @@ const MIME: Record<string, 'image/png' | 'image/jpeg' | 'image/gif' | 'image/web
 
 export class AnthropicProvider implements AiProvider {
   readonly name = 'anthropic';
+  readonly readsPdf = true;
   private readonly client: Anthropic;
 
   constructor(apiKey?: string) {
@@ -73,6 +74,15 @@ export class AnthropicProvider implements AiProvider {
     }
 
     const ext = path.extname(input.imagePath).toLowerCase();
+    if (ext === '.pdf') {
+      // A document block: the model reads each page's text and its image.
+      const pdf = await readFile(input.imagePath, { encoding: 'base64' });
+      const content = [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+        { type: 'text', text: buildPdfNormalizePrompt(input) },
+      ];
+      return coerceNormalize(await this.json(content, normalizeSchema, 12_000));
+    }
     const mediaType = MIME[ext];
     if (!mediaType) throw new Error(`Unsupported image type: ${ext || input.imagePath}`);
     const data = await readFile(input.imagePath, { encoding: 'base64' });

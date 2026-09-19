@@ -9,8 +9,9 @@ import { serveStatic } from './static.ts';
  * body, call `handle`, and write JSON back.
  */
 
-// A 6MB image (saveImage's own limit) is about 8MB once it is base64 in JSON.
-const MAX_BODY_BYTES = 9 * 1024 * 1024;
+// The largest thing a body carries is a 10MB PDF (saveImage's own limit),
+// which is about 13.4MB once it is base64 in JSON.
+const MAX_BODY_BYTES = 15 * 1024 * 1024;
 
 async function readBody(
   req: import('node:http').IncomingMessage,

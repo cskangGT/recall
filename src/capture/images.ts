@@ -104,3 +104,57 @@ export async function takeImages(files: File[]): Promise<boolean> {
   }
   return true;
 }
+
+/** The server's own limit (saveImage) — said here first, so a large file is refused before it is read. */
+const MAX_PDF_BYTES = 10_000_000;
+
+/**
+ * PDFs in. The file goes to the server whole; the model reads the document
+ * out, and what it read becomes the source's text — so a PDF is a text
+ * source like any note, with its own words as the original. Reading takes a
+ * while (a long document is a long read), so the ticker runs meanwhile.
+ * Returns true when it handled any.
+ */
+export async function takePdfs(files: File[]): Promise<boolean> {
+  const pdfs = files.filter(isPdf);
+  if (pdfs.length === 0) return false;
+  const ui = useUiStore.getState();
+  const store = useWorkspaceStore.getState();
+  if (!store.source.capture || !store.source.readsPdf) {
+    ui.toast(t('toast.pdfNotYet'));
+    return true;
+  }
+
+  ui.setCaptureStage('reading');
+  ui.toast(t('toast.pdfReading', { count: pdfs.length }));
+  let kept = 0;
+  let memories = 0;
+  try {
+    for (const file of pdfs) {
+      if (file.size > MAX_PDF_BYTES) {
+        ui.toast(t('toast.pdfTooLarge', { name: file.name }));
+        continue;
+      }
+      const result = await store.source.capture({
+        type: 'text',
+        title: file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim(),
+        content: '',
+        fileData: await readAsDataUrl(file),
+      });
+      useWorkspaceStore.getState().applyPayload(result.graph);
+      kept += 1;
+      memories += result.addedMemoryIds?.length ?? 0;
+    }
+    if (kept > 0) {
+      ui.dismissWelcome();
+      ui.toast(t('toast.pdfKept', { count: kept, memories }));
+    }
+  } catch (err) {
+    ui.toast(
+      err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'),
+    );
+  } finally {
+    ui.setCaptureStage('idle');
+  }
+  return true;
+}

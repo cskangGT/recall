@@ -95,6 +95,8 @@ export interface Repository {
   getGraphPayload(workspaceId: string): GraphPayload;
 
   insertSource(workspaceId: string, source: SourceRow): void;
+  /** What normalize read out of a kept file: the words, and what the thing is. Null leaves a field alone. */
+  updateSourceContent(id: string, fields: { raw_content?: string | null; scene_description?: string | null }): void;
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],

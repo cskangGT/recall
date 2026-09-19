@@ -54,6 +54,32 @@ export function buildNormalizePrompt(input: NormalizeInput): string {
   ].join('\n');
 }
 
+/**
+ * A PDF is not a picture of words. A one-page note should come back whole; a
+ * forty-page report transcribed verbatim would overrun any output budget and
+ * bury what it says. So the instruction scales: keep everything when it is
+ * short, and when it is long keep every section's substance — names, numbers,
+ * dates, decisions and claims — in the document's own language and order.
+ */
+export function buildPdfNormalizePrompt(input: NormalizeInput): string {
+  return [
+    'Read this PDF so it can be filed in a personal memory system.',
+    '',
+    'ocr_text: the text of the document, in its own language.',
+    '  - Up to a few pages: every word, verbatim, in reading order.',
+    '  - Longer: go section by section and keep the substance of each — names, numbers,',
+    '    dates, decisions, claims, lists — under its heading. Drop boilerplate, page',
+    '    furniture and repeated headers. Do not summarize into a paragraph; keep it a',
+    '    faithful, skimmable rendering of what the document says.',
+    '  - Describe a chart, table or figure in a line when it carries information.',
+    'scene_description: one sentence naming what this document *is*, in the second person',
+    '  ("A pitch deck for…", "Your lease agreement with…").',
+    'detected_context: "document" unless another value clearly fits better.',
+    'has_meaningful_text: false only for an empty or unreadable file.',
+    input.text ? `\nAccompanying text:\n${input.text}` : '',
+  ].join('\n');
+}
+
 export function coerceNormalize(raw: unknown): NormalizeResult {
   const o = (raw ?? {}) as Partial<NormalizeResult>;
   const ocr = typeof o.ocr_text === 'string' ? o.ocr_text : '';

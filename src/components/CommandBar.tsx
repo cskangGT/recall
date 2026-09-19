@@ -1,4 +1,4 @@
-import { imageDataUrl } from '../capture/images';
+import { imageDataUrl, isPdf, takePdfs } from '../capture/images';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
@@ -185,13 +185,21 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/png,image/jpeg,image/webp,image/gif,.pdf,application/pdf"
           hidden
           data-testid="capture-photo-input"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) readImage(file);
             e.target.value = '';
+            if (!file) return;
+            // A PDF is not laid beside the words — it is its own original. The
+            // bar steps aside and the document is read.
+            if (isPdf(file)) {
+              setCaptureOpen(false);
+              void takePdfs([file]);
+              return;
+            }
+            readImage(file);
           }}
         />
         {preview && (

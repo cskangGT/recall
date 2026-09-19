@@ -68,7 +68,7 @@ describe('capture with imageData', () => {
       imageData: PNG,
     });
     expect(res.status).toBe(400);
-    expect((res.body as { error: string }).error).toContain('cannot store images');
+    expect((res.body as { error: string }).error).toContain('cannot store files');
   });
 
   it('refuses what is not an image data URL', async () => {
@@ -79,5 +79,79 @@ describe('capture with imageData', () => {
       imageData: 'data:text/html;base64,PGI+aGk8L2I+',
     });
     expect(res.status).toBe(400);
+  });
+});
+
+/**
+ * A PDF rides the same road as a photo: kept on disk, read by normalize — as
+ * a document — and what was read becomes the source's own text, so a PDF is a
+ * text source whose original is its words. The fixture cannot read a
+ * document, so the door is closed on it; a reading provider is stood in here.
+ */
+const PDF = `data:application/pdf;base64,${Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF').toString('base64')}`;
+
+class ReadingProvider extends FixtureProvider {
+  readonly readsPdf = true;
+  seen: string | undefined;
+  async normalize(input: Parameters<FixtureProvider['normalize']>[0]) {
+    this.seen = input.imagePath;
+    return {
+      ocr_text: 'Seed funds decide within two meetings.\nRunway should cover eighteen months.',
+      scene_description: 'A two-page memo on seed fundraising.',
+      detected_context: 'document' as const,
+      has_meaningful_text: true,
+    };
+  }
+}
+
+describe('capture with a PDF', () => {
+  it('keeps the file, has it read, and stores what was read as the original', async () => {
+    const ai = new ReadingProvider();
+    const deps = depsWith({
+      saveImage: imageSaver(dir),
+      ingest: new IngestPipeline(repo, ai, new FixtureEmbeddings()),
+    });
+    const res = await capture(deps, { type: 'text', title: 'Seed memo', content: '', fileData: PDF });
+    expect(res.status).toBe(200);
+
+    expect(ai.seen?.endsWith('.pdf')).toBe(true);
+    expect(existsSync(ai.seen!)).toBe(true);
+    const source = repo.listSources(WS).find((s) => s.image_path === ai.seen)!;
+    expect(source.type).toBe('text');
+    expect(source.title).toBe('Seed memo');
+    expect(source.raw_content).toContain('Runway should cover eighteen months');
+    expect(source.scene_description).toBe('A two-page memo on seed fundraising.');
+  });
+
+  it('opens the door only where the model reads documents and files can be kept', async () => {
+    const caps = (deps: Deps) => handle({ method: 'GET', path: '/api/capabilities', body: null }, deps);
+    const reading = new IngestPipeline(repo, new ReadingProvider(), new FixtureEmbeddings());
+    expect(((await caps(depsWith({ saveImage: imageSaver(dir), ingest: reading }))).body as { pdf: boolean }).pdf).toBe(true);
+    expect(((await caps(depsWith({ ingest: reading }))).body as { pdf: boolean }).pdf).toBe(false);
+    expect(((await caps(depsWith({ saveImage: imageSaver(dir) }))).body as { pdf: boolean }).pdf).toBe(false);
+  });
+
+  it('refuses a file that only claims to be a PDF', async () => {
+    const deps = depsWith({ saveImage: imageSaver(dir) });
+    const fake = `data:application/pdf;base64,${Buffer.from('<html>not a pdf</html>').toString('base64')}`;
+    const res = await capture(deps, { type: 'text', content: '', fileData: fake });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toContain('not a PDF');
+  });
+
+  it('a PDF nothing could be read from fails as a source, not silently', async () => {
+    class Blank extends ReadingProvider {
+      async normalize() {
+        return { ocr_text: '', scene_description: '', detected_context: 'document' as const, has_meaningful_text: false };
+      }
+    }
+    const deps = depsWith({
+      saveImage: imageSaver(dir),
+      ingest: new IngestPipeline(repo, new Blank(), new FixtureEmbeddings()),
+    });
+    await capture(deps, { type: 'text', title: 'Blank', content: '', fileData: PDF });
+    const source = repo.listSources(WS).find((s) => s.title === 'Blank')!;
+    expect(source.status).toBe('failed');
+    expect(source.error_message).toContain('nothing could be read');
   });
 });

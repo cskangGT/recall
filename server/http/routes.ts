@@ -265,6 +265,8 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       // Configured, not connected: connection is per workspace, and this
       // endpoint has none — `GET /workspaces/:id/google` says the rest.
       google: Boolean(deps.google),
+      // A PDF needs somewhere to be kept and a model that reads documents.
+      pdf: Boolean(deps.saveImage) && deps.ingest.canReadPdf(),
     });
   }
 
@@ -394,11 +396,21 @@ async function handleWorkspace(
     // A photo written alongside the words: the client sends the image itself
     // as a data URL, the server keeps it on disk, and from there the existing
     // imagePath pipeline (normalize reads the file) carries it.
+    //
+    // A PDF arrives the same way as `fileData`. It is a text source whose
+    // words the model reads out of the document; the pipeline tells it apart
+    // by the kept file's extension.
     let uploadedPath: string | undefined;
-    if (typeof body.imageData === 'string' && body.imageData) {
-      if (!deps.saveImage) return badRequest('this server cannot store images');
+    const upload =
+      typeof body.fileData === 'string' && body.fileData
+        ? body.fileData
+        : typeof body.imageData === 'string' && body.imageData
+          ? body.imageData
+          : null;
+    if (upload) {
+      if (!deps.saveImage) return badRequest('this server cannot store files');
       try {
-        uploadedPath = await deps.saveImage(body.imageData);
+        uploadedPath = await deps.saveImage(upload);
       } catch (err) {
         return badRequest(err instanceof Error ? err.message : 'could not store the image');
       }
