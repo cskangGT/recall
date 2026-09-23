@@ -3,6 +3,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useState } from 'react';
 import { Bundle } from './Bundle';
+import { runAsk } from '../ask/runAsk';
 
 /**
  * Thinking with picked memories — the mode, and the picks.
@@ -36,6 +37,7 @@ export function ThinkPicks() {
   const setPicked = useUiStore((s) => s.setPicked);
   const selectedId = useUiStore((s) => s.selectedId);
   const bundle = useUiStore((s) => s.bundle);
+  const talking = useUiStore((s) => s.answer !== null || s.askThread.length > 0 || s.asking);
   const focused = useUiStore((s) => s.mapFocus !== null);
   const payload = useWorkspaceStore((s) => s.payload);
   const [bundling, setBundling] = useState(false);
@@ -118,6 +120,21 @@ export function ThinkPicks() {
         </div>
       )}
       {bundling && memories.length > 0 && <Bundle onClose={() => setBundling(false)} />}
+      {/* The way in, said as a button: the first question is the one people
+          do not know they can ask. Once the talk has begun, the bar is enough. */}
+      {memories.length > 0 && !talking && !bundling && (
+        <button
+          className="picks__start"
+          data-testid="think-start"
+          onClick={() => {
+            useUiStore.getState().setFindMode('map', 'ask');
+            void runAsk(t(bundle ? 'think.openingBundle' : 'think.opening', { name: bundle?.name ?? '' }));
+          }}
+        >
+          <span aria-hidden="true">✦</span>{' '}
+          {bundle ? t('think.startBundle', { name: bundle.name }) : t('think.start', { count: memories.length })}
+        </button>
+      )}
     </div>
   );
 }

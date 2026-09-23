@@ -164,11 +164,10 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
   await expect(page.getByTestId('map-back')).toBeVisible();
   await page.getByTestId('map-back').click();
 
-  // Thinking with them: the answer is never a refusal, and the evidence beside
-  // it says which were the person's own.
-  await page.getByTestId('find-mode-ask').click();
-  await page.getByTestId('map-search-input').fill('zzqx');
-  await page.getByTestId('map-search-input').press('Enter');
+  // Thinking with them starts from a button — the first question is the one
+  // people do not know they can ask. The answer is never a refusal, and the
+  // evidence beside it says which were the person's own.
+  await page.getByTestId('think-start').click();
   await expect(page.getByTestId('map-conversation').getByTestId('answer')).toContainText('side by side');
   await expect(page.getByTestId('used-memories')).toContainText('What you picked');
 
@@ -192,8 +191,12 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
   await expect(page.getByTestId('map-keep')).toContainText('Keep this in “Hiring rules”');
   const before = await page.locator('[data-testid^="pick-"]').count();
   await page.getByTestId('map-keep').click();
-  await expect(page.getByTestId('toast').last()).toContainText('in “Hiring rules” now');
-  // What was kept joins the picks (the pipeline may read more than one line out of it).
+  // The result, where it was asked for: what it became, listed under the line.
+  const keptBlock = page.getByTestId('map-kept');
+  await expect(keptBlock).toContainText('Kept in “Hiring rules”');
+  expect(await keptBlock.locator('.memory-row').count()).toBeGreaterThan(0);
+  await expect(page.getByTestId('map-keep')).toHaveCount(0);
+  // …and it joins the picks (the pipeline may read more than one line out of it).
   await expect.poll(() => page.locator('[data-testid^="pick-"]').count()).toBeGreaterThan(before);
 
   await page.keyboard.press('t');

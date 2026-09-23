@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
+import { MemoryRow } from './Inspector';
 
 /**
  * The conversation, rising from the bar.
@@ -26,6 +27,10 @@ export function MapConversation() {
   const bundle = useUiStore((s) => s.bundle);
   const thinking = useUiStore((s) => s.thinking);
   const [keeping, setKeeping] = useState<string | null>(null);
+  /** What each kept line became — memory ids, by the turn (question + answer) it was kept from. */
+  const [kept, setKept] = useState<Record<string, string[]>>({});
+  const turnKey = (q: string, a: string) => `${q}\n${a}`;
+  const payload = useWorkspaceStore((s) => s.payload);
 
   /*
    * Keeping what was said. A line of the conversation worth remembering
@@ -34,9 +39,9 @@ export function MapConversation() {
    * joins the picks. This is the moment the whole mode is for: thinking
    * together, and deciding what of it to keep.
    */
-  const keep = async (text: string) => {
+  const keep = async (key: string, text: string) => {
     if (keeping) return;
-    setKeeping(text);
+    setKeeping(key);
     const ui = useUiStore.getState();
     const store = useWorkspaceStore.getState();
     try {
@@ -53,7 +58,12 @@ export function MapConversation() {
       }
       if (bundle) for (const id of added) useWorkspaceStore.getState().moveMemory(id, bundle.categoryId);
       if (thinking && added.length > 0) useUiStore.getState().setPicked([...useUiStore.getState().picked, ...added]);
-      ui.toast(bundle ? t('mapchat.keptInto', { name: bundle.name }) : t('mapchat.kept'));
+      // The result, where it was asked for: the memories it became, listed
+      // under the line, and the map going to them. A toast alone was a
+      // sentence with nothing to look at.
+      setKept((k) => ({ ...k, [key]: added }));
+      if (added.length > 0) ui.requestZoomTo(added);
+      else ui.toast(t('mapchat.keptNothing'));
     } catch {
       ui.toast(t('toast.captureFailed'));
     } finally {
@@ -74,6 +84,26 @@ export function MapConversation() {
   }, [prior.length, live?.answer, pending?.text]);
 
   if (!live && !pending && prior.length === 0) return null;
+
+  const keptBlock = (key: string) => {
+    const ids = kept[key];
+    if (!ids || !payload) return null;
+    const memories = ids.map((id) => payload.memories.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => m !== undefined);
+    return (
+      <div className="mapchat__kept" data-testid="map-kept">
+        <span className="mapchat__kept-head">
+          {memories.length === 0
+            ? t('mapchat.keptNothing')
+            : bundle
+              ? t('mapchat.keptHeadInto', { count: memories.length, name: bundle.name })
+              : t('mapchat.keptHead', { count: memories.length })}
+        </span>
+        {memories.map((m) => (
+          <MemoryRow key={m.id} memory={m} payload={payload} onSelect={(id) => go(id)} />
+        ))}
+      </div>
+    );
+  };
 
   const go = (memoryId: string) => {
     const ui = useUiStore.getState();
@@ -103,11 +133,12 @@ export function MapConversation() {
           <div key={i} className="mapchat__turn mapchat__turn--past">
             <p className="mapchat__q">{turn.question}</p>
             <p className="mapchat__a">{clean(turn.answer)}</p>
-            {thinking && (
-              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => void keep(clean(turn.answer))}>
+            {thinking && !kept[turnKey(turn.question, turn.answer)] && (
+              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => void keep(turnKey(turn.question, turn.answer), clean(turn.answer))}>
                 {t('mapchat.keep')}
               </button>
             )}
+            {keptBlock(turnKey(turn.question, turn.answer))}
           </div>
         ))}
         {live && (
@@ -133,16 +164,17 @@ export function MapConversation() {
                   );
                 })}
             </p>
-            {thinking && !live.refused && (
+            {thinking && !live.refused && !kept[turnKey(live.question, live.answer)] && (
               <button
                 className="mapchat__keep"
                 data-testid="map-keep"
                 disabled={keeping !== null}
-                onClick={() => void keep(clean(live.answer))}
+                onClick={() => void keep(turnKey(live.question, live.answer), clean(live.answer))}
               >
                 {keeping ? t('mapchat.keeping') : bundle ? t('mapchat.keepInto', { name: bundle.name }) : t('mapchat.keep')}
               </button>
             )}
+            {!live.refused && keptBlock(turnKey(live.question, live.answer))}
           </div>
         )}
         {pending && (

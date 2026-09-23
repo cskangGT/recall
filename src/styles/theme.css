@@ -6517,3 +6517,42 @@ button.brief__line:hover {
   opacity: 0.5;
   cursor: default;
 }
+
+
+/* The first question, as a button: the whole invitation, in one line. */
+.picks__start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 163, 61, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(232, 163, 61, 0.14);
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.picks__start:hover {
+  background: rgba(232, 163, 61, 0.22);
+}
+
+/* What a kept line became, listed where it was kept. */
+.mapchat__kept {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(232, 163, 61, 0.55);
+}
+
+.mapchat__kept-head {
+  color: #f6dfae;
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+}
