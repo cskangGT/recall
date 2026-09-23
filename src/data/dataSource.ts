@@ -142,6 +142,8 @@ export interface DataSource {
   condenseSource?(sourceId: string): Promise<{ text: string }>;
   /** One text for what a handful of picked memories come to. Reads only. */
   condenseMemories?(memoryIds: string[]): Promise<{ text: string }>;
+  /** What Mado would call a category made of these memories. A suggestion only. */
+  suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
   /** A category made by hand around picked memories; they move in, locked. */
   createCategory?(name: string, memoryIds: string[], parentId?: string | null): Promise<{ categoryId: string; graph: GraphPayload }>;
   updateCategory?(
@@ -511,6 +513,9 @@ export class ApiDataSource implements DataSource {
 
   condenseMemories?: (memoryIds: string[]) => Promise<{ text: string }> = (memoryIds) =>
     this.post<{ text: string }>('/memories/condense-preview', { memoryIds, locale: currentLocale() });
+
+  suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
+    this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });
 
   async createCategory(
     name: string,

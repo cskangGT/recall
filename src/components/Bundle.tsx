@@ -20,6 +20,8 @@ export function Bundle({ onClose }: { onClose: () => void }) {
   const picked = useUiStore((s) => s.picked);
   const payload = useWorkspaceStore((s) => s.payload);
   const canCondense = Boolean(useWorkspaceStore((s) => s.source.condenseMemories));
+  const canSuggest = Boolean(useWorkspaceStore((s) => s.source.suggestCategoryName));
+  const [suggesting, setSuggesting] = useState(false);
   const [way, setWay] = useState<Way>('new');
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
@@ -50,6 +52,19 @@ export function Bundle({ onClose }: { onClose: () => void }) {
     ui.setThinking(false);
     onClose();
     go();
+  };
+
+  const suggest = async () => {
+    if (suggesting) return;
+    setSuggesting(true);
+    try {
+      const { name: proposed } = await useWorkspaceStore.getState().source.suggestCategoryName!(picked);
+      setName(proposed);
+    } catch {
+      useUiStore.getState().toast(t('bundle.suggestFailed'));
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   const makeNew = async () => {
@@ -153,6 +168,16 @@ export function Bundle({ onClose }: { onClose: () => void }) {
             }}
             autoFocus
           />
+          {canSuggest && (
+            <button
+              className="picks__action picks__action--quiet"
+              data-testid="bundle-suggest"
+              disabled={suggesting}
+              onClick={() => void suggest()}
+            >
+              {suggesting ? t('bundle.suggesting') : t('bundle.suggest')}
+            </button>
+          )}
           <button className="picks__action" data-testid="bundle-make" disabled={busy || !name.trim()} onClick={() => void makeNew()}>
             {t('bundle.make', { count: picked.length })}
           </button>

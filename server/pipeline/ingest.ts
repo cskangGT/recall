@@ -921,6 +921,32 @@ export class IngestPipeline {
     return this.ai.condenseSource({ title: source.title ?? '', texts, locale });
   }
 
+  /**
+   * A name for a category the person is about to make around picked
+   * memories — the same namer every reorganization uses, with the existing
+   * category names forbidden so it does not hand back one they already have.
+   * A suggestion only; the person types the name that is kept.
+   */
+  async suggestCategoryName(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ name: string }> {
+    const all = this.repo.listMemories(workspaceId);
+    const texts = memoryIds.map((id) => {
+      const m = all.find((x) => x.id === id);
+      if (!m) throw new Error(`unknown memory ${id}`);
+      return m.text;
+    });
+    const [named] = await this.ai.nameClusters({
+      operation: 'new_category',
+      clusters: [{ cluster_id: 'picked', sample_texts: texts.slice(0, 12) }],
+      forbiddenNames: this.repo.listCategories(workspaceId).map((c) => c.name),
+      locale,
+    });
+    return { name: named?.name?.trim() || texts[0]!.slice(0, 40) };
+  }
+
   /** What a handful of picked memories come to, in one text. Reads, never writes. */
   async condenseMemories(
     workspaceId: string,

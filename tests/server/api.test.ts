@@ -209,6 +209,19 @@ describe('POST categories — a category made by hand around picked memories', (
   });
 });
 
+describe('POST categories/suggest-name — what Mado would call these', () => {
+  it('names the picks through the same namer, avoiding names already taken', async () => {
+    const ids = repo.getGraphPayload(WS).memories.slice(0, 3).map((m) => m.id);
+    const res = await post(`${base}/categories/suggest-name`, { memoryIds: ids });
+    expect(res.status).toBe(200);
+    const { name } = res.body as { name: string };
+    expect(name.length).toBeGreaterThan(0);
+    expect(repo.getGraphPayload(WS).categories.some((c) => c.name === name)).toBe(false);
+    expect((await post(`${base}/categories/suggest-name`, { memoryIds: [] })).status).toBe(400);
+    expect((await post(`${base}/categories/suggest-name`, { memoryIds: ['mem_nope'] })).status).toBe(404);
+  });
+});
+
 describe('POST memories/condense-preview — what picked memories come to', () => {
   it('is a closed door on a model that cannot condense, and wants two or more', async () => {
     const ids = repo.getGraphPayload(WS).memories.slice(0, 2).map((m) => m.id);

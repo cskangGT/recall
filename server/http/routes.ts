@@ -985,6 +985,25 @@ async function handleWorkspace(
   }
 
   /*
+   * POST /api/workspaces/:id/categories/suggest-name — what Mado would call
+   * a category made of these memories. Reads only; the person decides.
+   */
+  if (req.method === 'POST' && resource === 'categories' && resourceId === 'suggest-name' && !action) {
+    const body = asRecord(req.body);
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    if (memoryIds.length === 0) return badRequest('memoryIds is required');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.suggestCategoryName(workspaceId, memoryIds, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'naming failed';
+      return message.startsWith('unknown memory') ? notFound(message) : { status: 502, body: { error: message } };
+    }
+  }
+
+  /*
    * POST /api/workspaces/:id/memories/condense-preview — one text for what a
    * handful of picked memories come to. Writes nothing; the person reads the
    * draft and decides whether to keep it, and keeping it is an ordinary

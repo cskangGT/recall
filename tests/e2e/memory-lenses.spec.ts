@@ -169,6 +169,8 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
 
   // Bundled into a category of one's own: named, locked, the picks inside.
   await page.getByTestId('think-bundle').click();
+  // The seed has no namer door; where a server has one, a suggestion fills the box.
+  await expect(page.getByTestId('bundle-suggest')).toHaveCount(0);
   await page.getByTestId('bundle-name').fill('Hiring rules');
   await page.getByTestId('bundle-make').click();
   await expect(page.getByTestId('toast').last()).toContainText('“Hiring rules” is yours now');
