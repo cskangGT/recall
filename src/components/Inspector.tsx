@@ -4,6 +4,7 @@ import { t, currentLocale } from '../i18n';
 import { mergeCandidates, relatedMemories } from '../core/related';
 import { briefingOf } from '../core/briefing';
 import { effectivePlan, freeCutoff, sleepingCountOf, trialDaysLeft } from '../core/plan';
+import { memoriesUnder, togglePicked } from '../graph/pick';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
@@ -156,6 +157,44 @@ function CategoryName({ category }: { category: Category }) {
  * worse than two. The Inspector keeps the part the browser does not have —
  * where the category sits, what it is made of, and whether you pinned it.
  */
+/**
+ * Picking, from the panel. While thinking on the map a press shows what a
+ * star is here, and this is where it is picked — after it has been read. A
+ * memory picks itself; a category or a person picks the memories it holds,
+ * and the count says how many before the press.
+ */
+function PickAction({ id }: { id: string }) {
+  const nodes = useWorkspaceStore((s) => s.nodes);
+  const edges = useWorkspaceStore((s) => s.edges);
+  const picked = useUiStore((s) => s.picked);
+  const setPicked = useUiStore((s) => s.setPicked);
+  const ids = memoriesUnder(nodes, edges, id);
+  if (ids.length === 0) return null;
+  const have = new Set(picked);
+  const allIn = ids.every((m) => have.has(m));
+  const some = ids.filter((m) => have.has(m)).length;
+  const single = ids.length === 1 && ids[0] === id;
+  const label = allIn
+    ? single
+      ? t('think.unpick')
+      : t('think.unpickAll', { count: ids.length })
+    : single
+      ? t('think.pick')
+      : some > 0
+        ? t('think.pickRest', { count: ids.length - some })
+        : t('think.pickAll', { count: ids.length });
+  return (
+    <button
+      className={`pickaction${allIn ? ' pickaction--on' : ''}`}
+      data-testid="think-pick-action"
+      aria-pressed={allIn}
+      onClick={() => setPicked(togglePicked(picked, ids))}
+    >
+      <span aria-hidden="true">✦</span> {label}
+    </button>
+  );
+}
+
 function CategoryDetail({
   category,
   payload,
@@ -796,9 +835,11 @@ export function Inspector() {
   const showAnswerHere = answer !== null && !answerShownInBrowser;
   // On the map the panel is the conversation — even before the first answer lands.
   const talking = useUiStore((st) => st.asking && st.answerDraft !== null);
+  const thinking = useUiStore((st) => st.thinking && st.view === 'map');
 
   return (
     <aside className="inspector" data-testid="inspector">
+      {thinking && selectedId && <PickAction id={selectedId} />}
       {view === 'map' && !selectedId && (answer !== null || talking) ? (
         <UsedMemories />
       ) : showAnswerHere && !selectedId ? (

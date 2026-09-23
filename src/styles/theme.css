@@ -6269,6 +6269,9 @@ button.brief__line:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 112px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .pick {
@@ -6289,9 +6292,27 @@ button.brief__line:hover {
 }
 
 .pick__text {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.pick__text:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+}
+
+.pick--on {
+  border-color: var(--accent);
+  background: rgba(232, 163, 61, 0.12);
 }
 
 .pick__x {
@@ -6427,4 +6448,33 @@ button.brief__line:hover {
   color: var(--text-faint);
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
+}
+
+
+/* Picking, from the panel: the one loud thing above a selected star. */
+.pickaction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 163, 61, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(232, 163, 61, 0.12);
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pickaction:hover {
+  background: rgba(232, 163, 61, 0.2);
+}
+
+.pickaction--on {
+  border-color: var(--accent);
+  background: rgba(232, 163, 61, 0.24);
+  color: var(--text);
 }

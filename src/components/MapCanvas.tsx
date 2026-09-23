@@ -1,4 +1,3 @@
-import { memoriesUnder, togglePicked } from '../graph/pick';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { drawFrame } from '../graph/renderer';
 import {
@@ -491,8 +490,10 @@ export function MapCanvas({
           return;
         }
         if (hit && ui.thinking) {
-          // Thinking: a press picks, and the camera stays where it is.
-          ui.setPicked(togglePicked(ui.picked, memoriesUnder(baseNodes, baseEdges, hit.id)));
+          // Thinking: a press shows what the star is — in the panel beside —
+          // and the picking is done there, once it has been read. The camera
+          // stays where it is; a pick is a decision, not a journey.
+          ui.select(hit.id);
           return;
         }
         if (hit) {

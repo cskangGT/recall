@@ -30,18 +30,18 @@ export function ThinkSwitch() {
   );
 }
 
-/** How many picks are named before the strip says "and n more". */
-const NAMED = 4;
-
 export function ThinkPicks() {
   const thinking = useUiStore((s) => s.thinking);
   const picked = useUiStore((s) => s.picked);
   const setPicked = useUiStore((s) => s.setPicked);
+  const selectedId = useUiStore((s) => s.selectedId);
   const focused = useUiStore((s) => s.mapFocus !== null);
   const payload = useWorkspaceStore((s) => s.payload);
   const [bundling, setBundling] = useState(false);
   if (!thinking || !payload) return null;
 
+  // Every pick, named: a strip that hid the rest behind "and n more" was a
+  // strip nothing could be taken out of. It wraps, and past a few rows scrolls.
   const memories = picked
     .map((id) => payload.memories.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => m !== undefined);
@@ -81,10 +81,16 @@ export function ThinkPicks() {
       </div>
       {memories.length > 0 && (
         <div className="picks__chips">
-          {memories.slice(0, NAMED).map((m) => (
-            <span key={m.id} className="pick" data-testid={`pick-${m.id}`}>
+          {memories.map((m) => (
+            <span key={m.id} className={`pick${selectedId === m.id ? ' pick--on' : ''}`} data-testid={`pick-${m.id}`}>
               <span className="pick__star" aria-hidden="true">✦</span>
-              <span className="pick__text">{m.text}</span>
+              <button
+                className="pick__text"
+                title={m.text}
+                onClick={() => useUiStore.getState().select(m.id)}
+              >
+                {m.text}
+              </button>
               <button
                 className="pick__x"
                 aria-label={t('think.remove')}
@@ -94,9 +100,6 @@ export function ThinkPicks() {
               </button>
             </span>
           ))}
-          {memories.length > NAMED && (
-            <span className="pick pick--more">{t('think.more', { count: memories.length - NAMED })}</span>
-          )}
         </div>
       )}
       {bundling && memories.length > 0 && <Bundle onClose={() => setBundling(false)} />}

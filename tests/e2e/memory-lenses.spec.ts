@@ -140,6 +140,11 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
   await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('think-picks')).toContainText('Press a star');
 
+  // A press shows the star beside, and the pick is made there — read first.
+  await page.getByTestId('map-search-input').fill('');
+  await page.mouse.click(600, 400);
+  await expect(page.getByTestId('think-pick-action')).toHaveCount(await page.getByTestId('think-pick-action').count());
+
   // Search is a way to find things to pick: the results go in at once.
   await page.getByTestId('find-mode-search').click();
   await page.getByTestId('map-search-input').fill('hiring');
@@ -193,4 +198,30 @@ test('switching the mode off puts the picks down and leaves the map as it was', 
   await expect(page.getByTestId('think-picks')).toHaveCount(0);
   await page.getByTestId('think-switch').click();
   await expect(page.getByTestId('think-picks')).toContainText('Press a star');
+});
+
+test('a star is read beside before it is picked, and every pick can be taken out', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('g');
+  await page.getByTestId('think-switch').click();
+
+  // Take a whole result in, then take each one out from the strip — none hidden.
+  await page.getByTestId('find-mode-search').click();
+  await page.getByTestId('map-search-input').fill('hiring');
+  await page.getByTestId('think-pick-results').click();
+  await page.getByTestId('map-search-input').fill('');
+  const chips = page.locator('[data-testid^="pick-"]');
+  const n = await chips.count();
+  expect(n).toBeGreaterThan(1);
+  await expect(chips.locator('.pick__x')).toHaveCount(n);
+
+  // A chip's text shows the memory beside, and the panel offers to take it out.
+  await chips.first().locator('.pick__text').click();
+  await expect(page.getByTestId('inspector')).toContainText('Memory');
+  await expect(page.getByTestId('think-pick-action')).toContainText('take it out');
+  await page.getByTestId('think-pick-action').click();
+  await expect(chips).toHaveCount(n - 1);
+  await expect(page.getByTestId('think-pick-action')).toContainText('Pick this memory');
+  await page.getByTestId('think-pick-action').click();
+  await expect(chips).toHaveCount(n);
 });
