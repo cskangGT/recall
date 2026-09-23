@@ -657,6 +657,7 @@ export const askBackSchema = {
 const ROLE_WORDS: Record<string, string> = {
   planner: 'a product planner / PM',
   ceo: 'a founder / CEO',
+  clevel: 'a C-level executive (CTO, COO, CMO, CFO…) running a function',
   researcher: 'a researcher',
   developer: 'a software developer',
   designer: 'a designer',
