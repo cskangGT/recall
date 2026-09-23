@@ -278,6 +278,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       google: Boolean(deps.google),
       // A PDF needs somewhere to be kept and a model that reads documents.
       pdf: Boolean(deps.saveImage) && deps.ingest.canReadPdf(),
+      askBack: deps.ingest.canAskBack(),
     });
   }
 
@@ -982,6 +983,24 @@ async function handleWorkspace(
       }
     });
     return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/onboarding/ask-back — the first conversation's
+   * second beat: one question, on the person's own words, asking what is in
+   * the way. Reads nothing and writes nothing.
+   */
+  if (req.method === 'POST' && resource === 'onboarding' && resourceId === 'ask-back' && !action) {
+    if (!deps.ingest.canAskBack()) return { status: 501, body: { error: 'this model cannot ask back' } };
+    const body = asRecord(req.body);
+    const thought = typeof body.thought === 'string' ? body.thought.trim().slice(0, 1000) : '';
+    if (!thought) return badRequest('thought is required');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.askBack(thought, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'ask-back failed' } };
+    }
   }
 
   /*

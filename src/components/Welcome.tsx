@@ -56,9 +56,12 @@ export function Welcome() {
     // The map beat lives on the map; landing here mid-way means it is over.
     return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
   });
+  const [askBackInit] = useState(() => (readStep() === 'why' ? t('welcome.askBack') : null));
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
   const [first, setFirst] = useState<Memory | null>(null);
+  /** Mado's question back — the model's where there is one, the fixed line otherwise (null while it is being written). */
+  const [askBack, setAskBack] = useState<string | null>(askBackInit);
   const [connecting, setConnecting] = useState(false);
 
   const steps: OnboardingStep[] = ['thought', 'why', 'think', 'learn'];
@@ -84,6 +87,20 @@ export function Welcome() {
       setFirst(kept.find((m) => CONCERN_KINDS.has(m.kind)) ?? kept[0]!);
       setDraft('');
       go('why');
+      /*
+       * The ask-back, written on their words where the server has a model
+       * for it. It arrives a beat after the screen does; until then, and
+       * without one, the fixed line asks.
+       */
+      const ask = useWorkspaceStore.getState().source.askBack;
+      if (ask) {
+        setAskBack(null);
+        ask(content)
+          .then((r) => setAskBack(r.question || t('welcome.askBack')))
+          .catch(() => setAskBack(t('welcome.askBack')));
+      } else {
+        setAskBack(t('welcome.askBack'));
+      }
     } catch {
       useUiStore.getState().toast(t('toast.captureFailed'));
     } finally {
@@ -211,8 +228,8 @@ export function Welcome() {
           <p className="welcome__quote" data-testid="welcome-quote">
             {quote(firstText)}
           </p>
-          <p className="arc__greeting-line welcome__ask" data-testid="welcome-ask">
-            {t('welcome.askBack')}
+          <p className={`arc__greeting-line welcome__ask${askBack === null ? ' welcome__ask--writing' : ''}`} data-testid="welcome-ask">
+            {askBack ?? t('welcome.askBackWriting')}
           </p>
           <p className="arc__greeting-aside">{t('welcome.askBackHint')}</p>
           {textarea('welcome-why-input', t('welcome.whyPlaceholder'), () => void submitWhy())}

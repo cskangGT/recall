@@ -215,6 +215,16 @@ export interface AiProvider {
     texts: string[];
     locale?: 'en' | 'ko';
   }): Promise<CondenseDraft>;
+  askBack?(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack>;
+}
+
+/**
+ * Optional: the first conversation's ask-back. Given the one thing a person
+ * cannot decide, one question in the memory's own voice asking what is in
+ * the way. Providers without it leave the greeting to its fixed line.
+ */
+export interface AskBack {
+  question: string;
 }
 
 export interface CondenseDraft {

@@ -209,6 +209,22 @@ describe('POST categories — a category made by hand around picked memories', (
   });
 });
 
+describe('POST onboarding/ask-back — a question on their own words', () => {
+  it('is a closed door on the fixture, and open where the model asks back', async () => {
+    expect((await post(`${base}/onboarding/ask-back`, { thought: 'hire or wait' })).status).toBe(501);
+    class Asking extends FixtureProvider {
+      async askBack(input: { thought: string }) {
+        return { question: `What is in the way of "${input.thought}"?` };
+      }
+    }
+    const asking = { ...deps, ingest: new IngestPipeline(repo, new Asking(), new FixtureEmbeddings()) };
+    const res = await handle({ method: 'POST', path: `${base}/onboarding/ask-back`, body: { thought: 'hire or wait' } }, asking);
+    expect(res.status).toBe(200);
+    expect((res.body as { question: string }).question).toContain('hire or wait');
+    expect((await handle({ method: 'POST', path: `${base}/onboarding/ask-back`, body: {} }, asking)).status).toBe(400);
+  });
+});
+
 describe('POST categories/suggest-name — what Mado would call these', () => {
   it('names the picks through the same namer, avoiding names already taken', async () => {
     const ids = repo.getGraphPayload(WS).memories.slice(0, 3).map((m) => m.id);

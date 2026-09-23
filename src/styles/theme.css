@@ -6652,3 +6652,8 @@ button.brief__line:hover {
   font-size: var(--text-sm);
   cursor: pointer;
 }
+
+.welcome__ask--writing {
+  color: var(--text-faint);
+  font-style: italic;
+}

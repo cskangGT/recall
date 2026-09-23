@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
+  AskBack,
   AiProvider, AnswerResult, AskTurn, CondenseDraft, EmbeddingProvider, ExtractResult, MergeDraft,
   NameCluster,
   NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
@@ -8,7 +9,7 @@ import type {
   Reflection,
 } from './provider.ts';
 import {
-  answerSchema, answerSoFar, buildAnswerPrompt, buildCondensePrompt, buildExtractPrompt,
+  answerSchema, answerSoFar, askBackSchema, buildAnswerPrompt, buildAskBackPrompt, buildCondensePrompt, coerceAskBack, buildExtractPrompt,
   buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
   coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
   mergeSchema, nameByFallback, nameSchema,
@@ -348,6 +349,10 @@ export class OpenAiProvider implements AiProvider {
       await this.json(buildMergePrompt(input), 'merge', mergeSchema, 2048),
       input.texts,
     );
+  }
+
+  async askBack(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack> {
+    return coerceAskBack(await this.json(buildAskBackPrompt(input), 'ask_back', askBackSchema, 300));
   }
 
   async condenseSource(input: {

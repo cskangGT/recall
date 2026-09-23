@@ -891,6 +891,16 @@ export class IngestPipeline {
     return typeof this.ai.mergeMemories === 'function';
   }
 
+  /** The first conversation's ask-back, where the model can write one. */
+  canAskBack(): boolean {
+    return typeof this.ai.askBack === 'function';
+  }
+
+  async askBack(thought: string, locale?: 'en' | 'ko'): Promise<{ question: string }> {
+    if (!this.ai.askBack) throw new Error('this model cannot ask back');
+    return this.ai.askBack({ thought, locale });
+  }
+
   /** Whether the wired model takes a PDF as a document. */
   canReadPdf(): boolean {
     return this.ai.readsPdf === true;

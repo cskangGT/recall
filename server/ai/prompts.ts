@@ -639,6 +639,47 @@ export function buildCondensePrompt(input: {
   return lines.filter((l) => l !== '').join('\n');
 }
 
+// ------------------------------------------------------------------ ask-back
+
+export const askBackSchema = {
+  type: 'object',
+  properties: { question: { type: 'string' } },
+  required: ['question'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The first conversation's second beat. The person has just written the one
+ * thing they cannot decide; Mado asks back — as their own memory would —
+ * what is in the way, so that what they answer becomes the stars the next
+ * beat is made of. One question, on their actual words, never generic.
+ */
+export function buildAskBackPrompt(input: { thought: string; locale?: 'en' | 'ko' }): string {
+  return [
+    'A person has just written down the one thing they cannot decide right now:',
+    '',
+    `  "${input.thought}"`,
+    '',
+    'Ask them back ONE question that gets them to say what is in the way — the',
+    'two or three things holding the decision open. Name what they wrote (the',
+    'specific choice, the people or numbers in it) so the question is plainly',
+    'about their thing, not a template. Then ask for two or three things, one',
+    'per line. Two sentences at most.',
+    '',
+    'Voice: you are this person\'s own memory speaking — warm, direct, familiar',
+    '(반말 in Korean: "~야", "~줘"). No "I" as an assistant, no praise, no',
+    'preamble. Return only the question.',
+    input.locale === 'ko'
+      ? 'Write it in Korean.'
+      : 'Write it in English — unless they wrote in another language, then in that one.',
+  ].join('\n');
+}
+
+export function coerceAskBack(raw: unknown): { question: string } {
+  const o = (raw ?? {}) as { question?: unknown };
+  return { question: typeof o.question === 'string' ? o.question.trim() : '' };
+}
+
 export function coerceCondense(raw: unknown, fallbackTexts: string[]): { text: string } {
   const o = (raw ?? {}) as { text?: unknown };
   const text = typeof o.text === 'string' ? o.text.trim() : '';

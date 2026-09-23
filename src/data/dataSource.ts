@@ -142,6 +142,8 @@ export interface DataSource {
   condenseSource?(sourceId: string): Promise<{ text: string }>;
   /** One text for what a handful of picked memories come to. Reads only. */
   condenseMemories?(memoryIds: string[]): Promise<{ text: string }>;
+  /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
+  askBack?(thought: string): Promise<{ question: string }>;
   /** What Mado would call a category made of these memories. A suggestion only. */
   suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
   /** A category made by hand around picked memories; they move in, locked. */
@@ -326,6 +328,7 @@ export class ApiDataSource implements DataSource {
         condense?: boolean;
         google?: boolean;
         pdf?: boolean;
+        askBack?: boolean;
       };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
@@ -334,6 +337,7 @@ export class ApiDataSource implements DataSource {
         this.condenseMemories = undefined;
       }
       this.readsPdf = caps.pdf === true;
+      if (!caps.askBack) this.askBack = undefined;
       if (!caps.google) {
         this.listMeetings = undefined;
         this.googleStatus = undefined;
@@ -513,6 +517,9 @@ export class ApiDataSource implements DataSource {
 
   condenseMemories?: (memoryIds: string[]) => Promise<{ text: string }> = (memoryIds) =>
     this.post<{ text: string }>('/memories/condense-preview', { memoryIds, locale: currentLocale() });
+
+  askBack?: (thought: string) => Promise<{ question: string }> = (thought) =>
+    this.post<{ question: string }>('/onboarding/ask-back', { thought, locale: currentLocale() });
 
   suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
     this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });

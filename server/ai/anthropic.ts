@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
+  AskBack,
   AiProvider, AnswerResult, AskTurn, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
@@ -9,7 +10,7 @@ import type {
 } from './provider.ts';
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
-  buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, coerceNormalize, extractSchema, nameByFallback,
+  buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, askBackSchema, buildAskBackPrompt, coerceAskBack, coerceNormalize, extractSchema, nameByFallback,
   nameSchema, normalizeSchema, resolveAnswer, resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
@@ -92,6 +93,10 @@ export class AnthropicProvider implements AiProvider {
       { type: 'text', text: buildNormalizePrompt(input) },
     ];
     return coerceNormalize(await this.json(content, normalizeSchema, 2048));
+  }
+
+  async askBack(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack> {
+    return coerceAskBack(await this.json(buildAskBackPrompt(input), askBackSchema, 300));
   }
 
   async extract(input: {
