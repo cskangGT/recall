@@ -30,6 +30,13 @@ import type { Memory } from '../core/types';
 
 const CONCERN_KINDS = new Set<Memory['kind']>(['question', 'decision', 'task']);
 const QUOTE_CHARS = 72;
+/**
+ * The example in the first box, one of several lives — a job, a move, a
+ * degree, a hire, a lease. One example says "this is for people like that";
+ * a different one each visit says "this is for whatever yours is". Picked
+ * once per mount, not per keystroke.
+ */
+const FIRST_EXAMPLES = ['welcome.firstEx.1', 'welcome.firstEx.2', 'welcome.firstEx.3', 'welcome.firstEx.4', 'welcome.firstEx.5'] as const;
 const quote = (text: string) => (text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS - 1)}…` : text);
 
 /** Kept text → memory ids, through the server or the seed's own pipeline. */
@@ -56,6 +63,7 @@ export function Welcome() {
     // The map beat lives on the map; landing here mid-way means it is over.
     return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
   });
+  const [example] = useState(() => FIRST_EXAMPLES[Math.floor(Math.random() * FIRST_EXAMPLES.length)]!);
   const [askBackInit] = useState(() => (readStep() === 'why' ? t('welcome.askBack') : null));
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
@@ -202,7 +210,7 @@ export function Welcome() {
         <>
           <p className="arc__greeting-line">{t('welcome.brain', { product: PRODUCT })}</p>
           <p className="arc__greeting-aside">{t('welcome.first')}</p>
-          {textarea('welcome-first-input', t('welcome.firstPlaceholder'), () => void submitThought())}
+          {textarea('welcome-first-input', t(example), () => void submitThought())}
           <div className="welcome__actions">
             <button
               className="arc__source"
