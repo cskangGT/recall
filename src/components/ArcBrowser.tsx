@@ -419,6 +419,7 @@ export function ArcBrowser() {
         homeIndexOpen(true, payload.memories.length) ? [] : (calendar ?? []),
         {
           firstDayStamp: localStorage.getItem(FIRST_DAY_KEY),
+          firstBundle: localStorage.getItem('mado.ob.firstBundle'),
           weekStamp: localStorage.getItem('mado.ob.weekCard'),
           canRetro: Boolean(useWorkspaceStore.getState().source.diaryRetro),
         },
@@ -900,6 +901,10 @@ export function ArcBrowser() {
                     closeMorning();
                     const ui = useUiStore.getState();
                     if (morning.kind === 'firstDay') return;
+                    if (morning.kind === 'holding') {
+                      ui.goToday();
+                      return;
+                    }
                     if (morning.kind === 'week') {
                       ui.setRetroRange({ from: morning.from, to: morning.to });
                       ui.setView('diary');
@@ -918,6 +923,10 @@ export function ArcBrowser() {
                   {morning.kind === 'firstDay' ? (
                     <span className="arc__morning-line" data-testid="morning-first-day">
                       {t('morning.firstDay', { count: morning.count, product: PRODUCT })}
+                    </span>
+                  ) : morning.kind === 'holding' ? (
+                    <span className="arc__morning-line" data-testid="morning-holding">
+                      {t('morning.holding', { name: morning.name })}
                     </span>
                   ) : morning.kind === 'week' ? (
                     <span className="arc__morning-line" data-testid="morning-week">

@@ -33,6 +33,8 @@ export { localDay };
 export interface MorningOptions {
   /** The day the welcome ended (FIRST_DAY_KEY), if it did. */
   firstDayStamp?: string | null;
+  /** The first bundle's name — the morning after, home asks whether it is still held. */
+  firstBundle?: string | null;
   /** The Monday of the week whose look-back was already offered or put away. */
   weekStamp?: string | null;
   /** The server has the look-back door (source.diaryRetro). */
@@ -47,6 +49,7 @@ export function mondayOf(d: Date): string {
 
 export type MorningCard =
   | { kind: 'firstDay'; count: number }
+  | { kind: 'holding'; name: string }
   | { kind: 'meetings'; count: number; first: Meeting }
   | { kind: 'diary'; sourceId: string; date: string }
   | { kind: 'week'; from: string; to: string; days: number }
@@ -78,6 +81,8 @@ export function morningCardOf(
   if (first) return { kind: 'meetings', count: ahead.length, first };
 
   const yesterday = localDay(new Date(now.getTime() - 24 * HOURS));
+  // The morning after the first conversation: the thing they could not decide, asked after by name.
+  if (opts.firstDayStamp === yesterday && opts.firstBundle) return { kind: 'holding', name: opts.firstBundle };
   const diary = payload.sources.find((s) => s.diary_date === yesterday);
   if (diary) return { kind: 'diary', sourceId: diary.id, date: yesterday };
 

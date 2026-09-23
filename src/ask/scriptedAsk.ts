@@ -126,10 +126,11 @@ function reflect(payload: GraphPayload): ScriptedAnswer {
     .slice(0, 3)
     .map((i) => t('ask.reflect.item', { name: i.name, count: i.count }))
     .join(', ');
+  const you = t('ask.reflect.you', { top: top.name });
   const answer =
     others.length === 0
-      ? `${t('ask.reflect.one', { top: top.name, count: top.count })} ${marks(0, 1)}`
-      : `${t('ask.reflect.lead', { top: top.name, count: top.count })} ${marks(0, 1)} ` +
+      ? `${you} ${t('ask.reflect.one', { top: top.name, count: top.count })} ${marks(0, 1)}`
+      : `${you} ${t('ask.reflect.lead', { top: top.name, count: top.count })} ${marks(0, 1)} ` +
         `${t('ask.reflect.rest', { rest })} ${marks(1, citations.length)}`;
 
   const highlighted = new Set<string>();

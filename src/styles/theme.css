@@ -6556,3 +6556,99 @@ button.brief__line:hover {
   font-size: var(--text-xs);
   letter-spacing: 0.03em;
 }
+
+
+/* ------------------------------------------------- the first conversation */
+
+/* Their own words, quoted back before Mado asks after them. */
+.welcome__quote {
+  max-width: 52ch;
+  margin: 0 0 6px;
+  color: var(--text-dim);
+  font-size: var(--text-md);
+  font-style: italic;
+  text-shadow: 0 1px 10px rgba(22, 13, 30, 0.7);
+}
+
+.welcome__ask {
+  font-size: 22px;
+  max-width: 34ch;
+}
+
+/* The four places, as a list one can read in a breath. */
+.welcome__places {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 24px 0 0;
+  text-align: left;
+}
+
+.welcome__places > div {
+  display: contents;
+}
+
+.welcome__places dt {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.welcome__places dd {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-base);
+}
+
+.welcome__doors-head {
+  margin: 28px 0 0;
+  color: var(--text-dim);
+  font-size: var(--text-base);
+}
+
+/* The guide on the map during the third beat: one strip, top centre. */
+.obguide {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(760px, calc(100% - 420px));
+  padding: 10px 16px;
+  border: 1px solid rgba(232, 163, 61, 0.45);
+  border-radius: var(--radius-md);
+  background: rgb(30 22 44 / 94%);
+  color: var(--text);
+  font-size: var(--text-base);
+  backdrop-filter: blur(10px);
+  animation: rise 0.3s ease both;
+}
+
+.obguide__step {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.obguide__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.obguide__next {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid rgba(232, 163, 61, 0.55);
+  border-radius: var(--radius-pill);
+  background: rgba(232, 163, 61, 0.14);
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

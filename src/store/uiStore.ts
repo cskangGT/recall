@@ -200,6 +200,8 @@ interface UiState {
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
   welcomeAgain: () => void;
+  /** The greeting again, mid-hour: the beat on the map is over and the next one is on the sky. */
+  showGreeting: () => void;
   consumeCenterOn: () => string | null;
   setHovered: (id: string | null) => void;
   select: (id: string | null) => void;
@@ -393,6 +395,16 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   // The way back to the first screen, from Settings: forget the welcome and
   // stand on it again.
+  showGreeting: () =>
+    set({
+      ...CLEARED,
+      view: 'browse',
+      place: 'home',
+      welcomeDismissed: false,
+      thinking: false,
+      picked: [],
+      bundle: null,
+    }),
   welcomeAgain: () => {
     if (typeof localStorage !== 'undefined') localStorage.removeItem(WELCOMED_KEY);
     // The first hour starts over with it — from the first thought.

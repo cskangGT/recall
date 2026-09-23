@@ -438,6 +438,8 @@ export function buildAnswerPrompt(input: {
         'their interests. The interests, by how much each took:',
         ...input.reflective.interests.map((i) => `  - ${i.name} (${i.count})`),
         '',
+        'Open with one sentence about their own way — a pattern in what they keep',
+        'or how they think, said to them ("넌 … 편이야" / "you tend to …") — then',
         'They are asking what has been on their mind lately. Answer by looking',
         'around, not looking up: say what these weeks were mostly about, what',
         'kept coming back, what was new — three or four sentences, concrete,',

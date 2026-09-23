@@ -1,44 +1,66 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The first hour, and every visit after it.
+ * The first conversation, and every visit after it.
  *
- * The greeting asks for the cheapest thing a person has — one thought, typed
- * — and the memory answers it in its own voice: what it kept and where. Then
- * what has piled up (the calendar beat is only drawn where the server has
- * that door; the seed has none). However the greeting is left, the next
- * visit opens on home, the logo means home, and Settings keeps the way back.
+ * Not a tour: one thing this person cannot decide, taken all the way through
+ * with Mado — what it is, what is in the way, those words threaded on the
+ * map and tied into one thought, a line of it kept as their first category,
+ * and only then what just happened said in three lines with the four
+ * places. However the greeting is left, the next visit opens on home, and
+ * the morning after asks after the thing by name.
  */
-const THOUGHT =
-  'I need to decide whether we should hire a second infrastructure engineer this quarter or wait until the seed round closes.';
+const THOUGHT = 'I still cannot decide whether to hire a second infrastructure engineer before the round closes.';
+const WHY = [
+  'The runway should cover eighteen months and it covers fourteen right now.',
+  'I have not asked the first five engineers whether they would refer someone.',
+].join('\n');
 
-test('one thought in, the memory answers, and home opens on the first day', async ({ page }) => {
+test('one thing undecided, taken all the way through', async ({ page }) => {
   await page.goto('/');
   const welcome = page.getByTestId('welcome');
   await expect(welcome).toHaveAttribute('data-step', 'thought');
-  await expect(page.getByTestId('welcome-step')).toHaveText('1 / 2');
-
-  // Nothing to hand over yet, nothing to press.
+  await expect(welcome).toContainText('keep not deciding');
   await expect(page.getByTestId('welcome-first-send')).toBeDisabled();
+
+  // Beat 1 → 2: their words quoted back, and Mado asking after them.
   await page.getByTestId('welcome-first-input').fill(THOUGHT);
   await page.getByTestId('welcome-first-input').press('Enter');
+  await expect(welcome).toHaveAttribute('data-step', 'why');
+  await expect(page.getByTestId('welcome-quote')).toContainText('second infrastructure engineer');
+  await expect(page.getByTestId('welcome-ask')).toContainText('keeping you from deciding');
 
-  // The payoff: read back in the memory's voice, and where it went.
-  const reply = page.getByTestId('welcome-reply');
-  await expect(reply).toContainText('Read it.');
-  await expect(reply).toContainText('hire a second');
+  // Beat 2 → 3: what is in the way goes in, and the map opens on all of it,
+  // picked and threaded, with Mado's first answer already asked for.
+  await page.getByTestId('welcome-why-input').fill(WHY);
+  await page.getByTestId('welcome-why-send').click();
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await expect(page.getByTestId('onboarding-guide')).toBeVisible();
+  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.locator('[data-testid^="pick-"]').count()).toBeGreaterThanOrEqual(2);
+  await expect(page.getByTestId('map-conversation').getByTestId('answer')).toContainText('side by side');
+  await expect(page.getByTestId('onboarding-guide')).toContainText('Keep a line of it');
 
-  // The second beat: what has piled up — every way in, and a way past.
-  await page.getByTestId('welcome-next').click();
-  await expect(welcome).toHaveAttribute('data-step', 'pile');
-  await expect(page.getByTestId('welcome-step')).toHaveText('2 / 2');
+  // A line kept makes the first category — theirs, named, their stars inside.
+  await page.getByTestId('map-keep').click();
+  await expect(page.getByTestId('map-kept')).toContainText('Kept in');
+  await expect(page.getByTestId('think-bundle-name')).toBeVisible();
+  await expect(page.getByTestId('onboarding-guide')).toContainText('is yours now');
+
+  // Beat 4: what just happened, the four places, the doors — then begin.
+  await page.getByTestId('onboarding-next').click();
+  await expect(welcome).toHaveAttribute('data-step', 'learn');
+  await expect(welcome).toContainText('put something in, asked, and kept');
+  await expect(page.getByTestId('welcome-places')).toContainText('Diary');
   await expect(page.getByTestId('fill-sources')).toBeVisible();
   await page.getByTestId('welcome-finish').click();
-
-  // The hour ends at home; today, behind its first door, says the first day once.
   await expect(page.getByTestId('home')).toBeVisible();
-  await page.getByTestId('door-today').click();
-  await expect(page.getByTestId('morning-first-day')).toContainText('came to Mado today');
+
+  // The category is real: it is in Memory.
+  await page.keyboard.press('t');
+  const index = page.getByTestId('category-index');
+  await expect(index).toBeVisible();
+  expect(await index.locator('[data-testid^="index-card-"]').count()).toBeGreaterThan(6);
 
   // Next visit: straight to home, no greeting.
   await page.reload();
@@ -46,13 +68,31 @@ test('one thought in, the memory answers, and home opens on the first day', asyn
   await expect(page.getByTestId('welcome')).toHaveCount(0);
 });
 
+test('the morning after asks after the thing by name', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('welcome-first-input').fill(THOUGHT);
+  await page.getByTestId('welcome-first-input').press('Enter');
+  await page.getByTestId('welcome-why-skip').click();
+  await expect(page.getByTestId('map-conversation').getByTestId('answer')).toBeVisible();
+  await page.getByTestId('map-keep').click();
+  await expect(page.getByTestId('think-bundle-name')).toBeVisible();
+  const name = (await page.getByTestId('think-bundle-name').textContent())!.replace('✦', '').trim();
+  await page.getByTestId('onboarding-next').click();
+  await page.getByTestId('welcome-finish').click();
+  await expect(page.getByTestId('home')).toBeVisible();
+
+  await page.clock.setFixedTime(new Date(Date.now() + 24 * 3600 * 1000));
+  await page.reload();
+  await page.getByTestId('door-today').click();
+  await expect(page.getByTestId('morning-holding')).toContainText(name);
+  await expect(page.getByTestId('morning-holding')).toContainText('Still?');
+});
+
 test('Enter on the greeting goes to the thought box, and the shortcuts still work', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('welcome')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('welcome-first-input')).toBeFocused();
-
-  // Escape hands the keyboard back; a single-key shortcut navigates again.
   await page.keyboard.press('Escape');
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
@@ -60,11 +100,9 @@ test('Enter on the greeting goes to the thought box, and the shortcuts still wor
 
 test('looking around first skips the hour — home, the logo, and the way back', async ({ page }) => {
   await page.goto('/');
-  // "Look around" means it: the categories, not another set of doors.
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
 
-  // The logo, for someone who has been here, is home — not the greeting.
   await page.getByTestId('index-card-cat_ai_tooling').click();
   await expect(page.getByTestId('reading-list')).toContainText('AI Tooling');
   await page.getByTestId('rail-home').click();
@@ -74,7 +112,6 @@ test('looking around first skips the hour — home, the logo, and the way back',
   await page.getByTestId('door-today').click();
   await expect(page.getByTestId('morning-first-day')).toHaveCount(0);
 
-  // Settings keeps the way back, and the hour starts over from its first beat.
   await page.keyboard.press(',');
   await page.getByTestId('settings-welcome-again').click();
   await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'thought');

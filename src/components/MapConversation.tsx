@@ -4,6 +4,7 @@ import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
 import { MemoryRow } from './Inspector';
+import { readStep, FIRST_BUNDLE_KEY } from '../core/onboarding';
 
 /**
  * The conversation, rising from the bar.
@@ -57,6 +58,37 @@ export function MapConversation() {
         added = result.addedMemoryIds;
       }
       if (bundle) for (const id of added) useWorkspaceStore.getState().moveMemory(id, bundle.categoryId);
+      /*
+       * The first conversation: the first line kept is what makes the first
+       * category — named by Mado where a namer exists, else after the words
+       * — and the person's stars move in with it. Their worry, come back as
+       * a structure of their own.
+       */
+      if (!bundle && readStep() === 'think' && thinking) {
+        const st = useWorkspaceStore.getState();
+        const picks = [...useUiStore.getState().picked, ...added];
+        let name = '';
+        try {
+          name = (await st.source.suggestCategoryName?.(picks))?.name ?? '';
+        } catch {
+          name = '';
+        }
+        if (!name) {
+          const firstPick = st.payload?.memories.find((m) => m.id === picks[0]);
+          // Without a namer: the first clause of the first pick, cut on a word.
+          const clause = firstPick ? firstPick.text.split(/[,.—\n?!]/)[0]!.trim() : '';
+          const words = clause.split(/\s+/);
+          let short = '';
+          for (const w of words) {
+            if ((short + ' ' + w).trim().length > 22) break;
+            short = (short + ' ' + w).trim();
+          }
+          name = short || t('bundle.condensedTitle');
+        }
+        const categoryId = await st.createCategory(name, picks);
+        useUiStore.getState().setBundle({ categoryId, name });
+        localStorage.setItem(FIRST_BUNDLE_KEY, name);
+      }
       if (thinking && added.length > 0) useUiStore.getState().setPicked([...useUiStore.getState().picked, ...added]);
       // The result, where it was asked for: the memories it became, listed
       // under the line, and the map going to them. A toast alone was a

@@ -2,63 +2,47 @@ import { useMemo, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
+import { runAsk } from '../ask/runAsk';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
-import { readStep, writeStep, type OnboardingStep } from '../core/onboarding';
+import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep } from '../core/onboarding';
 import { SourceChips } from './SourceChips';
 import { t, PRODUCT } from '../i18n';
-import type { GraphPayload, Memory } from '../core/types';
+import type { Memory } from '../core/types';
 
 /**
- * The first hour.
+ * The first conversation.
  *
- * The greeting used to be a menu — four kinds of thing, pick one, find the
- * way in. A menu has no moment in it: nothing on the screen had read
- * anything of yours until you had found a file to give it. So the first
- * screen now asks for the cheapest thing a person has — one thought, typed —
- * and answers it in the memory's own voice: what it kept, what kind of thing
- * it was, where it put it. That is the whole product in thirty seconds.
+ * Not a tour and not a form: one thing this person cannot decide, taken all
+ * the way through with Mado in a few minutes. The beats are the loop the
+ * product runs every day — open, pull, keep — met once, in order, on the
+ * person's own words:
  *
- * Two optional beats follow, each with its own payoff: the calendar (the
- * week, read back) where the server has that door, and what has piled up
- * (the bulk reveal). Every beat can be skipped, and "look around first"
- * skips them all. The step survives a trip to Google's consent screen
- * (core/onboarding), and however the greeting is left, ArcBrowser closes
- * the hour and stamps the first day for the card home shows next.
+ *   thought  the thing they cannot decide (the stakes are theirs)
+ *   why      Mado asks back; they say what is in the way — two or three
+ *            lines, each a memory, each a star
+ *   think    the map: those stars threaded together, and Mado's first
+ *            answer tying their words into one thought; a line of it kept
+ *            becomes their first category (OnboardingGuide holds that beat)
+ *   learn    what just happened, in three lines; the four places; the doors
+ *
+ * Every beat can be passed, and "look around first" passes them all.
  */
 
 const CONCERN_KINDS = new Set<Memory['kind']>(['question', 'decision', 'task']);
-const KIND_KEY = {
-  question: 'briefing.kind.question',
-  decision: 'briefing.kind.decision',
-  task: 'briefing.kind.task',
-} as const;
-
-/** A quoted memory should read as a quote, not a paragraph. */
-const QUOTE_CHARS = 64;
+const QUOTE_CHARS = 72;
 const quote = (text: string) => (text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS - 1)}…` : text);
 
-/** What the memory says back about the thought it was just handed. */
-function replyFor(payload: GraphPayload, addedIds: string[]): string[] {
-  const added = addedIds
-    .map((id) => payload.memories.find((m) => m.id === id))
-    .filter((m): m is Memory => m !== undefined);
-  const first = added[0];
-  if (!first) return [t('welcome.read.nothing')];
-
-  const took = added.length === 1 ? t('welcome.read.took.one') : t('welcome.read.took', { count: added.length });
-  // A question, a decision or a task is what the briefing calls "on the
-  // table" — say so, because that is where they will meet it tomorrow.
-  const concern = added.find((m) => CONCERN_KINDS.has(m.kind));
-  const where = concern
-    ? t('welcome.read.concern', {
-        text: quote(concern.text),
-        kind: t(KIND_KEY[concern.kind as keyof typeof KIND_KEY]),
-      })
-    : t('welcome.read.filed', {
-        text: quote(first.text),
-        category: payload.categories.find((c) => c.id === first.category_id)?.name ?? '',
-      });
-  return [took, where, t('welcome.read.ask')];
+/** Kept text → memory ids, through the server or the seed's own pipeline. */
+async function keepText(title: string, content: string): Promise<string[]> {
+  const store = useWorkspaceStore.getState();
+  if (store.source.capture) {
+    const result = await store.source.capture({ type: 'text', title, content });
+    store.applyPayload(result.graph);
+    return result.addedMemoryIds ?? [];
+  }
+  const result = runBatchPipeline(store.payload!, [{ title, content }]);
+  store.applyPayload(result.payload);
+  return result.addedMemoryIds;
 }
 
 export function Welcome() {
@@ -69,52 +53,37 @@ export function Welcome() {
 
   const [step, setStep] = useState<OnboardingStep>(() => {
     const stored = readStep();
-    return stored === 'done' ? 'thought' : stored;
+    // The map beat lives on the map; landing here mid-way means it is over.
+    return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
   });
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
-  const [reply, setReply] = useState<string[] | null>(null);
+  const [first, setFirst] = useState<Memory | null>(null);
   const [connecting, setConnecting] = useState(false);
 
-  // A step whose door this server does not have is not drawn — it is passed.
-  const current: OnboardingStep = step === 'calendar' && !canConnect ? 'pile' : step;
-  const steps: OnboardingStep[] = canConnect ? ['thought', 'calendar', 'pile'] : ['thought', 'pile'];
-
+  const steps: OnboardingStep[] = ['thought', 'why', 'think', 'learn'];
   const go = (next: OnboardingStep) => {
     writeStep(next);
     setStep(next);
   };
-  const after = (from: OnboardingStep): OnboardingStep => steps[steps.indexOf(from) + 1] ?? 'done';
-  const advance = () => {
-    const next = after(current);
-    if (next === 'done') dismissWelcome();
-    else go(next);
-  };
 
-  const submit = async () => {
+  /* Beat 1: the thing they cannot decide. */
+  const submitThought = async () => {
     const content = draft.trim();
     if (!content || reading) return;
     setReading(true);
     try {
-      const store = useWorkspaceStore.getState();
-      const title = t('welcome.firstTitle');
-      let addedIds: string[] = [];
-      if (store.source.capture) {
-        const result = await store.source.capture({ type: 'text', title, content });
-        store.applyPayload(result.graph);
-        addedIds = result.addedMemoryIds ?? [];
-      } else {
-        // Seed mode: the same thought through the local pipeline — quietly,
-        // the way the diary does it. One line does not deserve the bulk reveal.
-        const result = runBatchPipeline(store.payload!, [{ title, content }]);
-        store.applyPayload(result.payload);
-        addedIds = result.addedMemoryIds;
-      }
+      const added = await keepText(t('welcome.firstTitle'), content);
       const next = useWorkspaceStore.getState().payload;
-      setReply(next ? replyFor(next, addedIds) : [t('welcome.read.nothing')]);
-      // The hour has begun: from here on, leaving the greeting is a first day.
-      if (addedIds.length > 0) writeStep('thought');
+      const kept = added.map((id) => next?.memories.find((m) => m.id === id)).filter((m): m is Memory => m !== undefined);
+      if (kept.length === 0) {
+        useUiStore.getState().toast(t('welcome.read.nothing'));
+        return;
+      }
+      writeFirstPicks(added);
+      setFirst(kept.find((m) => CONCERN_KINDS.has(m.kind)) ?? kept[0]!);
       setDraft('');
+      go('why');
     } catch {
       useUiStore.getState().toast(t('toast.captureFailed'));
     } finally {
@@ -122,13 +91,45 @@ export function Welcome() {
     }
   };
 
+  /* Beat 2: what is in the way — then straight onto the map with all of it in hand. */
+  const submitWhy = async () => {
+    const content = draft.trim();
+    if (!content || reading) return;
+    setReading(true);
+    try {
+      const added = await keepText(t('welcome.whyTitle'), content);
+      const picks = [...readFirstPicks(), ...added];
+      writeFirstPicks(picks);
+      setDraft('');
+      startThinking(picks);
+    } catch {
+      useUiStore.getState().toast(t('toast.captureFailed'));
+    } finally {
+      setReading(false);
+    }
+  };
+
+  /*
+   * Beat 3 begins: the map, with their stars picked and threaded, and Mado
+   * asked the one question people do not know they can ask. The guide on
+   * the map carries the beat from there (OnboardingGuide).
+   */
+  const startThinking = (picks: string[]) => {
+    const ui = useUiStore.getState();
+    writeStep('think');
+    ui.setThinking(true);
+    ui.setPicked(picks);
+    ui.setFindMode('map', 'ask');
+    ui.setView('map');
+    setTimeout(() => void runAsk(t('welcome.openingQ')), 350);
+  };
+
   const connect = async () => {
     const source = useWorkspaceStore.getState().source;
     if (!source.connectGoogle || connecting) return;
     setConnecting(true);
     try {
-      // Remember the beat before leaving for Google; the return lands on it.
-      writeStep('calendar');
+      writeStep('learn');
       const { url } = await source.connectGoogle();
       window.location.assign(url);
     } catch {
@@ -137,7 +138,6 @@ export function Welcome() {
     }
   };
 
-  /* The week, read back — what is still ahead between now and Sunday. */
   const week = useMemo(() => {
     if (!meetings?.connected) return null;
     const now = new Date();
@@ -149,140 +149,140 @@ export function Welcome() {
   }, [meetings]);
 
   if (!payload) return null;
+  const firstText = first?.text ?? payload.memories.find((m) => m.id === readFirstPicks()[0])?.text ?? '';
+  const bundleName = typeof localStorage !== 'undefined' ? localStorage.getItem('mado.ob.firstBundle') : null;
+
+  const textarea = (testId: string, placeholder: string, onSubmit: () => void) => (
+    <textarea
+      id="welcome-first-input"
+      className="welcome__input"
+      data-testid={testId}
+      aria-label={placeholder}
+      placeholder={placeholder}
+      rows={3}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          e.currentTarget.blur();
+          return;
+        }
+        if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+        e.preventDefault();
+        onSubmit();
+      }}
+    />
+  );
 
   return (
-    <div className="arc__greeting" data-testid="welcome" data-step={current}>
+    <div className="arc__greeting" data-testid="welcome" data-step={step}>
       <span className="welcome__step" data-testid="welcome-step">
-        {t('welcome.step', { n: steps.indexOf(current) + 1, total: steps.length })}
+        {t('welcome.step', { n: steps.indexOf(step) + 1, total: steps.length })}
       </span>
 
-      {current === 'thought' && (
+      {step === 'thought' && (
         <>
           <p className="arc__greeting-line">{t('welcome.brain', { product: PRODUCT })}</p>
-          {/* Once it has been answered, the ask steps back — the reply is the screen. */}
-          {!reply && <p className="arc__greeting-aside">{t('welcome.first')}</p>}
-          {reply ? (
-            <div className="welcome__reply" data-testid="welcome-reply">
-              {reply.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-            </div>
-          ) : (
-            <textarea
-              id="welcome-first-input"
-              className="welcome__input"
-              data-testid="welcome-first-input"
-              aria-label={t('welcome.firstTitle')}
-              placeholder={t('welcome.firstPlaceholder')}
-              rows={3}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  // Hand the keyboard back, like the composer does.
-                  e.stopPropagation();
-                  e.currentTarget.blur();
-                  return;
-                }
-                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
-                e.preventDefault();
-                void submit();
-              }}
-            />
-          )}
-          <div className="welcome__actions">
-            {reply ? (
-              <>
-                <button className="arc__source" data-testid="welcome-next" onClick={advance}>
-                  {t('welcome.next')}
-                </button>
-                <button className="welcome__quiet" data-testid="welcome-another" onClick={() => setReply(null)}>
-                  {t('welcome.another')}
-                </button>
-              </>
-            ) : (
-              <button
-                className="arc__source"
-                data-testid="welcome-first-send"
-                disabled={reading || draft.trim().length === 0}
-                onClick={() => void submit()}
-              >
-                {reading ? t('stage.reading') : t('welcome.firstSend')}
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      {current === 'calendar' && (
-        <>
-          <p className="arc__greeting-line">{t('meetings.connect.title')}</p>
-          {week ? (
-            <p className="arc__greeting-aside" data-testid="welcome-week">
-              {week.first
-                ? t('welcome.calendar.week', {
-                    count: week.count,
-                    title: week.first.title,
-                    who: attendeeLine(week.first) || t('meetings.group.today'),
-                  })
-                : t('welcome.calendar.empty')}
-            </p>
-          ) : (
-            <p className="arc__greeting-aside">{t('welcome.calendar.line', { product: PRODUCT })}</p>
-          )}
-          <div className="welcome__actions">
-            {week ? (
-              <button className="arc__source" data-testid="welcome-next" onClick={advance}>
-                {t('welcome.next')}
-              </button>
-            ) : (
-              <>
-                <button
-                  className="arc__source"
-                  data-testid="welcome-connect"
-                  disabled={connecting}
-                  onClick={() => void connect()}
-                >
-                  {t('meetings.connect.cta')}
-                </button>
-                <button className="welcome__quiet" data-testid="welcome-later" onClick={advance}>
-                  {t('welcome.calendar.later')}
-                </button>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {current === 'pile' && (
-        <>
-          <p className="arc__greeting-line">{t('welcome.pile.line', { product: PRODUCT })}</p>
-          <SourceChips />
+          <p className="arc__greeting-aside">{t('welcome.first')}</p>
+          {textarea('welcome-first-input', t('welcome.firstPlaceholder'), () => void submitThought())}
           <div className="welcome__actions">
             <button
-              className="welcome__quiet"
-              data-testid="welcome-paste"
-              onClick={() => useUiStore.getState().setCaptureOpen(true)}
+              className="arc__source"
+              data-testid="welcome-first-send"
+              disabled={reading || draft.trim().length === 0}
+              onClick={() => void submitThought()}
             >
-              {t('welcome.unfold.pasteLink')}
+              {reading ? t('stage.reading') : t('welcome.firstSend')}
             </button>
-            <span className="arc__unfold-aside">{t('welcome.unfold.dropToo')}</span>
           </div>
+          {payload.memories.length > 0 && (
+            <button className="arc__browse" data-testid="door-browse" onClick={() => useUiStore.getState().goBrowse()}>
+              <span className="arc__browse-name">{t('welcome.browse')}</span>
+              <span className="arc__browse-hint">{t('welcome.browseHint', { memories: payload.memories.length })}</span>
+            </button>
+          )}
+        </>
+      )}
+
+      {step === 'why' && (
+        <>
+          {/* Mado, in its own voice, asking back — the loop opens here. */}
+          <p className="welcome__quote" data-testid="welcome-quote">
+            {quote(firstText)}
+          </p>
+          <p className="arc__greeting-line welcome__ask" data-testid="welcome-ask">
+            {t('welcome.askBack')}
+          </p>
+          <p className="arc__greeting-aside">{t('welcome.askBackHint')}</p>
+          {textarea('welcome-why-input', t('welcome.whyPlaceholder'), () => void submitWhy())}
           <div className="welcome__actions">
-            <button className="arc__source" data-testid="welcome-finish" onClick={dismissWelcome}>
-              {t('welcome.pile.later')}
+            <button
+              className="arc__source"
+              data-testid="welcome-why-send"
+              disabled={reading || draft.trim().length === 0}
+              onClick={() => void submitWhy()}
+            >
+              {reading ? t('stage.reading') : t('welcome.whySend')}
+            </button>
+            <button
+              className="welcome__quiet"
+              data-testid="welcome-why-skip"
+              onClick={() => startThinking(readFirstPicks())}
+            >
+              {t('welcome.whySkip')}
             </button>
           </div>
         </>
       )}
 
-      {current === 'thought' && !reply && payload.memories.length > 0 && (
-        <button className="arc__browse" data-testid="door-browse" onClick={() => useUiStore.getState().goBrowse()}>
-          <span className="arc__browse-name">{t('welcome.browse')}</span>
-          <span className="arc__browse-hint">
-            {t('welcome.browseHint', { memories: payload.memories.length })}
-          </span>
-        </button>
+      {step === 'learn' && (
+        <>
+          <p className="arc__greeting-line">{t('welcome.learn.title')}</p>
+          <p className="arc__greeting-aside">
+            {bundleName ? t('welcome.learn.asideBundle', { name: bundleName, product: PRODUCT }) : t('welcome.learn.aside', { product: PRODUCT })}
+          </p>
+          <dl className="welcome__places" data-testid="welcome-places">
+            <div>
+              <dt>{t('welcome.place.home')}</dt>
+              <dd>{t('welcome.place.homeHint')}</dd>
+            </div>
+            <div>
+              <dt>{t('welcome.place.today')}</dt>
+              <dd>{t('welcome.place.todayHint')}</dd>
+            </div>
+            <div>
+              <dt>{t('welcome.place.memory')}</dt>
+              <dd>{t('welcome.place.memoryHint')}</dd>
+            </div>
+            <div>
+              <dt>{t('welcome.place.diary')}</dt>
+              <dd>{t('welcome.place.diaryHint')}</dd>
+            </div>
+          </dl>
+          <p className="welcome__doors-head">{t('welcome.pile.line', { product: PRODUCT })}</p>
+          <SourceChips />
+          {canConnect && (
+            <div className="welcome__actions">
+              {week ? (
+                <span className="arc__unfold-aside" data-testid="welcome-week">
+                  {week.first
+                    ? t('welcome.calendar.week', { count: week.count, title: week.first.title, who: attendeeLine(week.first) || t('meetings.group.today') })
+                    : t('welcome.calendar.empty')}
+                </span>
+              ) : (
+                <button className="welcome__quiet" data-testid="welcome-connect" disabled={connecting} onClick={() => void connect()}>
+                  {t('welcome.calendar.short')}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="welcome__actions">
+            <button className="arc__source" data-testid="welcome-finish" onClick={dismissWelcome}>
+              {t('welcome.begin')}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

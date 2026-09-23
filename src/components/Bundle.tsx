@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { t, josa } from '../i18n';
+import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
@@ -78,7 +78,7 @@ export function Bundle({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       const id = await useWorkspaceStore.getState().createCategory(trimmed, picked);
-      finish(t('bundle.made', { name: trimmed, count: picked.length }).replace('{은/는}', josa(trimmed, '은', '는').slice(trimmed.length)), () => {
+      finish(t('bundle.made', { name: trimmed, count: picked.length }), () => {
         const ui = useUiStore.getState();
         ui.setBundle({ categoryId: id, name: trimmed });
         ui.setFindMode('map', 'ask');

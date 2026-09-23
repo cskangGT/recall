@@ -9,6 +9,7 @@ import { isImage, isPdf, takeImages, takePdfs } from './capture/images';
 import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
 import { ThinkSwitch } from './components/ThinkTogether';
+import { OnboardingGuide } from './components/OnboardingGuide';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -144,7 +145,7 @@ export function App() {
         ui.toast(t('toast.googleConnected'));
         // Mid-welcome, the return lands back on the calendar beat — the week
         // is read out there. Anywhere else, it opens the meetings page.
-        const midWelcome = !hasBeenWelcomed() && readStep() === 'calendar';
+        const midWelcome = !hasBeenWelcomed() && readStep() === 'learn';
         if (!midWelcome) ui.setView('meetings');
       } else if (google === 'failed') {
         ui.toast(t('toast.googleFailed'));
@@ -470,6 +471,7 @@ export function App() {
         {/* The map is everything at once, so it needs a way to find one thing
             in it. Browse has the composer in the same slot. */}
         {view === 'map' && nodes.length > 0 && <ThinkSwitch />}
+        <OnboardingGuide />
         {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'sources' && <ArchiveFind />}
         {view === 'map' && nodes.length === 0 && (

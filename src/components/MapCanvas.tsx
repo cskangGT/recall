@@ -15,6 +15,7 @@ import { hitTest } from '../graph/hitTest';
 import { focusTargetsFor } from '../graph/focus';
 import { runLayout } from '../graph/layout';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { readStep } from '../core/onboarding';
 import { useUiStore } from '../store/uiStore';
 import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
 import type { GraphNode } from '../core/types';
@@ -210,7 +211,7 @@ export function MapCanvas({
            */
           const talking = ui.findMode.map === 'ask' && ui.answer !== null && !ui.answer.found;
           // The lens switch sits across the top; the panel takes the lower half.
-          const top = talking ? 70 : 0;
+          const top = talking ? (readStep() === 'think' ? 110 : 70) : 0;
           const freeH = talking ? viewport.h * 0.5 - top : viewport.h;
           const fit = fitToBounds(targets, { w: viewport.w, h: freeH }, 0.35);
           const zoom = Math.min(fit.zoom, 2.2);
