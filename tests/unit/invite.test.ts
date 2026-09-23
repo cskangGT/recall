@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveInvite } from '../../src/data/dataSource';
+import { resolveInvite, resolveWorkspaceFromLink, returnLinkFor } from '../../src/data/dataSource';
 
 /**
  * The invite's client half: a tester clicks one link with ?invite= once, the
@@ -29,5 +29,29 @@ describe('resolveInvite', () => {
   it('no link, nothing stored — no header at all', () => {
     expect(resolveInvite('', null)).toBeNull();
     expect(resolveInvite('?invite=', null)).toBeNull();
+  });
+});
+
+/**
+ * Before there is an account the link is the account: a workspace named in
+ * it becomes this browser's, and the link handed out carries the workspace
+ * and the invite so opening it anywhere is enough.
+ */
+describe('the way back', () => {
+  it('a link that names a workspace is followed and remembered', () => {
+    let saved: string | null = null;
+    expect(resolveWorkspaceFromLink('?ws=ws_ab12&invite=t', (id) => (saved = id))).toBe('ws_ab12');
+    expect(saved).toBe('ws_ab12');
+  });
+
+  it('ignores a missing or malformed id', () => {
+    expect(resolveWorkspaceFromLink('?api=1', () => {})).toBeNull();
+    expect(resolveWorkspaceFromLink('?ws=../etc', () => {})).toBeNull();
+    expect(resolveWorkspaceFromLink('?ws=', () => {})).toBeNull();
+  });
+
+  it('the link out carries the workspace and, where there is one, the invite', () => {
+    expect(returnLinkFor('http://43.202.24.252', 'ws_ab12', 'tok')).toBe('http://43.202.24.252/?ws=ws_ab12&invite=tok');
+    expect(returnLinkFor('https://mado.example', 'ws_ab12', null)).toBe('https://mado.example/?ws=ws_ab12');
   });
 });

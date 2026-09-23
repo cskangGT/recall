@@ -6,6 +6,7 @@ import { runAsk } from '../ask/runAsk';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
 import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep } from '../core/onboarding';
 import { SourceChips } from './SourceChips';
+import { ReturnLink } from './ReturnLink';
 import { t, PRODUCT } from '../i18n';
 import type { Memory } from '../core/types';
 
@@ -322,6 +323,8 @@ export function Welcome() {
               )}
             </div>
           )}
+          {/* Before there is an account, the link is the account: said once, here, where the first thing worth keeping just happened. */}
+          <ReturnLink />
           <div className="welcome__actions">
             <button className="arc__source" data-testid="welcome-finish" onClick={dismissWelcome}>
               {t('welcome.begin')}

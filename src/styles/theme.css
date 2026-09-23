@@ -6663,3 +6663,55 @@ button.brief__line:hover {
   color: var(--text-faint);
   font-style: italic;
 }
+
+
+/* ------------------------------------------------------------- the way back */
+.returnlink {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(520px, 100% - 48px);
+  margin-top: 26px;
+  text-align: left;
+}
+
+.returnlink--compact {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.returnlink__hint {
+  color: var(--text-dim);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.returnlink__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.returnlink__url {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.returnlink__url:focus {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.settings__row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}

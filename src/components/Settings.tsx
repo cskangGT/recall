@@ -4,6 +4,7 @@ import { useDismissable } from './useDismissable';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { isOffline } from '../data/dataSource';
 import { effectivePlan, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
+import { ReturnLink } from './ReturnLink';
 import { t, currentLocale, chooseLocale } from '../i18n';
 import type { GoogleStatus } from '../core/meetingTypes';
 
@@ -189,6 +190,8 @@ export function Settings() {
           )}
         </div>
 
+        <ReturnLinkRow />
+
         <div className="settings__row">
           <span className="settings__body">
             <span className="settings__label">{t('settings.welcome.label')}</span>
@@ -213,6 +216,21 @@ export function Settings() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The way back, as a settings row — drawn only where there is a link to carry. */
+function ReturnLinkRow() {
+  const hasLink = Boolean(useWorkspaceStore((s) => s.source.returnLink));
+  if (!hasLink) return null;
+  return (
+    <div className="settings__row settings__row--stack" data-testid="settings-return-link">
+      <span className="settings__body">
+        <span className="settings__label">{t('returnLink.label')}</span>
+        <span className="settings__hint">{t('returnLink.hint')}</span>
+      </span>
+      <ReturnLink compact />
     </div>
   );
 }

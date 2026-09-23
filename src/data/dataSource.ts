@@ -142,6 +142,8 @@ export interface DataSource {
   condenseSource?(sourceId: string): Promise<{ text: string }>;
   /** One text for what a handful of picked memories come to. Reads only. */
   condenseMemories?(memoryIds: string[]): Promise<{ text: string }>;
+  /** The link that brings this workspace back anywhere. Null where the workspace is fixed (the developer's corpus). */
+  returnLink?(): Promise<string | null>;
   /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
   askBack?(thought: string): Promise<{ question: string }>;
   /** What Mado would call a category made of these memories. A suggestion only. */
@@ -216,6 +218,28 @@ export function resolveInvite(
   return stored;
 }
 
+const WORKSPACE_KEY = 'mado.workspace';
+
+/**
+ * A workspace named in the link (`?ws=`) becomes this browser's — that is
+ * the whole of "coming back": the link is the account until there is one.
+ * Pure over its inputs; the wrapper below feeds it the real location.
+ */
+export function resolveWorkspaceFromLink(search: string, remember: (id: string) => void): string | null {
+  const id = new URLSearchParams(search).get('ws');
+  if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+  remember(id);
+  return id;
+}
+
+/** The link that brings this workspace back, anywhere — invite included, since the gate wants it. */
+export function returnLinkFor(origin: string, workspaceId: string, invite: string | null): string {
+  const params = new URLSearchParams();
+  params.set('ws', workspaceId);
+  if (invite) params.set('invite', invite);
+  return `${origin}/?${params.toString()}`;
+}
+
 function currentInvite(): string | null {
   if (typeof window === 'undefined') return null;
   return resolveInvite(
@@ -245,7 +269,20 @@ export class ApiDataSource implements DataSource {
   private ensureWorkspace(): Promise<string> {
     if (this.workspaceId) return Promise.resolve(this.workspaceId);
     this.wsPromise ??= (async () => {
-      const stored = localStorage.getItem('mado.workspace');
+      // A link that names a workspace wins over what this browser had: that
+      // is what following the link means.
+      const fromLink = resolveWorkspaceFromLink(window.location.search, (id) =>
+        localStorage.setItem(WORKSPACE_KEY, id),
+      );
+      if (fromLink) {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('ws');
+        params.delete('invite');
+        const query = params.toString();
+        window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+        return fromLink;
+      }
+      const stored = localStorage.getItem(WORKSPACE_KEY);
       if (stored) return stored;
       const invite = currentInvite();
       // The locale rides along so the starter corpus arrives in the visitor's
@@ -265,7 +302,7 @@ export class ApiDataSource implements DataSource {
         this.wsPromise = null;
         throw new HttpError(response.status, body.error ?? 'could not create a workspace');
       }
-      localStorage.setItem('mado.workspace', body.workspaceId);
+      localStorage.setItem(WORKSPACE_KEY, body.workspaceId);
       return body.workspaceId;
     })();
     return this.wsPromise;
@@ -518,6 +555,12 @@ export class ApiDataSource implements DataSource {
   condenseMemories?: (memoryIds: string[]) => Promise<{ text: string }> = (memoryIds) =>
     this.post<{ text: string }>('/memories/condense-preview', { memoryIds, locale: currentLocale() });
 
+  async returnLink(): Promise<string | null> {
+    if (this.workspaceId) return null;
+    const id = await this.ensureWorkspace();
+    return returnLinkFor(window.location.origin, id, currentInvite());
+  }
+
   askBack?: (thought: string) => Promise<{ question: string }> = (thought) =>
     this.post<{ question: string }>('/onboarding/ask-back', { thought, locale: currentLocale() });
 
@@ -624,6 +667,8 @@ export function selectDataSource(search = typeof window === 'undefined' ? '' : w
   // `?api=1` is the developer's door and keeps everyone on the local server's
   // one corpus; a build shipped with a server gives each visitor their own.
   if (params.get('api') === '1') return new ApiDataSource('ws_demo');
+  // The hosted case, in development: each visitor minted their own workspace.
+  if (params.get('api') === 'visitor') return new ApiDataSource();
   const builtForApi = (import.meta.env ?? {}).VITE_API_DEFAULT === '1';
   return builtForApi ? new ApiDataSource() : SeedDataSource;
 }
