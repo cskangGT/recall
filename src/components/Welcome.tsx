@@ -6,8 +6,9 @@ import { runAsk } from '../ask/runAsk';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
 import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep } from '../core/onboarding';
 import { SourceChips } from './SourceChips';
+import { ROLES, readRole, writeRole, type Role } from '../core/roles';
 import { ReturnLink } from './ReturnLink';
-import { t, PRODUCT } from '../i18n';
+import { t, PRODUCT, type StringKey } from '../i18n';
 import type { Memory } from '../core/types';
 
 /**
@@ -31,33 +32,6 @@ import type { Memory } from '../core/types';
 
 const CONCERN_KINDS = new Set<Memory['kind']>(['question', 'decision', 'task']);
 const QUOTE_CHARS = 72;
-/**
- * The example in the first box. The person this is for (product spec §2)
- * works with information for a living — a founder, a knowledge worker —
- * and the examples are that person's decisions, said plainly enough that
- * any of them could be theirs: an offer, a ship date, a hire, a tool, a
- * project, a thing kept put off. A different one each visit, in turn, so a
- * second look never lands on the same one.
- */
-const FIRST_EXAMPLES = [
-  'welcome.firstEx.1',
-  'welcome.firstEx.2',
-  'welcome.firstEx.3',
-  'welcome.firstEx.4',
-  'welcome.firstEx.5',
-  'welcome.firstEx.6',
-] as const;
-const EXAMPLE_TURN_KEY = 'mado.ob.exampleTurn';
-function nextExample(): (typeof FIRST_EXAMPLES)[number] {
-  let turn = 0;
-  try {
-    turn = Number(localStorage.getItem(EXAMPLE_TURN_KEY) ?? '0') || 0;
-    localStorage.setItem(EXAMPLE_TURN_KEY, String(turn + 1));
-  } catch {
-    turn = Math.floor(Math.random() * FIRST_EXAMPLES.length);
-  }
-  return FIRST_EXAMPLES[turn % FIRST_EXAMPLES.length]!;
-}
 const quote = (text: string) => (text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS - 1)}…` : text);
 
 /** Kept text → memory ids, through the server or the seed's own pipeline. */
@@ -73,6 +47,30 @@ async function keepText(title: string, content: string): Promise<string[]> {
   return result.addedMemoryIds;
 }
 
+/**
+ * The example in the first box, in turn per visit — the general set, or the
+ * chosen role's own two. A different one each visit, so a second look never
+ * lands on the same one.
+ */
+const GENERAL_EXAMPLES = [
+  'welcome.firstEx.1',
+  'welcome.firstEx.2',
+  'welcome.firstEx.3',
+  'welcome.firstEx.4',
+  'welcome.firstEx.5',
+  'welcome.firstEx.6',
+] as const;
+const EXAMPLE_TURN_KEY = 'mado.ob.exampleTurn';
+function exampleTurn(): number {
+  try {
+    const turn = Number(localStorage.getItem(EXAMPLE_TURN_KEY) ?? '0') || 0;
+    localStorage.setItem(EXAMPLE_TURN_KEY, String(turn + 1));
+    return turn;
+  } catch {
+    return Math.floor(Math.random() * 6);
+  }
+}
+
 export function Welcome() {
   const payload = useWorkspaceStore((s) => s.payload);
   const meetings = useWorkspaceStore((s) => s.meetings);
@@ -84,7 +82,13 @@ export function Welcome() {
     // The map beat lives on the map; landing here mid-way means it is over.
     return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
   });
-  const [example] = useState(nextExample);
+  const [turn] = useState(exampleTurn);
+  const [role, setRole] = useState<Role | null>(readRole);
+  const [introduced, setIntroduced] = useState<boolean>(() => readRole() !== null || readStep() !== 'thought');
+  const example: StringKey = role
+    ? (`welcome.ex.${role}.${turn % 2 === 0 ? 1 : 2}` as StringKey)
+    : GENERAL_EXAMPLES[turn % GENERAL_EXAMPLES.length]!;
+  const whyHint = role ? (`welcome.why.${role}` as const) : ('welcome.whyPlaceholder' as const);
   const [askBackInit] = useState(() => (readStep() === 'why' ? t('welcome.askBack') : null));
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
@@ -124,7 +128,7 @@ export function Welcome() {
       const ask = useWorkspaceStore.getState().source.askBack;
       if (ask) {
         setAskBack(null);
-        ask(content)
+        ask(content, role ?? undefined)
           .then((r) => setAskBack(r.question || t('welcome.askBack')))
           .catch(() => setAskBack(t('welcome.askBack')));
       } else {
@@ -230,8 +234,50 @@ export function Welcome() {
       {step === 'thought' && (
         <>
           <p className="arc__greeting-line">{t('welcome.brain', { product: PRODUCT })}</p>
-          <p className="arc__greeting-aside">{t('welcome.first')}</p>
-          {textarea('welcome-first-input', t(example), () => void submitThought())}
+          {/* Who they are, in one press — so the example and the ask-back are theirs. */}
+          {!introduced ? (
+            <>
+              <p className="arc__greeting-aside">{t('welcome.who')}</p>
+              <div className="welcome__roles" data-testid="welcome-roles">
+                {ROLES.map((r) => (
+                  <button
+                    key={r}
+                    className="arc__source"
+                    data-testid={`role-${r}`}
+                    onClick={() => {
+                      writeRole(r);
+                      setRole(r);
+                      setIntroduced(true);
+                    }}
+                  >
+                    {t(`welcome.role.${r}`)}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="welcome__quiet"
+                data-testid="role-skip"
+                onClick={() => {
+                  writeRole(null);
+                  setRole(null);
+                  setIntroduced(true);
+                }}
+              >
+                {t('welcome.roleSkip')}
+              </button>
+            </>
+          ) : (
+            <>
+              {role && (
+                <button className="welcome__rolechip" data-testid="role-chosen" onClick={() => setIntroduced(false)}>
+                  {t(`welcome.role.${role}`)} · {t('welcome.roleChange')}
+                </button>
+              )}
+              <p className="arc__greeting-aside">{t('welcome.first')}</p>
+              {textarea('welcome-first-input', t(example), () => void submitThought())}
+            </>
+          )}
+          {introduced && (
           <div className="welcome__actions">
             <button
               className="arc__source"
@@ -242,6 +288,7 @@ export function Welcome() {
               {reading ? t('stage.reading') : t('welcome.firstSend')}
             </button>
           </div>
+          )}
           {payload.memories.length > 0 && (
             <button className="arc__browse" data-testid="door-browse" onClick={() => useUiStore.getState().goBrowse()}>
               <span className="arc__browse-name">{t('welcome.browse')}</span>
@@ -261,7 +308,7 @@ export function Welcome() {
             {askBack ?? t('welcome.askBackWriting')}
           </p>
           <p className="arc__greeting-aside">{t('welcome.askBackHint')}</p>
-          {textarea('welcome-why-input', t('welcome.whyPlaceholder'), () => void submitWhy())}
+          {textarea('welcome-why-input', t(whyHint), () => void submitWhy())}
           <div className="welcome__actions">
             <button
               className="arc__source"

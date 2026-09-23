@@ -95,7 +95,7 @@ export class AnthropicProvider implements AiProvider {
     return coerceNormalize(await this.json(content, normalizeSchema, 2048));
   }
 
-  async askBack(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack> {
+  async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
     return coerceAskBack(await this.json(buildAskBackPrompt(input), askBackSchema, 300));
   }
 

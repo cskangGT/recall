@@ -215,7 +215,7 @@ export interface AiProvider {
     texts: string[];
     locale?: 'en' | 'ko';
   }): Promise<CondenseDraft>;
-  askBack?(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack>;
+  askBack?(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack>;
 }
 
 /**

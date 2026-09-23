@@ -6715,3 +6715,26 @@ button.brief__line:hover {
   align-items: stretch;
   gap: 4px;
 }
+
+
+/* Who they are, as pressable words — the greeting's one question before the question. */
+.welcome__roles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 18px auto 12px;
+}
+
+.welcome__rolechip {
+  margin: 0 0 8px;
+  padding: 3px 10px;
+  border: 1px solid rgba(232, 163, 61, 0.45);
+  border-radius: var(--radius-pill);
+  background: rgba(232, 163, 61, 0.1);
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}

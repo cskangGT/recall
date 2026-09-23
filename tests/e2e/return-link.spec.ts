@@ -78,6 +78,7 @@ test('the first conversation ends on the way back', async ({ page }) => {
     r.fulfill({ contentType: 'application/json', body: JSON.stringify({ graph: JSON.parse(seed) }) }),
   );
   await page.goto('/?api=visitor');
+  await page.getByTestId('role-skip').click();
   await page.getByTestId('welcome-first-input').fill('Whether to take the offer or stay.');
   await page.getByTestId('welcome-first-input').press('Enter');
   await page.getByTestId('welcome-why-skip').click();

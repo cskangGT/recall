@@ -997,8 +997,9 @@ async function handleWorkspace(
     const thought = typeof body.thought === 'string' ? body.thought.trim().slice(0, 1000) : '';
     if (!thought) return badRequest('thought is required');
     const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    const role = typeof body.role === 'string' ? body.role.trim().slice(0, 40) : undefined;
     try {
-      return ok(await deps.ingest.askBack(thought, locale));
+      return ok(await deps.ingest.askBack(thought, locale, role));
     } catch (err) {
       return { status: 502, body: { error: err instanceof Error ? err.message : 'ask-back failed' } };
     }

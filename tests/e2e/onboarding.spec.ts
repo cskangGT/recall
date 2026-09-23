@@ -20,7 +20,13 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await page.goto('/');
   const welcome = page.getByTestId('welcome');
   await expect(welcome).toHaveAttribute('data-step', 'thought');
+  // Who they are, in one press — then the question, with an example that is theirs.
+  await expect(welcome).toContainText('second memory');
+  await expect(page.getByTestId('welcome-roles')).toBeVisible();
+  await expect(page.getByTestId('welcome-first-input')).toHaveCount(0);
+  await page.getByTestId('role-ceo').click();
   await expect(welcome).toContainText('keep not deciding');
+  await expect(page.getByTestId('welcome-first-input')).toHaveAttribute('placeholder', /round closes|raise now/);
   await expect(page.getByTestId('welcome-first-send')).toBeDisabled();
 
   // Beat 1 → 2: their words quoted back, and Mado asking after them.
@@ -70,6 +76,7 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
 
 test('the morning after asks after the thing by name', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('role-skip').click();
   await page.getByTestId('welcome-first-input').fill(THOUGHT);
   await page.getByTestId('welcome-first-input').press('Enter');
   await page.getByTestId('welcome-why-skip').click();
@@ -91,6 +98,7 @@ test('the morning after asks after the thing by name', async ({ page }) => {
 test('Enter on the greeting goes to the thought box, and the shortcuts still work', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('welcome')).toBeVisible();
+  await page.getByTestId('role-developer').click();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('welcome-first-input')).toBeFocused();
   await page.keyboard.press('Escape');
@@ -124,4 +132,17 @@ test('leaving the greeting through the diary counts as having seen it', async ({
   await expect(page.getByTestId('diary-view')).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('welcome')).toHaveCount(0);
+});
+
+test('the role is remembered, can be changed, and skipping keeps the question general', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('role-researcher').click();
+  await expect(page.getByTestId('role-chosen')).toContainText('Researcher');
+  await page.reload();
+  await expect(page.getByTestId('role-chosen')).toContainText('Researcher');
+  await page.getByTestId('role-chosen').click();
+  await expect(page.getByTestId('welcome-roles')).toBeVisible();
+  await page.getByTestId('role-skip').click();
+  await expect(page.getByTestId('role-chosen')).toHaveCount(0);
+  await expect(page.getByTestId('welcome-first-input')).toHaveAttribute('placeholder', /e\.g\./);
 });

@@ -654,9 +654,20 @@ export const askBackSchema = {
  * what is in the way, so that what they answer becomes the stars the next
  * beat is made of. One question, on their actual words, never generic.
  */
-export function buildAskBackPrompt(input: { thought: string; locale?: 'en' | 'ko' }): string {
+const ROLE_WORDS: Record<string, string> = {
+  planner: 'a product planner / PM',
+  ceo: 'a founder / CEO',
+  researcher: 'a researcher',
+  developer: 'a software developer',
+  designer: 'a designer',
+  marketer: 'a marketer',
+};
+
+export function buildAskBackPrompt(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): string {
+  const who = input.role && ROLE_WORDS[input.role] ? `They are ${ROLE_WORDS[input.role]}.` : '';
   return [
     'A person has just written down the one thing they cannot decide right now:',
+    who,
     '',
     `  "${input.thought}"`,
     '',

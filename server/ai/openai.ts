@@ -351,7 +351,7 @@ export class OpenAiProvider implements AiProvider {
     );
   }
 
-  async askBack(input: { thought: string; locale?: 'en' | 'ko' }): Promise<AskBack> {
+  async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
     return coerceAskBack(await this.json(buildAskBackPrompt(input), 'ask_back', askBackSchema, 300));
   }
 

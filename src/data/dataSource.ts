@@ -148,7 +148,7 @@ export interface DataSource {
   /** The link that brings this workspace back anywhere. Null where the workspace is fixed (the developer's corpus). */
   returnLink?(): Promise<string | null>;
   /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
-  askBack?(thought: string): Promise<{ question: string }>;
+  askBack?(thought: string, role?: string): Promise<{ question: string }>;
   /** What Mado would call a category made of these memories. A suggestion only. */
   suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
   /** A category made by hand around picked memories; they move in, locked. */
@@ -564,8 +564,8 @@ export class ApiDataSource implements DataSource {
     return returnLinkFor(window.location.origin, id, currentInvite());
   }
 
-  askBack?: (thought: string) => Promise<{ question: string }> = (thought) =>
-    this.post<{ question: string }>('/onboarding/ask-back', { thought, locale: currentLocale() });
+  askBack?: (thought: string, role?: string) => Promise<{ question: string }> = (thought, role) =>
+    this.post<{ question: string }>('/onboarding/ask-back', { thought, role, locale: currentLocale() });
 
   suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
     this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });
