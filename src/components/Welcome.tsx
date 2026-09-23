@@ -31,12 +31,32 @@ import type { Memory } from '../core/types';
 const CONCERN_KINDS = new Set<Memory['kind']>(['question', 'decision', 'task']);
 const QUOTE_CHARS = 72;
 /**
- * The example in the first box, one of several lives — a job, a move, a
- * degree, a hire, a lease. One example says "this is for people like that";
- * a different one each visit says "this is for whatever yours is". Picked
- * once per mount, not per keystroke.
+ * The example in the first box. The person this is for (product spec §2)
+ * works with information for a living — a founder, a knowledge worker —
+ * and the examples are that person's decisions, said plainly enough that
+ * any of them could be theirs: an offer, a ship date, a hire, a tool, a
+ * project, a thing kept put off. A different one each visit, in turn, so a
+ * second look never lands on the same one.
  */
-const FIRST_EXAMPLES = ['welcome.firstEx.1', 'welcome.firstEx.2', 'welcome.firstEx.3', 'welcome.firstEx.4', 'welcome.firstEx.5'] as const;
+const FIRST_EXAMPLES = [
+  'welcome.firstEx.1',
+  'welcome.firstEx.2',
+  'welcome.firstEx.3',
+  'welcome.firstEx.4',
+  'welcome.firstEx.5',
+  'welcome.firstEx.6',
+] as const;
+const EXAMPLE_TURN_KEY = 'mado.ob.exampleTurn';
+function nextExample(): (typeof FIRST_EXAMPLES)[number] {
+  let turn = 0;
+  try {
+    turn = Number(localStorage.getItem(EXAMPLE_TURN_KEY) ?? '0') || 0;
+    localStorage.setItem(EXAMPLE_TURN_KEY, String(turn + 1));
+  } catch {
+    turn = Math.floor(Math.random() * FIRST_EXAMPLES.length);
+  }
+  return FIRST_EXAMPLES[turn % FIRST_EXAMPLES.length]!;
+}
 const quote = (text: string) => (text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS - 1)}…` : text);
 
 /** Kept text → memory ids, through the server or the seed's own pipeline. */
@@ -63,7 +83,7 @@ export function Welcome() {
     // The map beat lives on the map; landing here mid-way means it is over.
     return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
   });
-  const [example] = useState(() => FIRST_EXAMPLES[Math.floor(Math.random() * FIRST_EXAMPLES.length)]!);
+  const [example] = useState(nextExample);
   const [askBackInit] = useState(() => (readStep() === 'why' ? t('welcome.askBack') : null));
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
