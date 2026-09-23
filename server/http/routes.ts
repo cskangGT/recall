@@ -703,6 +703,7 @@ async function handleWorkspace(
         touchedCategoryIds: r.touchedCategoryIds,
         skipped: r.skipped,
         note: r.note,
+        redacted: r.redacted,
       })),
       reorgs,
       notes: { total: read.total, imported: items.length, droppedSecretLines: read.droppedSecretLines },

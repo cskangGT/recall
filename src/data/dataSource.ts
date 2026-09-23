@@ -42,6 +42,8 @@ export interface CaptureResult {
   } | null;
   graph: GraphPayload;
   note?: string;
+  /** Secrets replaced or removed before anything was stored or sent. */
+  redacted?: number;
 }
 
 export interface LinkPreview {
@@ -60,6 +62,7 @@ export interface CaptureBatchResult {
     touchedCategoryIds: string[];
     skipped: { text: string; similarity: number }[];
     note?: string;
+    redacted?: number;
   }[];
   /** Every structural operation the batch settled into, oldest first. */
   reorgs: NonNullable<CaptureResult['reorg']>[];

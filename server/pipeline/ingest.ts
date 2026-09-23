@@ -1,4 +1,5 @@
 import { isPdfPath } from '../link/saveImage.ts';
+import { redact } from '../secrets/redact.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
 import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
@@ -61,6 +62,8 @@ export interface IngestResult {
   reorg: ReorgEventRow | null;
   /** Populated when extraction produced nothing or a stage failed. */
   note?: string;
+  /** Secrets replaced or removed before anything was stored or sent. */
+  redacted: number;
 }
 
 export interface BatchIngestResult {
@@ -251,6 +254,17 @@ export class IngestPipeline {
   ): Promise<IngestResult> {
     const sourceId = id('src');
 
+    /*
+     * ---- 0. Secrets never leave the process. Before the row is written and
+     * long before a model sees a word: keys, tokens, card and resident
+     * numbers replaced in place, password lines dropped. The count rides the
+     * result so the person is told, not surprised.
+     */
+    const redaction = redact(input.content ?? '');
+    const titleRedaction = redact(input.title ?? '');
+    input = { ...input, content: redaction.text, title: titleRedaction.text || input.title };
+    const redacted = redaction.count + titleRedaction.count;
+
     // ---- 1. Persist the raw source first. A capture is never lost.
     const source: SourceRow = {
       id: sourceId,
@@ -271,7 +285,8 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    return this.process(input.workspaceId, source, { ...options, locale: input.locale });
+    const result = await this.process(input.workspaceId, source, { ...options, locale: input.locale });
+    return { ...result, redacted: result.redacted + redacted };
   }
 
   /**
@@ -379,6 +394,7 @@ export class IngestPipeline {
     };
 
     try {
+      let redactedInProcess = 0;
       // ---- 2. Normalize (screenshots only — spec §10.1)
       let content = input.content ?? '';
       let sceneDescription: string | undefined;
@@ -393,9 +409,13 @@ export class IngestPipeline {
         if (pdf && !normalized.ocr_text.trim()) {
           throw new Error('nothing could be read out of that PDF');
         }
+        // What was read out of a picture or a document is text like any
+        // other, and can carry a key photographed off a screen.
+        const read = redact(normalized.ocr_text);
+        redactedInProcess += read.count;
         content = pdf
-          ? [input.content?.trim(), normalized.ocr_text].filter(Boolean).join('\n\n')
-          : normalized.ocr_text || input.content || '';
+          ? [input.content?.trim(), read.text].filter(Boolean).join('\n\n')
+          : read.text || input.content || '';
         sceneDescription = normalized.scene_description;
         this.repo.updateSourceContent(sourceId, {
           // A screenshot keeps the words written beside it; only an empty one
@@ -422,7 +442,7 @@ export class IngestPipeline {
         this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
         return {
           sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [],
-          skipped: [], reorg: null,
+          skipped: [], reorg: null, redacted: redactedInProcess,
           note: "Saved, but Mado couldn't find anything to remember in this. It's in your Sources.",
         };
       }
@@ -475,7 +495,7 @@ export class IngestPipeline {
         }
       }
 
-      return { sourceId, status: 'complete', ...result, reorg };
+      return { sourceId, status: 'complete', ...result, reorg, redacted: redactedInProcess };
     } catch (err) {
       this.repo.updateSourceStatus(sourceId, 'failed', {
         error_message: err instanceof Error ? err.message : String(err),
@@ -483,7 +503,7 @@ export class IngestPipeline {
       });
       return {
         sourceId, status: 'failed', addedMemoryIds: [], touchedCategoryIds: [],
-        skipped: [], reorg: null,
+        skipped: [], reorg: null, redacted: 0,
         note: "Couldn't process that — it's saved and you can retry.",
       };
     }

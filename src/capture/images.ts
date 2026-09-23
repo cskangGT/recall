@@ -153,6 +153,7 @@ export async function takePdfs(files: File[]): Promise<boolean> {
   ui.toast(t('toast.pdfReading', { count: pdfs.length }));
   let kept = 0;
   let memories = 0;
+  let redacted = 0;
   const keptSources: string[] = [];
   try {
     for (const file of pdfs) {
@@ -169,12 +170,14 @@ export async function takePdfs(files: File[]): Promise<boolean> {
       useWorkspaceStore.getState().applyPayload(result.graph);
       kept += 1;
       memories += result.addedMemoryIds?.length ?? 0;
+      redacted += result.redacted ?? 0;
       const sid = sourceOf(result);
       if (sid) keptSources.push(sid);
     }
     if (kept > 0) {
       ui.dismissWelcome();
       ui.toast(t('toast.pdfKept', { count: kept, memories }));
+      if (redacted > 0) ui.toast(t('toast.redacted', { count: redacted }));
       showWhatWasKept(keptSources);
     }
   } catch (err) {

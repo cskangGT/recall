@@ -239,6 +239,8 @@ async function batchViaEndpoint(
   if (failed > 0) {
     useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
   }
+  const redacted = response.results.reduce((n, r) => n + (r.redacted ?? 0), 0);
+  if (redacted > 0) useUiStore.getState().toast(t('toast.redacted', { count: redacted }));
 
   return {
     payload: response.graph,

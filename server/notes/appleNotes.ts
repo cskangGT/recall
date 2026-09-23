@@ -38,40 +38,14 @@ export interface NotesReadResult {
 }
 
 /*
- * Lines that look like credentials never leave this function.
- *
- * Learned on the very first real import: a note titled "스트라이프" carried a
- * live secret key, which was faithfully extracted into a memory and travelled
- * to the extraction model as prompt content. People keep secrets in notes
- * apps; an importer that forwards notes wholesale is an exfiltration tool
- * with good intentions. (scripts/import-notes.mjs and import-instagram.mjs
- * import this very function — one list, one place.)
+ * Lines that look like credentials never leave this function — see
+ * server/secrets/redact.ts, the one list every reader and every capture
+ * shares. Re-exported here because scripts/import-notes.mjs and
+ * import-instagram.mjs import it from this module.
  */
-export const SECRET_PATTERNS: RegExp[] = [
-  /sk_(live|test)_[A-Za-z0-9]{8,}/, // Stripe secrets
-  /whsec_[A-Za-z0-9]{8,}/, // Stripe webhook secrets
-  /sk-[A-Za-z0-9_-]{20,}/, // OpenAI-style keys
-  /AKIA[0-9A-Z]{16}/, // AWS access keys
-  /gh[pousr]_[A-Za-z0-9]{20,}/, // GitHub tokens
-  /xox[baprs]-[A-Za-z0-9-]{10,}/, // Slack tokens
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /(password|passwd|비밀번호)\s*[:=]\s*\S+/i,
-];
-
-export function stripSecrets(body: string): { kept: string; dropped: number } {
-  let dropped = 0;
-  const kept = body
-    .split('\n')
-    .filter((line) => {
-      if (SECRET_PATTERNS.some((p) => p.test(line))) {
-        dropped++;
-        return false;
-      }
-      return true;
-    })
-    .join('\n');
-  return { kept, dropped };
-}
+import { stripSecrets } from '../secrets/redact.ts';
+export { stripSecrets };
+export { TOKEN_PATTERNS as SECRET_PATTERNS } from '../secrets/redact.ts';
 
 /*
  * One AppleScript pass, one record per note, unit/record separators — control
