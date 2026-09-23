@@ -204,11 +204,25 @@ function ReviewCard({ payload, sourceId }: { payload: GraphPayload; sourceId: st
       <div className="reviewpanel__card">
         <div className="reviewpanel__head">
           <span className="reviewpanel__title">{t('review.title')}</span>
-          {total > 1 && (
-            <span className="reviewpanel__step" data-testid="review-step">
-              {t('review.step', { current: review.index + 1, total })}
-            </span>
-          )}
+          <span className="reviewpanel__headright">
+            {total > 1 && (
+              <span className="reviewpanel__step" data-testid="review-step">
+                {t('review.step', { current: review.index + 1, total })}
+              </span>
+            )}
+            {/* The way out, where every other page has it. Escape did this
+                already; a card with no visible way to close it reads as a
+                trap, and the review is an offer, not homework. Staged
+                verdicts are dropped — nothing has been written. */}
+            <button
+              className="memorypage__close"
+              data-testid="review-close"
+              aria-label={t('page.close')}
+              onClick={() => useUiStore.getState().closeReview()}
+            >
+              {t('page.close')}
+            </button>
+          </span>
         </div>
         <p className="reviewpanel__hint">{t('review.hint')}</p>
 

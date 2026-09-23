@@ -136,3 +136,17 @@ test('finishing a review lands where the memories went', async ({ page }) => {
   await expect(selected).toContainText(/tri-tip|Oak chunks/);
   await expect(page.getByTestId('toast').filter({ hasText: /into|에/ })).toHaveCount(1);
 });
+
+test('the card has a way out, and closing it writes nothing', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('s');
+  await page.locator('[data-testid^="review-open-"]').first().click();
+  await expect(page.getByTestId('review-panel')).toBeVisible();
+  // Stage a drop, then close: the drop is forgotten, not applied.
+  const before = await page.locator('[data-testid^="review-item-"]').count();
+  await page.locator('[data-testid^="review-drop-"]').first().click();
+  await page.getByTestId('review-close').click();
+  await expect(page.getByTestId('review-panel')).toHaveCount(0);
+  await page.locator('[data-testid^="review-open-"]').first().click();
+  await expect(page.locator('[data-testid^="review-item-"]')).toHaveCount(before);
+});

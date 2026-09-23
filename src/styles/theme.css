@@ -1707,6 +1707,12 @@ button {
   font-weight: 550;
 }
 
+.reviewpanel__headright {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
 .reviewpanel__step {
   color: var(--text-faint);
   font-size: var(--text-xs);
