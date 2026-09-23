@@ -58,6 +58,15 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(welcome).toHaveAttribute('data-step', 'learn');
   await expect(welcome).toContainText('put something in, asked, and kept');
   await expect(page.getByTestId('welcome-places')).toContainText('Diary');
+
+  // The meeting beat: one upcoming meeting in a line, and — from their own
+  // words so far — what Mado would put in front of them before it.
+  await page.getByTestId('welcome-meeting-input').fill('Thursday with Sujin, about the infra hire');
+  await page.getByTestId('welcome-meeting-preview').click();
+  const card = page.getByTestId('welcome-meeting-card');
+  await expect(card).toContainText('Before that meeting, Mado brings this up');
+  expect(await card.locator('.memory-row').count()).toBeGreaterThan(0);
+  await expect(card).toContainText('comes back before the next');
   await expect(page.getByTestId('fill-sources')).toBeVisible();
   await page.getByTestId('welcome-finish').click();
   await expect(page.getByTestId('home')).toBeVisible();

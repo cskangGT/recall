@@ -8,6 +8,7 @@ import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingSt
 import { SourceChips } from './SourceChips';
 import { ROLES, readRole, writeRole, type Role } from '../core/roles';
 import { ReturnLink } from './ReturnLink';
+import { MeetingPreview } from './MeetingPreview';
 import { t, PRODUCT, type StringKey } from '../i18n';
 import type { Memory } from '../core/types';
 
@@ -353,6 +354,8 @@ export function Welcome() {
               <dd>{t('welcome.place.diaryHint')}</dd>
             </div>
           </dl>
+          {/* The meeting beat: one upcoming meeting, and what Mado would put in front of them before it. */}
+          <MeetingPreview />
           <p className="welcome__doors-head">{t('welcome.pile.line', { product: PRODUCT })}</p>
           <SourceChips />
           {canConnect && (

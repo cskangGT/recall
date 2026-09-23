@@ -6738,3 +6738,47 @@ button.brief__line:hover {
   font-size: var(--text-xs);
   cursor: pointer;
 }
+
+
+/* The meeting beat: one line asked, and the card Mado would show before it. */
+.meetprev {
+  width: min(560px, 100% - 48px);
+  text-align: left;
+}
+
+.meetprev .welcome__doors-head {
+  text-align: center;
+}
+
+.meetprev__row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.meetprev__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-left: 2px solid rgba(232, 163, 61, 0.55);
+  background: rgba(24, 17, 36, 0.32);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  animation: rise 0.3s ease both;
+}
+
+.meetprev__text {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+.meetprev__promise {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
