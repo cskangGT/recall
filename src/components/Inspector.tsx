@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { mergeCandidates, relatedMemories } from '../core/related';
@@ -479,6 +480,10 @@ function UsedMemories() {
   const asking = useUiStore((s) => s.asking);
   const payload = useWorkspaceStore((s) => s.payload)!;
   const citations = answer && !answer.found ? answer.citations : [];
+  const picked = useUiStore((s) => (s.thinking ? s.picked : []));
+  const mine = new Set(picked);
+  const own = citations.filter((c) => mine.has(c.memory_id));
+  const more = citations.filter((c) => !mine.has(c.memory_id));
 
   return (
     <div data-testid="used-memories">
@@ -489,14 +494,17 @@ function UsedMemories() {
       {citations.length === 0 && (
         <p className="stats">{asking ? t('mapchat.looking') : t('mapchat.usedNone')}</p>
       )}
-      {citations.map((c) => {
+      {own.length > 0 && <div className="used__group">{t('mapchat.usedMine', { count: own.length })}</div>}
+      {[...own, ...more].map((c, i) => {
         const memory = payload.memories.find((m) => m.id === c.memory_id);
+        const divider = own.length > 0 && i === own.length;
         const source = payload.sources.find((src) => src.id === c.source_id);
         if (!memory) return null;
         const category = payload.categories.find((cat) => cat.id === memory.category_id);
         return (
+          <Fragment key={c.n}>
+          {divider && <div className="used__group">{t('mapchat.usedMore', { count: more.length })}</div>}
           <button
-            key={c.n}
             className="used"
             data-testid={`used-memory-${c.n}`}
             onClick={() => {
@@ -515,6 +523,7 @@ function UsedMemories() {
               </span>
             </span>
           </button>
+          </Fragment>
         );
       })}
     </div>

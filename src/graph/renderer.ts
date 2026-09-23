@@ -31,6 +31,8 @@ export interface FrameState {
    * label of its own, and "look at these while we talk" needs to say which.
    */
   callouts?: { id: string; text: string }[];
+  /** Memories picked to think with — ringed, so a pick reads as a pick and not a hover. */
+  pickedIds?: string[];
   /** Ghost node position while an item is processing. */
   ghost?: { x: number; y: number; pulse: number } | null;
   /**
@@ -311,6 +313,67 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
       alphaFor(n.id) * (n.kind === 'entity' ? entityFade : 1),
     );
     ctx.fillText(text, sx, y);
+  }
+
+  /*
+   * The picks, drawn as a constellation.
+   *
+   * A picked memory is a star that has been lit: an amber glow around a
+   * bright core, and a four-point sparkle over it — the same star the arc
+   * draws for a category, so "chosen" reads in the product's own alphabet
+   * rather than a form control's. A faint thread joins them in the order
+   * they were picked: picking is drawing a constellation, and the line is
+   * what makes a handful of stars into one thought.
+   */
+  if (s.pickedIds && s.pickedIds.length > 0) {
+    const picked = s.pickedIds.map((id) => byId.get(id)).filter((n): n is GraphNode => n !== undefined);
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = withAlpha(COLORS.edgeActive, 0.5);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    picked.forEach((n, i) => {
+      const { sx, sy } = worldToScreen(n, camera, viewport);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const n of picked) {
+      const { sx, sy } = worldToScreen(n, camera, viewport);
+      const r = screenRadius(n.kind, n.radius, camera.zoom) * (s.scaleOverrides?.get(n.id) ?? 1);
+      const reach = r + 14;
+      const glow = ctx.createRadialGradient(sx, sy, r * 0.4, sx, sy, reach);
+      glow.addColorStop(0, withAlpha(COLORS.edgeActive, 0.55));
+      glow.addColorStop(1, withAlpha(COLORS.edgeActive, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(sx, sy, reach, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = lighten(COLORS.edgeActive, 0.55);
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(2.5, r * 0.8), 0, Math.PI * 2);
+      ctx.fill();
+      // The sparkle: two thin diamonds, one long and one short, crossed.
+      const long = r + 9;
+      const short = r + 4;
+      ctx.fillStyle = withAlpha('#fff3d6', 0.95);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - long);
+      ctx.lineTo(sx + 1.6, sy);
+      ctx.lineTo(sx, sy + long);
+      ctx.lineTo(sx - 1.6, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sx - short, sy);
+      ctx.lineTo(sx, sy + 1.6);
+      ctx.lineTo(sx + short, sy);
+      ctx.lineTo(sx, sy - 1.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // The conversation's memories, said by number and first words — above the

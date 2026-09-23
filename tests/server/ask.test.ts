@@ -223,3 +223,42 @@ describe('a reflective question', () => {
     expect(result.refused).toBe(true);
   });
 });
+
+/**
+ * Thinking with picked memories: the picks lead the context, in the order
+ * picked, and are never refused — the person is holding them. Retrieval still
+ * fills what room is left, without repeating a pick, and the model is told
+ * how many at the head are the person's own.
+ */
+describe('ask with focus — the picks lead', () => {
+  class Watching extends FixtureProvider {
+    seen: { retrieved: RetrievedMemory[]; focused?: number } | null = null;
+    async answer(input: { question: string; retrieved: RetrievedMemory[]; focused?: number }): Promise<AnswerResult> {
+      this.seen = { retrieved: input.retrieved, focused: input.focused };
+      return {
+        answer: input.retrieved.slice(0, 2).map((_, i) => `[${i + 1}]`).join(' '),
+        citations: input.retrieved.slice(0, 2).map((r, i) => ({ n: i + 1, memory_id: r.memory_id, source_id: r.source_id })),
+        refused: false,
+      };
+    }
+  }
+
+  it('puts the picks first and tells the model how many, and never refuses them', async () => {
+    const ai = new Watching();
+    const pipeline = new AskPipeline(repo, ai, new FixtureEmbeddings());
+    const picks = repo.listMemories(WS).slice(5, 8).map((m) => m.id);
+    // A question retrieval alone would refuse.
+    const result = await pipeline.ask(WS, 'zzqx', [], picks);
+    expect(result.refused).toBe(false);
+    expect(ai.seen!.focused).toBe(3);
+    expect(ai.seen!.retrieved.slice(0, 3).map((r) => r.memory_id)).toEqual(picks);
+    expect(new Set(ai.seen!.retrieved.map((r) => r.memory_id)).size).toBe(ai.seen!.retrieved.length);
+  });
+
+  it('ignores ids it does not know, and without picks behaves as before', async () => {
+    const ai = new Watching();
+    const pipeline = new AskPipeline(repo, ai, new FixtureEmbeddings());
+    expect((await pipeline.ask(WS, 'zzqx', [], ['mem_nope'])).refused).toBe(true);
+    expect((await pipeline.ask(WS, 'zzqx', [], [])).refused).toBe(true);
+  });
+});

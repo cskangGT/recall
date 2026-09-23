@@ -177,6 +177,45 @@ describe('POST undo', () => {
   });
 });
 
+describe('POST categories — a category made by hand around picked memories', () => {
+  it('creates it locked and theirs, and moves the picks in, locked', async () => {
+    const before = repo.getGraphPayload(WS);
+    const picks = before.memories.slice(0, 3).map((m) => m.id);
+    const res = await post(`${base}/categories`, { name: '채용 원칙', memoryIds: picks });
+    expect(res.status).toBe(200);
+    const { categoryId, graph } = res.body as { categoryId: string; graph: GraphPayload };
+    const made = graph.categories.find((c) => c.id === categoryId)!;
+    expect(made.name).toBe('채용 원칙');
+    expect(made.parent_id).toBeNull();
+    expect(made.name_locked).toBe(true);
+    expect(made.user_created).toBe(true);
+    for (const id of picks) {
+      const m = graph.memories.find((x) => x.id === id)!;
+      expect(m.category_id).toBe(categoryId);
+      expect(m.category_locked).toBe(true);
+    }
+  });
+
+  it('needs a name, known memories, and a root as a parent', async () => {
+    const payload = repo.getGraphPayload(WS);
+    expect((await post(`${base}/categories`, { name: '  ', memoryIds: [] })).status).toBe(400);
+    expect((await post(`${base}/categories`, { name: 'x', memoryIds: ['mem_nope'] })).status).toBe(404);
+    const child = payload.categories.find((c) => c.parent_id !== null)!;
+    expect((await post(`${base}/categories`, { name: 'x', memoryIds: [], parentId: child.id })).status).toBe(400);
+    const root = payload.categories.find((c) => c.parent_id === null)!;
+    const ok = await post(`${base}/categories`, { name: 'under', memoryIds: [], parentId: root.id });
+    expect(ok.status).toBe(200);
+    expect((ok.body as { graph: GraphPayload }).graph.categories.find((c) => c.name === 'under')!.parent_id).toBe(root.id);
+  });
+});
+
+describe('POST memories/condense-preview — what picked memories come to', () => {
+  it('is a closed door on a model that cannot condense, and wants two or more', async () => {
+    const ids = repo.getGraphPayload(WS).memories.slice(0, 2).map((m) => m.id);
+    expect((await post(`${base}/memories/condense-preview`, { memoryIds: ids })).status).toBe(501);
+  });
+});
+
 describe('PATCH memory — putting it down', () => {
   it('stamps the time, keeps the memory, and picks it back up', async () => {
     const memory = repo.getGraphPayload(WS).memories[0]!;

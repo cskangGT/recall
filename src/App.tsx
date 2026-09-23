@@ -8,6 +8,7 @@ import { MeetingsView } from './components/MeetingsView';
 import { isImage, isPdf, takeImages, takePdfs } from './capture/images';
 import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
+import { ThinkSwitch } from './components/ThinkTogether';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
@@ -468,6 +469,7 @@ export function App() {
         )}
         {/* The map is everything at once, so it needs a way to find one thing
             in it. Browse has the composer in the same slot. */}
+        {view === 'map' && nodes.length > 0 && <ThinkSwitch />}
         {view === 'map' && nodes.length > 0 && <MapSearch />}
         {view === 'sources' && <ArchiveFind />}
         {view === 'map' && nodes.length === 0 && (

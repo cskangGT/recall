@@ -226,6 +226,17 @@ interface UiState {
   setAnswer: (a: (ScriptedAnswer & { question: string; found?: boolean }) | null) => void;
   /** What the archive's find bar is narrowing the list to. */
   archiveQuery: string;
+  /**
+   * Thinking with picked memories, on the map. A mode, switched on by hand:
+   * while it is on a press picks a star instead of travelling to it, the
+   * picks are what Mado thinks with, and they can be spread out on their own
+   * or bundled. Off, the map is exactly what it was.
+   */
+  thinking: boolean;
+  /** Memory ids picked so far, in the order they were picked. */
+  picked: string[];
+  setThinking: (on: boolean) => void;
+  setPicked: (ids: string[]) => void;
   /** A picture on its way into the add bar — dropped or picked elsewhere, laid in when the bar opens. */
   pendingImage: string | null;
   setPendingImage: (dataUrl: string | null) => void;
@@ -315,6 +326,12 @@ export const useUiStore = create<UiState>((set, get) => ({
   sourcePage: null,
   retroRange: null,
   archiveQuery: '',
+  thinking: false,
+  picked: [],
+  setThinking: (thinking) =>
+    // Leaving the mode puts the picks down and the map back as it was.
+    set((s) => (thinking ? { thinking } : { thinking, picked: [], highlightedIds: [], mapFocus: s.mapFocus ? null : s.mapFocus })),
+  setPicked: (picked) => set({ picked, highlightedIds: picked }),
   pendingImage: null,
   setPendingImage: (pendingImage) => set({ pendingImage }),
   // Browsing and brainstorming are conversations; the archive is for finding.

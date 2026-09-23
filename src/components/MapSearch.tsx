@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { matchedLabelNodes, search } from '../search/search';
 import { FindMode } from './FindMode';
 import { MapConversation } from './MapConversation';
+import { ThinkPicks } from './ThinkTogether';
 import { runAsk } from '../ask/runAsk';
 import type { SourceType } from '../core/types';
 
@@ -46,6 +47,9 @@ export function MapSearch() {
 
   const [query, setQuery] = useState('');
   const asking = useUiStore((s) => s.findMode.map === 'ask');
+  const thinking = useUiStore((s) => s.thinking);
+  const pickedIds = useUiStore((s) => s.picked);
+  const picked = pickedIds.length;
   const [filter, setFilter] = useState<SourceType | 'all'>('all');
 
   const results = useMemo(() => {
@@ -84,12 +88,15 @@ export function MapSearch() {
    */
   const owns = useRef(false);
   useEffect(() => {
+    // While thinking, what is picked stays lit beside what a search finds —
+    // the search is a way to find things to pick, not a different subject.
+    const picks = useUiStore.getState().thinking ? useUiStore.getState().picked : [];
     if (searching) {
       owns.current = true;
-      setHighlight([...results.map((r) => r.memory.id), ...labelIds]);
+      setHighlight([...new Set([...results.map((r) => r.memory.id), ...labelIds, ...picks])]);
     } else if (owns.current) {
       owns.current = false;
-      setHighlight([]);
+      setHighlight(picks);
       // The regrouped view belongs to the query; it dissolves with it.
       const ui = useUiStore.getState();
       if (ui.mapFocus) {
@@ -97,7 +104,7 @@ export function MapSearch() {
         ui.requestCameraPop();
       }
     }
-  }, [searching, results, labelIds, setHighlight]);
+  }, [searching, results, labelIds, setHighlight, thinking, pickedIds]);
 
   useEffect(
     () => () => {
@@ -112,6 +119,7 @@ export function MapSearch() {
   return (
     <div className="mapsearch" data-testid="map-search">
       <MapConversation />
+      <ThinkPicks />
       <div className="mapsearch__row">
         <FindMode lens="map" />
         <span className="mapsearch__glyph" aria-hidden="true">
@@ -120,7 +128,7 @@ export function MapSearch() {
         <input
           data-testid="map-search-input"
           aria-label={t('map.search.label')}
-          placeholder={asking ? t('find.ph.ask') : t('find.ph.search')}
+          placeholder={asking ? (thinking && picked > 0 ? t('think.ph') : t('find.ph.ask')) : t('find.ph.search')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -157,6 +165,19 @@ export function MapSearch() {
           <span className="mapsearch__count" data-testid="map-search-count">
             {results.length} of {payload.memories.length}
           </span>
+        )}
+        {/* Found something to think with: take the whole result in at once. */}
+        {thinking && searching && results.length > 0 && (
+          <button
+            className="picks__action"
+            data-testid="think-pick-results"
+            onClick={() => {
+              const ui = useUiStore.getState();
+              ui.setPicked([...new Set([...ui.picked, ...results.map((r) => r.memory.id)])]);
+            }}
+          >
+            {t('think.pickResults', { count: results.length })}
+          </button>
         )}
       </div>
 

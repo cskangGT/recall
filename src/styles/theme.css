@@ -6179,3 +6179,252 @@ button.brief__line:hover {
   background: rgb(30 22 44 / 94%);
   backdrop-filter: blur(10px);
 }
+
+
+/* ------------------------------------------------------- thinking together
+   The mode switch stands on the map, top right, as a word: what pressing a
+   star will do. On, it lights amber — the one accent — because while it is
+   on the map behaves differently and the eye should be told so. */
+.think {
+  position: absolute;
+  top: 16px;
+  right: 28px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.think:hover {
+  color: var(--text);
+}
+
+.think--on {
+  color: #f6dfae;
+  border-color: rgba(232, 163, 61, 0.55);
+  background: rgba(232, 163, 61, 0.12);
+}
+
+/* The picks, in the bar above the input: what is in hand, and what to do with it. */
+.picks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.picks__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.picks__count {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.picks__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.picks__action {
+  padding: 4px 11px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.picks__action:hover {
+  border-color: var(--accent-dim);
+}
+
+.picks__action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.picks__action--quiet {
+  border-color: transparent;
+  color: var(--text-faint);
+}
+
+.picks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 4px 6px 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(232, 163, 61, 0.4);
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+
+.pick--more {
+  border-color: transparent;
+  color: var(--text-faint);
+}
+
+.pick__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pick__x {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pick__x:hover {
+  color: var(--text);
+  background: rgba(240, 232, 250, 0.12);
+}
+
+.pick__star {
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+
+/* Bundling: one small panel under the picks, three ways in a row. */
+.bundle {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--edge);
+}
+
+.bundle__ways {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bundle__way {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.bundle__way--on {
+  color: var(--text);
+  background: rgba(240, 232, 250, 0.12);
+}
+
+.bundle__close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.bundle__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bundle__row--end {
+  justify-content: space-between;
+}
+
+.bundle__input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  outline: none;
+}
+
+.bundle__input:focus {
+  border-color: var(--accent-dim);
+}
+
+.bundle__input option {
+  color: #17130a;
+}
+
+.bundle__condense {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bundle__draft {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+}
+
+.bundle__hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.picks__action--on {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.used__group {
+  margin: 10px 0 2px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+}

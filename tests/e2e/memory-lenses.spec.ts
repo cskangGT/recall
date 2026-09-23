@@ -122,3 +122,73 @@ test('home and today only ask — the switch belongs to Memory', async ({ page }
   await page.getByTestId('rail-today').click();
   await expect(page.getByTestId('find-mode')).toHaveCount(0);
 });
+
+/**
+ * Thinking with picked memories. A mode, switched on by hand: while it is on
+ * a press picks a star — a category picks what it holds — and a search's
+ * results can be taken in at once. The picks are what Mado thinks with, can
+ * be spread out on their own, and can be bundled into a category of one's
+ * own. Off, the map is exactly what it was.
+ */
+test('pick, spread, think with, and bundle', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('g');
+  await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await expect(page.getByTestId('think-picks')).toHaveCount(0);
+
+  await page.getByTestId('think-switch').click();
+  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('think-picks')).toContainText('Press a star');
+
+  // Search is a way to find things to pick: the results go in at once.
+  await page.getByTestId('find-mode-search').click();
+  await page.getByTestId('map-search-input').fill('hiring');
+  await page.getByTestId('think-pick-results').click();
+  await expect(page.getByTestId('think-picks')).toContainText('memories picked');
+  const picked = page.locator('[data-testid^="pick-"]');
+  const n = await picked.count();
+  expect(n).toBeGreaterThan(1);
+  await page.getByTestId('map-search-input').fill('');
+
+  // One can be taken back out.
+  await picked.first().locator('.pick__x').click();
+  await expect(page.locator('[data-testid^="pick-"]')).toHaveCount(n - 1);
+
+  // Spread out on their own; ← brings the map back.
+  await page.getByTestId('think-spread').click();
+  await expect(page.getByTestId('map-back')).toBeVisible();
+  await page.getByTestId('map-back').click();
+
+  // Thinking with them: the answer is never a refusal, and the evidence beside
+  // it says which were the person's own.
+  await page.getByTestId('find-mode-ask').click();
+  await page.getByTestId('map-search-input').fill('zzqx');
+  await page.getByTestId('map-search-input').press('Enter');
+  await expect(page.getByTestId('map-conversation').getByTestId('answer')).toContainText('side by side');
+  await expect(page.getByTestId('used-memories')).toContainText('What you picked');
+
+  // Bundled into a category of one's own: named, locked, the picks inside.
+  await page.getByTestId('think-bundle').click();
+  await page.getByTestId('bundle-name').fill('Hiring rules');
+  await page.getByTestId('bundle-make').click();
+  await expect(page.getByTestId('toast').last()).toContainText('“Hiring rules” is yours now');
+  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('inspector')).toContainText('Hiring rules');
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('category-index')).toContainText('Hiring rules');
+});
+
+test('switching the mode off puts the picks down and leaves the map as it was', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('g');
+  await page.getByTestId('think-switch').click();
+  await page.getByTestId('find-mode-search').click();
+  await page.getByTestId('map-search-input').fill('eval');
+  await page.getByTestId('think-pick-results').click();
+  expect(await page.locator('[data-testid^="pick-"]').count()).toBeGreaterThan(0);
+  await page.getByTestId('map-search-input').fill('');
+  await page.getByTestId('think-switch').click();
+  await expect(page.getByTestId('think-picks')).toHaveCount(0);
+  await page.getByTestId('think-switch').click();
+  await expect(page.getByTestId('think-picks')).toContainText('Press a star');
+});

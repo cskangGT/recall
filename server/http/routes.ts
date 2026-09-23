@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
@@ -109,6 +110,16 @@ export interface Deps {
     meetings: Parameters<typeof contextForAll>[3],
   ) => ReturnType<typeof contextForAll>;
 }
+
+/**
+ * Memory ids the person picked to think with, riding along on an ask. Capped:
+ * past thirty the picks are a category, and a category is a different ask.
+ */
+const FOCUS_LIMIT = 30;
+const focusOf = (body: Record<string, unknown>): string[] =>
+  (Array.isArray(body.focus) ? body.focus : [])
+    .filter((id): id is string => typeof id === 'string')
+    .slice(0, FOCUS_LIMIT);
 
 const asRecord = (body: unknown): Record<string, unknown> =>
   body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
@@ -546,7 +557,7 @@ async function handleWorkspace(
           typeof (t as Record<string, unknown>).answer === 'string',
       )
       .slice(-3);
-    return ok(await deps.ask.ask(workspaceId, body.question, history));
+    return ok(await deps.ask.ask(workspaceId, body.question, history, focusOf(body)));
   }
 
   /*
@@ -570,7 +581,11 @@ async function handleWorkspace(
           typeof (t as Record<string, unknown>).answer === 'string',
       )
       .slice(-3);
-    return { status: 200, body: null, events: deps.ask.askStream(workspaceId, body.question, history) };
+    return {
+      status: 200,
+      body: null,
+      events: deps.ask.askStream(workspaceId, body.question, history, focusOf(body)),
+    };
   }
 
   /*
@@ -919,6 +934,76 @@ async function handleWorkspace(
     }
     deps.repo.deleteMemory(resourceId);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/categories — a category made by hand, around
+   * memories the person picked. It is theirs: named by them, locked against
+   * renaming and merging by any reorganization, and every memory moved into
+   * it is locked there the way a hand move locks. Optional parent, one level
+   * deep at most, like every other category.
+   */
+  if (req.method === 'POST' && resource === 'categories' && !resourceId) {
+    const body = asRecord(req.body);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name) return badRequest('name is required');
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    for (const id of memoryIds) {
+      if (!payload.memories.some((m) => m.id === id)) return notFound(`unknown memory ${id}`);
+    }
+    let parentId: string | null = null;
+    if (typeof body.parentId === 'string') {
+      const parent = payload.categories.find((c) => c.id === body.parentId);
+      if (!parent) return notFound(`unknown category ${body.parentId}`);
+      if (parent.parent_id !== null) return badRequest('Mado keeps categories two levels deep.');
+      parentId = parent.id;
+    }
+    const categoryId = `cat_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    deps.repo.transaction(() => {
+      deps.repo.insertCategory(workspaceId, {
+        id: categoryId,
+        parent_id: parentId,
+        name,
+        rationale: null,
+        name_locked: true,
+        user_created: true,
+        x: null,
+        y: null,
+        pinned: false,
+        created_by: 'user',
+      });
+      for (const id of memoryIds) {
+        const memory = payload.memories.find((m) => m.id === id)!;
+        deps.repo.assign({ memoryId: id, categoryId, confidence: memory.confidence, assignedBy: 'user' });
+        deps.repo.updateMemoryPosition(id, null, null, memory.pinned);
+      }
+    });
+    return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/memories/condense-preview — one text for what a
+   * handful of picked memories come to. Writes nothing; the person reads the
+   * draft and decides whether to keep it, and keeping it is an ordinary
+   * capture — it goes through the pipeline like any note.
+   */
+  if (req.method === 'POST' && resource === 'memories' && resourceId === 'condense-preview' && !action) {
+    if (!deps.ingest.canCondense()) return { status: 501, body: { error: 'this server cannot condense' } };
+    const body = asRecord(req.body);
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    if (memoryIds.length < 2) return badRequest('condense needs at least two memories');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.condenseMemories(workspaceId, memoryIds, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'condense failed';
+      return message.startsWith('unknown memory') ? notFound(message) : { status: 502, body: { error: message } };
+    }
   }
 
   // PATCH /api/workspaces/:id/categories/:categoryId — rename or re-parent.

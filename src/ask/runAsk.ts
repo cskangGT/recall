@@ -29,6 +29,9 @@ export async function runAsk(question: string): Promise<boolean> {
     // as it was when the question was asked.
     const history = useUiStore.getState().askThread;
     const source = useWorkspaceStore.getState().source;
+    // Thinking with picked memories: they lead the context, on every surface.
+    const ui0 = useUiStore.getState();
+    const focus = ui0.thinking && ui0.picked.length > 0 ? ui0.picked : [];
 
     /*
      * Streamed when the source can: the words appear as they are generated,
@@ -50,17 +53,18 @@ export async function runAsk(question: string): Promise<boolean> {
               .setAnswerDraft({ question: q, text: (draft?.text ?? '') + delta });
           },
           history,
+          focus,
         )
         .catch(async () => {
           useUiStore.getState().setAnswerDraft(null);
           return source.ask
-            ? source.ask(q, history).catch(() => answerQuestion(q, payload, history))
-            : answerQuestion(q, payload, history);
+            ? source.ask(q, history, focus).catch(() => answerQuestion(q, payload, history, focus))
+            : answerQuestion(q, payload, history, focus);
         });
     } else {
       result = source.ask
-        ? await source.ask(q, history).catch(() => answerQuestion(q, payload, history))
-        : answerQuestion(q, payload, history);
+        ? await source.ask(q, history, focus).catch(() => answerQuestion(q, payload, history, focus))
+        : answerQuestion(q, payload, history, focus);
     }
 
     useUiStore.getState().setAnswer({ ...result, question: q });
@@ -87,7 +91,7 @@ export async function runAsk(question: string): Promise<boolean> {
         const parent = payload.categories.find((c) => c.id === home)?.parent_id;
         if (parent) homes.add(parent);
       }
-      useUiStore.getState().setHighlight([...new Set([...result.highlighted_node_ids, ...cited, ...homes])]);
+      useUiStore.getState().setHighlight([...new Set([...result.highlighted_node_ids, ...cited, ...homes, ...focus])]);
       useUiStore.getState().requestZoomTo(cited);
     }
     return true;

@@ -47,6 +47,8 @@ interface WorkspaceState {
   deleteMemory: (memoryId: string) => void;
   /** User re-parents a child category. */
   moveCategory: (categoryId: string, parentId: string) => void;
+  /** A category made by hand around picked memories. Resolves to its id. */
+  createCategory: (name: string, memoryIds: string[]) => Promise<string>;
   /** Renames a category and locks it against future reorganization. */
   renameCategory: (categoryId: string, name: string) => void;
   /** Whether Recall may restructure on its own. */
@@ -226,6 +228,42 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     void source.updateCategory?.(categoryId, { name: trimmed })
       .then(get().applyPayload)
       .catch(() => void get().load());
+  },
+
+  createCategory: async (name, memoryIds) => {
+    const { source } = get();
+    if (source.createCategory) {
+      const result = await source.createCategory(name, memoryIds);
+      get().applyPayload(result.graph);
+      return result.categoryId;
+    }
+    // Seed mode: the same shape, made locally — theirs, locked, at the root.
+    const current = get().payload;
+    if (!current) throw new Error('no workspace');
+    const categoryId = `cat_user_${Date.now().toString(36)}`;
+    const ids = new Set(memoryIds);
+    get().applyPayload({
+      ...current,
+      categories: [
+        ...current.categories,
+        {
+          id: categoryId,
+          parent_id: null,
+          name,
+          rationale: null,
+          name_locked: true,
+          user_created: true,
+          x: null,
+          y: null,
+          pinned: false,
+          created_by: 'user',
+        },
+      ],
+      memories: current.memories.map((m) =>
+        ids.has(m.id) ? { ...m, category_id: categoryId, category_locked: true, x: null, y: null } : m,
+      ),
+    });
+    return categoryId;
   },
 
   moveCategory: (categoryId, parentId) => {

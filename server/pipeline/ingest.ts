@@ -921,6 +921,22 @@ export class IngestPipeline {
     return this.ai.condenseSource({ title: source.title ?? '', texts, locale });
   }
 
+  /** What a handful of picked memories come to, in one text. Reads, never writes. */
+  async condenseMemories(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ text: string }> {
+    if (!this.ai.condenseSource) throw new Error('this model cannot condense');
+    const all = this.repo.listMemories(workspaceId);
+    const texts = memoryIds.map((id) => {
+      const m = all.find((x) => x.id === id);
+      if (!m) throw new Error(`unknown memory ${id}`);
+      return m.text;
+    });
+    return this.ai.condenseSource({ title: '', texts, locale });
+  }
+
   /**
    * The AI's half of a user-driven merge: why these overlap, and the one text
    * that would hold everything. Reads nothing but the memories and writes

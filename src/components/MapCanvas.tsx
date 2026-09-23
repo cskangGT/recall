@@ -1,3 +1,4 @@
+import { memoriesUnder, togglePicked } from '../graph/pick';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { drawFrame } from '../graph/renderer';
 import {
@@ -409,6 +410,7 @@ export function MapCanvas({
         ghost,
         bloom,
         dissolving,
+        pickedIds: ui.picked,
         // What Mado's answer leaned on, numbered the way the panel numbers it.
         callouts:
           ui.answer && !ui.answer.found
@@ -416,7 +418,13 @@ export function MapCanvas({
                 const label = renderNodes.find((n) => n.id === c.memory_id)?.label ?? '';
                 return { id: c.memory_id, text: `[${c.n}] ${label.length > 34 ? `${label.slice(0, 33)}…` : label}` };
               })
-            : [],
+            : // Spread out on their own, the picks have room for their words.
+              ui.mapFocus && ui.picked.length > 0
+              ? ui.picked.map((id) => {
+                  const label = renderNodes.find((n) => n.id === id)?.label ?? '';
+                  return { id, text: label.length > 40 ? `${label.slice(0, 39)}…` : label };
+                })
+              : [],
       });
     };
 
@@ -480,6 +488,11 @@ export function MapCanvas({
           // A sleeping star answers with why it is dim, and the door to wake it.
           ui.toast(t('toast.sleepingTap'));
           ui.setUpgradeSheet(true);
+          return;
+        }
+        if (hit && ui.thinking) {
+          // Thinking: a press picks, and the camera stays where it is.
+          ui.setPicked(togglePicked(ui.picked, memoriesUnder(baseNodes, baseEdges, hit.id)));
           return;
         }
         if (hit) {

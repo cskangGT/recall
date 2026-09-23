@@ -98,7 +98,8 @@ export interface DataSource {
   previewLink?(url: string): Promise<LinkPreview>;
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
-  ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
+  /** `focus`: memory ids the person picked to think with — they lead the context. */
+  ask?(question: string, history?: AskTurn[], focus?: string[]): Promise<AskResult>;
   /** The diary's look back over [from, to] — the memory's own voice, longer form. */
   diaryRetro?(from: string, to: string): Promise<{ reflection: string; days: number }>;
   /**
@@ -110,6 +111,7 @@ export interface DataSource {
     question: string,
     onDelta: (text: string) => void,
     history?: AskTurn[],
+    focus?: string[],
   ): Promise<AskResult>;
   /**
    * The AI's half of a user-driven merge: why these memories overlap and the
@@ -138,6 +140,10 @@ export interface DataSource {
    * Closed by the capability probe on a server without a model.
    */
   condenseSource?(sourceId: string): Promise<{ text: string }>;
+  /** One text for what a handful of picked memories come to. Reads only. */
+  condenseMemories?(memoryIds: string[]): Promise<{ text: string }>;
+  /** A category made by hand around picked memories; they move in, locked. */
+  createCategory?(name: string, memoryIds: string[], parentId?: string | null): Promise<{ categoryId: string; graph: GraphPayload }>;
   updateCategory?(
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
@@ -321,7 +327,10 @@ export class ApiDataSource implements DataSource {
       };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
-      if (!caps.condense) this.condenseSource = undefined;
+      if (!caps.condense) {
+        this.condenseSource = undefined;
+        this.condenseMemories = undefined;
+      }
       this.readsPdf = caps.pdf === true;
       if (!caps.google) {
         this.listMeetings = undefined;
@@ -372,14 +381,15 @@ export class ApiDataSource implements DataSource {
     return this.post<{ url: string }>('/billing/checkout', { returnUrl });
   }
 
-  ask(question: string, history?: AskTurn[]): Promise<AskResult> {
-    return this.post<AskResult>('/ask', { question, history });
+  ask(question: string, history?: AskTurn[], focus?: string[]): Promise<AskResult> {
+    return this.post<AskResult>('/ask', { question, history, focus });
   }
 
   async askStream(
     question: string,
     onDelta: (text: string) => void,
     history?: AskTurn[],
+    focus?: string[],
   ): Promise<AskResult> {
     const invite = currentInvite();
     const workspace = await this.ensureWorkspace();
@@ -389,7 +399,7 @@ export class ApiDataSource implements DataSource {
         'content-type': 'application/json',
         ...(invite ? { 'x-recall-invite': invite } : {}),
       },
-      body: JSON.stringify({ question, history }),
+      body: JSON.stringify({ question, history, focus }),
     });
     if (!response.ok || !response.body) {
       throw new HttpError(response.status, `stream failed (${response.status})`);
@@ -497,6 +507,22 @@ export class ApiDataSource implements DataSource {
       { categoryId },
     );
     return validateSeed(graph);
+  }
+
+  condenseMemories?: (memoryIds: string[]) => Promise<{ text: string }> = (memoryIds) =>
+    this.post<{ text: string }>('/memories/condense-preview', { memoryIds, locale: currentLocale() });
+
+  async createCategory(
+    name: string,
+    memoryIds: string[],
+    parentId: string | null = null,
+  ): Promise<{ categoryId: string; graph: GraphPayload }> {
+    const result = await this.post<{ categoryId: string; graph: GraphPayload }>('/categories', {
+      name,
+      memoryIds,
+      parentId,
+    });
+    return { ...result, graph: validateSeed(result.graph) };
   }
 
   async settleMemory(memoryId: string, settled: boolean): Promise<GraphPayload> {

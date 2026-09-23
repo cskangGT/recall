@@ -35,7 +35,27 @@ export function answerQuestion(
   question: string,
   payload: GraphPayload,
   history: { question: string; answer: string }[] = [],
+  focus: string[] = [],
 ): ScriptedAnswer {
+  // Picked memories are thought with, never refused: the seed's stand-in
+  // strings them together in one sentence, citing each, so the surface —
+  // the numbers, the map, the evidence beside it — behaves as it will live.
+  const picked = focus
+    .map((id) => payload.memories.find((m) => m.id === id))
+    .filter((m): m is NonNullable<typeof m> => m !== undefined)
+    .slice(0, 6);
+  if (picked.length > 0) {
+    const cites = picked.map((m, i) => ({ n: i + 1, memory_id: m.id, source_id: m.source_id }));
+    const line = picked.map((m, i) => `${m.text} [${i + 1}]`).join(' ');
+    const ko = currentLocale() === 'ko';
+    return {
+      answer: ko ? `고른 것들을 나란히 두고 보면 — ${line}` : `Held side by side, these say — ${line}`,
+      citations: cites,
+      highlighted_node_ids: [...new Set([...picked.map((m) => m.id), ...picked.map((m) => m.category_id)])],
+      refused: false,
+    };
+  }
+
   // "What have I been into lately?" is answered by looking around, not by a
   // script: the last two weeks by interest, phrased from the counts — the
   // seed's honest stand-in for what a model does with the same sample.

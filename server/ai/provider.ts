@@ -165,6 +165,8 @@ export interface AiProvider {
     reflective?: Reflection;
     /** Recent exchanges, oldest first — absent on a fresh question. */
     history?: AskTurn[];
+    /** The first n of `retrieved` were picked out by the person to think with. */
+    focused?: number;
   }): Promise<AnswerResult>;
   /**
    * Optional: `answer`, with the text arriving as it is generated. `onDelta`
@@ -179,6 +181,7 @@ export interface AiProvider {
       retrieved: RetrievedMemory[];
       reflective?: Reflection;
       history?: AskTurn[];
+      focused?: number;
     },
     onDelta: (text: string) => void,
   ): Promise<AnswerResult>;

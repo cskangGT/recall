@@ -69,14 +69,15 @@ export class AskPipeline {
     workspaceId: string,
     question: string,
     history: AskTurn[] = [],
+    focus: string[] = [],
   ): AsyncGenerator<{ event: 'delta'; data: { text: string } } | { event: 'done'; data: AskResult }> {
-    const prepared = await this.prepare(workspaceId, question, history);
+    const prepared = await this.prepare(workspaceId, question, history, focus);
     if ('refusal' in prepared) {
       this.record(workspaceId, question, prepared.refusal);
       yield { event: 'done', data: prepared.refusal };
       return;
     }
-    const { payload, context, survivingCount, reflective } = prepared;
+    const { payload, context, survivingCount, reflective, focused } = prepared;
 
     /*
      * The provider pushes deltas through a callback; a generator pulls. The
@@ -93,11 +94,11 @@ export class AskPipeline {
     const streamFn = this.ai.answerStream?.bind(this.ai);
     const flight = (
       streamFn
-        ? streamFn({ question, retrieved: context, history, reflective }, (text) => {
+        ? streamFn({ question, retrieved: context, history, reflective, focused }, (text) => {
             pending.push(text);
             wake();
           })
-        : this.ai.answer({ question, retrieved: context, history, reflective })
+        : this.ai.answer({ question, retrieved: context, history, reflective, focused })
     ).finally(wake);
 
     let settled = false;
@@ -160,14 +161,19 @@ export class AskPipeline {
     return { reflection, days: new Set(entries.map((e) => e.date)).size };
   }
 
-  async ask(workspaceId: string, question: string, history: AskTurn[] = []): Promise<AskResult> {
-    const prepared = await this.prepare(workspaceId, question, history);
+  async ask(
+    workspaceId: string,
+    question: string,
+    history: AskTurn[] = [],
+    focus: string[] = [],
+  ): Promise<AskResult> {
+    const prepared = await this.prepare(workspaceId, question, history, focus);
     if ('refusal' in prepared) {
       this.record(workspaceId, question, prepared.refusal);
       return prepared.refusal;
     }
-    const { payload, context, survivingCount, reflective } = prepared;
-    const generated = await this.ai.answer({ question, retrieved: context, history, reflective });
+    const { payload, context, survivingCount, reflective, focused } = prepared;
+    const generated = await this.ai.answer({ question, retrieved: context, history, reflective, focused });
     return this.finish(workspaceId, question, payload, context, survivingCount, generated);
   }
 
@@ -176,6 +182,7 @@ export class AskPipeline {
     workspaceId: string,
     question: string,
     history: AskTurn[],
+    focus: string[] = [],
   ): Promise<
     | { refusal: AskResult }
     | {
@@ -183,9 +190,47 @@ export class AskPipeline {
         context: RetrievedMemory[];
         survivingCount: number;
         reflective?: Reflection;
+        /** How many of `context` are the person's own picks, at its head. */
+        focused?: number;
       }
   > {
     const payload = this.repo.getGraphPayload(workspaceId);
+
+    /*
+     * Thinking with picked memories. The picks are the context — they come
+     * first, in the order they were picked, and they are never refused: the
+     * person is holding them, so "nothing saved about that" would be false.
+     * Retrieval still runs, to fill what room is left with whatever else
+     * bears on the question; a hit that is already a pick is not repeated.
+     */
+    const picked = focus
+      .map((id) => payload.memories.find((m) => m.id === id))
+      .filter((m): m is NonNullable<typeof m> => m !== undefined)
+      .slice(0, CONTEXT_LIMIT);
+    if (picked.length > 0) {
+      const have = new Set(picked.map((m) => m.id));
+      const room = CONTEXT_LIMIT - picked.length;
+      const extra =
+        room > 0
+          ? (
+              await relevantTo(
+                payload,
+                (q, n) => this.repo.keywordSearch(workspaceId, q, n),
+                this.embeddings,
+                question,
+              )
+            )
+              .map((r) => r.memory)
+              .filter((m) => !have.has(m.id))
+              .slice(0, room)
+          : [];
+      return {
+        payload,
+        context: expandMemories(payload, [...picked, ...extra]),
+        survivingCount: picked.length + extra.length,
+        focused: picked.length,
+      };
+    }
 
     /*
      * "What have I been into lately?" resembles no memory, so retrieval would

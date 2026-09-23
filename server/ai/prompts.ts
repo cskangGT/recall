@@ -395,6 +395,7 @@ export function buildAnswerPrompt(input: {
   retrieved: RetrievedMemory[];
   history?: AskTurn[];
   reflective?: Reflection;
+  focused?: number;
 }): string {
   const numbered = input.retrieved
     .map(
@@ -445,14 +446,34 @@ export function buildAnswerPrompt(input: {
         'leans on. Refuse only if there are no memories at all.',
         '',
       ]
-    : [
-        'Answer using only the numbered memories below. They are the entire world.',
-        '',
-        'Every sentence must carry at least one [n] citation. Cite by number.',
-        'Two or three sentences. Say what the person decided or believes, in their',
-        'own terms — you are reminding them, not briefing a stranger.',
-        '',
-      ];
+    : input.focused && input.focused > 0
+      ? [
+          /*
+           * Thinking together: the person picked these out by hand, on the
+           * map, and is asking with them in front of them. They come first,
+           * and the task is to think across them — what they have in common,
+           * what one says about another, what is missing between them —
+           * before anything else that came up.
+           */
+          `The first ${input.focused} memories below are ones this person picked out by hand`,
+          'to think with — they are looking at them right now. Build the answer on',
+          'those first: draw the connections among them, say what one implies for',
+          'another, name what is missing between them. Any memories after those are',
+          'what else came up, and may be leaned on only where they add to the picks.',
+          '',
+          'Every sentence must carry at least one [n] citation. Cite by number.',
+          'Three or four sentences. Think out loud with them, in their own terms —',
+          'you are their memory joining in, not a stranger summarizing.',
+          '',
+        ]
+      : [
+          'Answer using only the numbered memories below. They are the entire world.',
+          '',
+          'Every sentence must carry at least one [n] citation. Cite by number.',
+          'Two or three sentences. Say what the person decided or believes, in their',
+          'own terms — you are reminding them, not briefing a stranger.',
+          '',
+        ];
 
   return [
     ...task,
