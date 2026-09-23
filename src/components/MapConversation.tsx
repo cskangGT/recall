@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
 import { useUiStore } from '../store/uiStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
+import { runBatchPipeline } from '../capture/batch';
 
 /**
  * The conversation, rising from the bar.
@@ -21,6 +23,43 @@ export function MapConversation() {
   const draft = useUiStore((s) => s.answerDraft);
   const asking = useUiStore((s) => s.asking);
   const scroller = useRef<HTMLDivElement>(null);
+  const bundle = useUiStore((s) => s.bundle);
+  const thinking = useUiStore((s) => s.thinking);
+  const [keeping, setKeeping] = useState<string | null>(null);
+
+  /*
+   * Keeping what was said. A line of the conversation worth remembering
+   * becomes a memory through the ordinary pipeline — a note titled for the
+   * thought — and, where the thought has a home, it is moved in there and
+   * joins the picks. This is the moment the whole mode is for: thinking
+   * together, and deciding what of it to keep.
+   */
+  const keep = async (text: string) => {
+    if (keeping) return;
+    setKeeping(text);
+    const ui = useUiStore.getState();
+    const store = useWorkspaceStore.getState();
+    try {
+      const title = bundle ? bundle.name : t('bundle.condensedTitle');
+      let added: string[] = [];
+      if (store.source.capture) {
+        const result = await store.source.capture({ type: 'text', title, content: text });
+        store.applyPayload(result.graph);
+        added = result.addedMemoryIds ?? [];
+      } else {
+        const result = runBatchPipeline(store.payload!, [{ title, content: text }]);
+        store.applyPayload(result.payload);
+        added = result.addedMemoryIds;
+      }
+      if (bundle) for (const id of added) useWorkspaceStore.getState().moveMemory(id, bundle.categoryId);
+      if (thinking && added.length > 0) useUiStore.getState().setPicked([...useUiStore.getState().picked, ...added]);
+      ui.toast(bundle ? t('mapchat.keptInto', { name: bundle.name }) : t('mapchat.kept'));
+    } catch {
+      ui.toast(t('toast.captureFailed'));
+    } finally {
+      setKeeping(null);
+    }
+  };
 
   const live = answer && !answer.found ? answer : null;
   // The thread's last turn is the answer in hand (a refusal never joins it).
@@ -64,6 +103,11 @@ export function MapConversation() {
           <div key={i} className="mapchat__turn mapchat__turn--past">
             <p className="mapchat__q">{turn.question}</p>
             <p className="mapchat__a">{clean(turn.answer)}</p>
+            {thinking && (
+              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => void keep(clean(turn.answer))}>
+                {t('mapchat.keep')}
+              </button>
+            )}
           </div>
         ))}
         {live && (
@@ -89,6 +133,16 @@ export function MapConversation() {
                   );
                 })}
             </p>
+            {thinking && !live.refused && (
+              <button
+                className="mapchat__keep"
+                data-testid="map-keep"
+                disabled={keeping !== null}
+                onClick={() => void keep(clean(live.answer))}
+              >
+                {keeping ? t('mapchat.keeping') : bundle ? t('mapchat.keepInto', { name: bundle.name }) : t('mapchat.keep')}
+              </button>
+            )}
           </div>
         )}
         {pending && (

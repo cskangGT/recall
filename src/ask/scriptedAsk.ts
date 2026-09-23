@@ -46,10 +46,16 @@ export function answerQuestion(
     .slice(0, 6);
   if (picked.length > 0) {
     const cites = picked.map((m, i) => ({ n: i + 1, memory_id: m.id, source_id: m.source_id }));
-    const line = picked.map((m, i) => `${m.text} [${i + 1}]`).join(' ');
+    // Each pick its own sentence, so the local extractor reads them as such.
+    const line = picked.map((m, i) => `${m.text.replace(/[.。]$/, '')} [${i + 1}].`).join(' ');
     const ko = currentLocale() === 'ko';
+    // A closing line of its own, so keeping the answer keeps something new
+    // rather than a second copy of the picks.
+    const close = ko
+      ? '이것들을 한데 놓고 보면 같은 방향을 가리키고 있어서, 하나의 생각으로 남겨 둘 만해.'
+      : 'Taken together these point the same way, and are worth keeping as one thought.';
     return {
-      answer: ko ? `고른 것들을 나란히 두고 보면 — ${line}` : `Held side by side, these say — ${line}`,
+      answer: ko ? `고른 것들을 나란히 두고 보면 — ${line} ${close}` : `Held side by side, these say — ${line} ${close}`,
       citations: cites,
       highlighted_node_ids: [...new Set([...picked.map((m) => m.id), ...picked.map((m) => m.category_id)])],
       refused: false,

@@ -6478,3 +6478,42 @@ button.brief__line:hover {
   background: rgba(232, 163, 61, 0.24);
   color: var(--text);
 }
+
+
+/* The bundle's name leads the strip: where the thought lives. */
+.picks__bundle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.picks__bundle:hover {
+  text-decoration: underline;
+}
+
+/* Keeping a line of the talk — quiet, under the answer it keeps. */
+.mapchat__keep {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  border: 1px solid rgba(232, 163, 61, 0.4);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: #f6dfae;
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.mapchat__keep:hover {
+  background: rgba(232, 163, 61, 0.12);
+}
+
+.mapchat__keep:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

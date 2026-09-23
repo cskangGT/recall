@@ -35,6 +35,7 @@ export function ThinkPicks() {
   const picked = useUiStore((s) => s.picked);
   const setPicked = useUiStore((s) => s.setPicked);
   const selectedId = useUiStore((s) => s.selectedId);
+  const bundle = useUiStore((s) => s.bundle);
   const focused = useUiStore((s) => s.mapFocus !== null);
   const payload = useWorkspaceStore((s) => s.payload);
   const [bundling, setBundling] = useState(false);
@@ -50,6 +51,20 @@ export function ThinkPicks() {
     <div className="picks" data-testid="think-picks">
       <div className="picks__head">
         <span className="picks__count">
+          {bundle && (
+            <button
+              className="picks__bundle"
+              data-testid="think-bundle-name"
+              onClick={() => {
+                const ui = useUiStore.getState();
+                ui.select(bundle.categoryId);
+                ui.requestZoomTo([bundle.categoryId, ...picked]);
+              }}
+            >
+              ✦ {bundle.name}
+            </button>
+          )}
+          {bundle ? ' · ' : ''}
           {memories.length === 0 ? t('think.none') : t('think.count', { count: memories.length })}
         </span>
         {memories.length > 0 && (
@@ -71,7 +86,7 @@ export function ThinkPicks() {
               aria-expanded={bundling}
               onClick={() => setBundling((v) => !v)}
             >
-              {t('think.bundle')}
+              {bundle ? t('think.rebundle') : t('think.bundle')}
             </button>
             <button className="picks__action picks__action--quiet" data-testid="think-clear" onClick={() => setPicked([])}>
               {t('think.clear')}

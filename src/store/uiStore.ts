@@ -235,6 +235,13 @@ interface UiState {
   thinking: boolean;
   /** Memory ids picked so far, in the order they were picked. */
   picked: string[];
+  /**
+   * Where the thought lives once it has been bundled — the category the picks
+   * were made into. Thinking goes on with it in hand: what the conversation
+   * turns up can be kept straight into it.
+   */
+  bundle: { categoryId: string; name: string } | null;
+  setBundle: (bundle: { categoryId: string; name: string } | null) => void;
   setThinking: (on: boolean) => void;
   setPicked: (ids: string[]) => void;
   /** A picture on its way into the add bar — dropped or picked elsewhere, laid in when the bar opens. */
@@ -328,9 +335,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   archiveQuery: '',
   thinking: false,
   picked: [],
+  bundle: null,
+  setBundle: (bundle) => set({ bundle }),
   setThinking: (thinking) =>
     // Leaving the mode puts the picks down and the map back as it was.
-    set((s) => (thinking ? { thinking } : { thinking, picked: [], highlightedIds: [], mapFocus: s.mapFocus ? null : s.mapFocus })),
+    set((s) => (thinking ? { thinking } : { thinking, picked: [], bundle: null, highlightedIds: [], mapFocus: s.mapFocus ? null : s.mapFocus })),
   setPicked: (picked) => set({ picked, highlightedIds: picked }),
   pendingImage: null,
   setPendingImage: (pendingImage) => set({ pendingImage }),

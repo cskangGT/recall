@@ -49,6 +49,7 @@ export function MapSearch() {
   const asking = useUiStore((s) => s.findMode.map === 'ask');
   const thinking = useUiStore((s) => s.thinking);
   const pickedIds = useUiStore((s) => s.picked);
+  const bundle = useUiStore((s) => s.bundle);
   const picked = pickedIds.length;
   const [filter, setFilter] = useState<SourceType | 'all'>('all');
 
@@ -128,7 +129,15 @@ export function MapSearch() {
         <input
           data-testid="map-search-input"
           aria-label={t('map.search.label')}
-          placeholder={asking ? (thinking && picked > 0 ? t('think.ph') : t('find.ph.ask')) : t('find.ph.search')}
+          placeholder={
+            asking
+              ? bundle
+                ? t('think.phBundle', { name: bundle.name })
+                : thinking && picked > 0
+                  ? t('think.ph')
+                  : t('find.ph.ask')
+              : t('find.ph.search')
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

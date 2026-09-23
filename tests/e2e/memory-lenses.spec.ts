@@ -179,8 +179,23 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
   await page.getByTestId('bundle-name').fill('Hiring rules');
   await page.getByTestId('bundle-make').click();
   await expect(page.getByTestId('toast').last()).toContainText('“Hiring rules” is yours now');
-  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByTestId('inspector')).toContainText('Hiring rules');
+
+  // Bundling is where the thinking starts: the mode stays on, the picks stay
+  // in hand with their new home named, and the bar invites the conversation.
+  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('think-bundle-name')).toContainText('Hiring rules');
+  await expect(page.getByTestId('map-search-input')).toHaveAttribute('placeholder', /Hiring rules/);
+
+  // What the talk turns up can be kept straight into it.
+  await page.getByTestId('map-search-input').fill('So what should we do first');
+  await page.getByTestId('map-search-input').press('Enter');
+  await expect(page.getByTestId('map-keep')).toContainText('Keep this in “Hiring rules”');
+  const before = await page.locator('[data-testid^="pick-"]').count();
+  await page.getByTestId('map-keep').click();
+  await expect(page.getByTestId('toast').last()).toContainText('in “Hiring rules” now');
+  // What was kept joins the picks (the pipeline may read more than one line out of it).
+  await expect.poll(() => page.locator('[data-testid^="pick-"]').count()).toBeGreaterThan(before);
+
   await page.keyboard.press('t');
   await expect(page.getByTestId('category-index')).toContainText('Hiring rules');
 });

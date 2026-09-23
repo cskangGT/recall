@@ -46,12 +46,17 @@ export function Bundle({ onClose }: { onClose: () => void }) {
   if (!payload) return null;
   const roots = payload.categories.filter((c) => c.parent_id === null);
 
+  /*
+   * Bundling is not the end — it is where the thinking starts in earnest.
+   * The picks stay in hand, now with a home, the mode stays on, and the
+   * bar invites the conversation that decides what else belongs there.
+   */
   const finish = (message: string, go: () => void) => {
     const ui = useUiStore.getState();
     ui.toast(message);
-    ui.setThinking(false);
     onClose();
     go();
+    document.querySelector<HTMLInputElement>('[data-testid="map-search-input"]')?.focus();
   };
 
   const suggest = async () => {
@@ -75,7 +80,8 @@ export function Bundle({ onClose }: { onClose: () => void }) {
       const id = await useWorkspaceStore.getState().createCategory(trimmed, picked);
       finish(t('bundle.made', { name: trimmed, count: picked.length }).replace('{은/는}', josa(trimmed, '은', '는').slice(trimmed.length)), () => {
         const ui = useUiStore.getState();
-        ui.select(id);
+        ui.setBundle({ categoryId: id, name: trimmed });
+        ui.setFindMode('map', 'ask');
         ui.requestZoomTo([id, ...picked]);
       });
     } catch {
@@ -92,7 +98,8 @@ export function Bundle({ onClose }: { onClose: () => void }) {
     for (const id of picked) store.moveMemory(id, category.id);
     finish(t('bundle.moved', { name: category.name, count: picked.length }), () => {
       const ui = useUiStore.getState();
-      ui.select(category.id);
+      ui.setBundle({ categoryId: category.id, name: category.name });
+      ui.setFindMode('map', 'ask');
       ui.requestZoomTo([category.id, ...picked]);
     });
   };
@@ -114,9 +121,10 @@ export function Bundle({ onClose }: { onClose: () => void }) {
         store.applyPayload(result.payload);
         added = result.addedMemoryIds;
       }
+      // The note joins the picks: it is part of the thought now.
       finish(t('bundle.kept'), () => {
         const ui = useUiStore.getState();
-        if (added[0]) ui.openMemoryPage(added[0]);
+        if (added.length > 0) ui.setPicked([...ui.picked, ...added]);
       });
     } catch {
       useUiStore.getState().toast(t('bundle.failed'));
