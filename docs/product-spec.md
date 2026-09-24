@@ -36,7 +36,7 @@ The one-line pitch:
 
 ## 2. Target user
 
-**Primary:** founders and knowledge workers who save 5–30 pieces of information per week across at least three different apps and have no retrieval ritual.
+**Primary:** people whose work is gathering information, taking meetings and making decisions — founders, and office workers in any line of work that fits that description — who save 5–30 pieces of information per week across at least three different apps and have no retrieval ritual. The role chips in the greeting (planner, founder, C-level, researcher, developer, designer, marketer) are examples of this way of working, not a gate.
 
 Concrete profile used for all seed data and demo content:
 

@@ -6809,3 +6809,13 @@ button.brief__line:hover {
 .arc__greeting[data-step='learn'] .welcome__places {
   margin-top: 16px;
 }
+
+/* Under the role chips: the door is wider than the examples on it. */
+.welcome__whoany {
+  margin: 0 0 4px;
+  max-width: 60ch;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-shadow: 0 1px 10px rgba(22, 13, 30, 0.7);
+}

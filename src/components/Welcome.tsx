@@ -255,6 +255,8 @@ export function Welcome() {
                   </button>
                 ))}
               </div>
+              {/* The chips are examples, not a gate: the target is a way of working. */}
+              <p className="welcome__whoany" data-testid="welcome-who-any">{t('welcome.whoAny')}</p>
               <button
                 className="welcome__quiet"
                 data-testid="role-skip"
