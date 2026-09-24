@@ -658,7 +658,7 @@ const ROLE_WORDS: Record<string, string> = {
   planner: 'a product planner / PM',
   ceo: 'a founder / CEO',
   clevel: 'a C-level executive (CTO, COO, CMO, CFO…) running a function',
-  researcher: 'a researcher',
+  researcher: 'a researcher or professor',
   developer: 'a software developer',
   designer: 'a designer',
   marketer: 'a marketer',
