@@ -663,6 +663,7 @@ const ROLE_WORDS: Record<string, string> = {
   designer: 'a designer',
   marketer: 'a marketer',
   creator: 'a content creator or influencer',
+  sales: 'in sales or business development',
 };
 
 export function buildAskBackPrompt(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): string {
