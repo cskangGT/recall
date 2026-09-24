@@ -3,13 +3,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
+import { HttpError, type LinkFailure, type LinkPreview } from '../data/dataSource';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
 import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
 import { runAsk } from '../ask/runAsk';
-import { t } from '../i18n';
+import { t, PRODUCT } from '../i18n';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
+
+const LINK_FAILURES: readonly string[] = ['invalid', 'scheme', 'private', 'status', 'timeout', 'network'];
+const isLinkFailure = (r: unknown): r is LinkFailure => typeof r === 'string' && LINK_FAILURES.includes(r);
 
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
@@ -39,7 +43,8 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
    */
   const [preview, setPreview] = useState<
     | { loading: true; url: string }
-    | { loading: false; url: string; title: string | null; description: string | null; excerpt: string | null; failed?: boolean }
+    | ({ loading: false; failed?: false } & LinkPreview)
+    | { loading: false; url: string; failed: true; reason: LinkFailure; httpStatus?: number }
     | null
   >(null);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -50,9 +55,12 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
 
   const keepLink = () => {
     if (!preview || preview.loading) return;
-    const enriched = [preview.title, preview.description, preview.excerpt]
-      .filter(Boolean)
-      .join('\n');
+    // What the page says, whole — title, its own description, then the text —
+    // so the memories come from the article, not from its first four hundred
+    // characters of navigation. A read that failed keeps the address alone.
+    const enriched = preview.failed
+      ? ''
+      : [preview.title, preview.description, preview.text ?? preview.excerpt].filter(Boolean).join('\n\n');
     setCaptureOpen(false);
     onSubmit({
       type: 'link',
@@ -75,14 +83,13 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
       setPreview({ loading: true, url });
       reader(url).then(
         (p) => setPreview({ loading: false, ...p }),
-        () =>
+        (err: unknown) =>
           setPreview({
             loading: false,
             url,
-            title: null,
-            description: null,
-            excerpt: null,
             failed: true,
+            reason: err instanceof HttpError && isLinkFailure(err.reason) ? err.reason : 'network',
+            httpStatus: err instanceof HttpError ? err.httpStatus : undefined,
           }),
       );
       return;
@@ -216,7 +223,17 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
                     {preview.description ?? preview.excerpt}
                   </span>
                 )}
-                <span className="bar__preview-ask">{t('capture.linkAsk')}</span>
+                {/* How much of the page came through, and why not all of it. */}
+                <span className="bar__preview-note" data-testid="link-preview-note">
+                  {preview.failed
+                    ? t(`capture.linkFail.${preview.reason}`, { status: preview.httpStatus ?? 0 })
+                    : preview.note
+                      ? t(`capture.linkNote.${preview.note}`, { product: PRODUCT })
+                      : preview.truncated
+                        ? t('capture.linkReadCut', { n: preview.chars.toLocaleString() })
+                        : t('capture.linkRead', { n: preview.chars.toLocaleString() })}
+                </span>
+                <span className="bar__preview-ask">{preview.failed ? t('capture.linkAskAddress') : t('capture.linkAsk')}</span>
                 <span className="bar__preview-actions">
                   <button
                     className="bar__preview-keep"

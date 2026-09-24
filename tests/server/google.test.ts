@@ -394,7 +394,9 @@ describe('the google routes', () => {
   });
 
   describe('GET /meetings when connected', () => {
-    const T0 = Date.parse('2026-09-16T09:00:00.000Z');
+    // Relative to the clock, not a date: the window is measured from now, and a
+    // fixed 'tomorrow' became 'last week' the week after it was written.
+    const T0 = Date.now();
     const soon = new Date(T0 + 86400_000).toISOString();
     let calendarCalls: number;
     let deps: Deps;

@@ -46,11 +46,23 @@ export interface CaptureResult {
   redacted?: number;
 }
 
+export type LinkNote = 'thin' | 'app' | 'login' | 'not-html' | null;
+export type LinkFailure = 'invalid' | 'scheme' | 'private' | 'status' | 'timeout' | 'network';
+
 export interface LinkPreview {
   url: string;
   title: string | null;
   description: string | null;
+  /** The opening of the text, for the card. */
   excerpt: string | null;
+  /** The page's main text, capped — what rides into capture. */
+  text: string | null;
+  /** Characters of main text on the page, before the cap. */
+  chars: number;
+  truncated: boolean;
+  /** Why the text may be less than the page; null when it read well. */
+  note: LinkNote;
+  contentType: string | null;
 }
 
 export interface CaptureBatchResult {
@@ -193,8 +205,14 @@ export const SeedDataSource: DataSource = {
   },
 };
 
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    /** A machine-readable reason, where the server gives one (a link that could not be read says why). */
+    readonly reason?: string,
+    readonly httpStatus?: number,
+  ) {
     super(message);
     this.name = 'HttpError';
   }
@@ -324,9 +342,9 @@ export class ApiDataSource implements DataSource {
         ...(invite ? { 'x-recall-invite': invite } : {}),
       },
     });
-    const body = (await response.json()) as T & { error?: string };
+    const body = (await response.json()) as T & { error?: string; reason?: string; httpStatus?: number };
     if (!response.ok) {
-      throw new HttpError(response.status, body.error ?? `request failed (${response.status})`);
+      throw new HttpError(response.status, body.error ?? `request failed (${response.status})`, body.reason, body.httpStatus);
     }
     return body;
   }

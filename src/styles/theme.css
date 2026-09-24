@@ -6819,3 +6819,10 @@ button.brief__line:hover {
   line-height: 1.5;
   text-shadow: 0 1px 10px rgba(22, 13, 30, 0.7);
 }
+
+/* Under the link card: how much of the page came through, and why not all of it. */
+.bar__preview-note {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: 1.5;
+}

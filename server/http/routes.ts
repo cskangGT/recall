@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { LinkError } from '../link/preview.ts';
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
@@ -641,9 +642,12 @@ async function handleWorkspace(
     try {
       return ok(await deps.previewLink(body.url.trim()));
     } catch (err) {
+      // The reason rides along, so the client can say why and not just that.
+      const reason = err instanceof LinkError ? err.reason : 'network';
+      const httpStatus = err instanceof LinkError ? err.httpStatus : undefined;
       return {
         status: 502,
-        body: { error: err instanceof Error ? err.message : 'could not read the link' },
+        body: { error: err instanceof Error ? err.message : 'could not read the link', reason, ...(httpStatus ? { httpStatus } : {}) },
       };
     }
   }
