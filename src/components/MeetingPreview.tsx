@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t, PRODUCT } from '../i18n';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -25,6 +25,11 @@ export function MeetingPreview() {
   const [line, setLine] = useState('');
   const [busy, setBusy] = useState(false);
   const [prep, setPrep] = useState<{ text: string; memories: Memory[] } | null>(null);
+  const card = useRef<HTMLDivElement>(null);
+  // The answer arrives below the fold of a tall step: bring it up to the eye.
+  useEffect(() => {
+    card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [prep]);
 
   const preview = async () => {
     const content = line.trim();
@@ -92,7 +97,7 @@ export function MeetingPreview() {
           </button>
         </div>
       ) : (
-        <div className="meetprev__card" data-testid="welcome-meeting-card">
+        <div className="meetprev__card" data-testid="welcome-meeting-card" ref={card}>
           <span className="brief__eyebrow">{t('welcome.meeting.cardHead', { product: PRODUCT })}</span>
           <p className="meetprev__text">{prep.text}</p>
           {prep.memories.length > 0 && (

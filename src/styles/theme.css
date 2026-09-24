@@ -6782,3 +6782,30 @@ button.brief__line:hover {
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+
+/*
+ * The last beat is the one that grows: the four places, then a meeting and
+ * what Mado brings to it. The sky above the greeting was empty on purpose
+ * for the short beats, but here it is room — so this step starts high and
+ * scrolls in the space above the bar instead of running under it. The
+ * fade at the foot says there is more; the scrollbar itself stays out of
+ * the sky.
+ */
+.arc__greeting[data-step='learn'] {
+  top: 7%;
+  bottom: 104px;
+  justify-content: flex-start;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 24px;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
+
+.arc__greeting[data-step='learn']::-webkit-scrollbar {
+  display: none;
+}
+
+.arc__greeting[data-step='learn'] .welcome__places {
+  margin-top: 16px;
+}
