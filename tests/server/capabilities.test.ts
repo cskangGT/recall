@@ -34,14 +34,14 @@ describe('GET /api/capabilities', () => {
   it('reports closed doors on a server with no readers', async () => {
     const res = await get(depsWith({}));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ appleNotes: false, notion: false, condense: false, google: false, pdf: false, askBack: false });
+    expect(res.body).toEqual({ appleNotes: false, notion: false, condense: false, google: false, pdf: false, askBack: false, digest: false });
   });
 
   it('reports exactly the doors the deps can open', async () => {
     const res = await get(depsWith({
       readNotes: async () => ({ notes: [], total: 0, droppedSecretLines: 0 }) as never,
     }));
-    expect(res.body).toEqual({ appleNotes: true, notion: false, condense: false, google: false, pdf: false, askBack: false });
+    expect(res.body).toEqual({ appleNotes: true, notion: false, condense: false, google: false, pdf: false, askBack: false, digest: false });
   });
 });
 

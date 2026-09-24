@@ -216,6 +216,16 @@ export interface AiProvider {
     locale?: 'en' | 'ko';
   }): Promise<CondenseDraft>;
   askBack?(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack>;
+  /**
+   * Optional: a page whole and in parts — one summary of everything and one
+   * per section, exactly as many as there are sections, in order. The person
+   * picks the parts to keep. Providers without it leave the link to its text.
+   */
+  digest?(input: {
+    title: string | null;
+    sections: { heading: string | null; text: string }[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ summary: string; sections: { summary: string }[] }>;
 }
 
 /**

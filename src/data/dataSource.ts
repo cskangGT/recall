@@ -65,6 +65,11 @@ export interface LinkPreview {
   contentType: string | null;
 }
 
+export interface PageDigest {
+  summary: string;
+  sections: { heading: string | null; text: string; summary: string }[];
+}
+
 export interface CaptureBatchResult {
   /** One per item, in item order. */
   results: {
@@ -161,6 +166,8 @@ export interface DataSource {
   returnLink?(): Promise<string | null>;
   /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
   askBack?(thought: string, role?: string): Promise<{ question: string }>;
+  /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
+  digest?(title: string | null, text: string): Promise<PageDigest>;
   /** What Mado would call a category made of these memories. A suggestion only. */
   suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
   /** A category made by hand around picked memories; they move in, locked. */
@@ -387,6 +394,7 @@ export class ApiDataSource implements DataSource {
         google?: boolean;
         pdf?: boolean;
         askBack?: boolean;
+        digest?: boolean;
       };
       if (!caps.appleNotes) this.importAppleNotes = undefined;
       if (!caps.notion) this.importNotionPages = undefined;
@@ -396,6 +404,7 @@ export class ApiDataSource implements DataSource {
       }
       this.readsPdf = caps.pdf === true;
       if (!caps.askBack) this.askBack = undefined;
+      if (!caps.digest) this.digest = undefined;
       if (!caps.google) {
         this.listMeetings = undefined;
         this.googleStatus = undefined;
@@ -584,6 +593,9 @@ export class ApiDataSource implements DataSource {
 
   askBack?: (thought: string, role?: string) => Promise<{ question: string }> = (thought, role) =>
     this.post<{ question: string }>('/onboarding/ask-back', { thought, role, locale: currentLocale() });
+
+  digest?: (title: string | null, text: string) => Promise<PageDigest> = (title, text) =>
+    this.post<PageDigest>('/digest', { title, text, locale: currentLocale() });
 
   suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
     this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });

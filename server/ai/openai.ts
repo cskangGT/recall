@@ -8,8 +8,9 @@ import type {
   NameOperation,
   Reflection,
 } from './provider.ts';
+import { firstSentence } from '../link/digest.ts';
 import {
-  answerSchema, answerSoFar, askBackSchema, buildAnswerPrompt, buildAskBackPrompt, buildCondensePrompt, coerceAskBack, buildExtractPrompt,
+  answerSchema, buildDigestPrompt, coerceDigest, digestSchema, answerSoFar, askBackSchema, buildAnswerPrompt, buildAskBackPrompt, buildCondensePrompt, coerceAskBack, buildExtractPrompt,
   buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
   coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
   mergeSchema, nameByFallback, nameSchema,
@@ -353,6 +354,10 @@ export class OpenAiProvider implements AiProvider {
 
   async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
     return coerceAskBack(await this.json(buildAskBackPrompt(input), 'ask_back', askBackSchema, 300));
+  }
+
+  async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {
+    return coerceDigest(await this.json(buildDigestPrompt(input), 'digest', digestSchema, 2048), input.sections, firstSentence);
   }
 
   async condenseSource(input: {

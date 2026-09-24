@@ -1,4 +1,5 @@
 import { isPdfPath } from '../link/saveImage.ts';
+import { splitSections, firstSentence, type Digest, type Section } from '../link/digest.ts';
 import { redact } from '../secrets/redact.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
@@ -919,6 +920,21 @@ export class IngestPipeline {
   async askBack(thought: string, locale?: 'en' | 'ko', role?: string): Promise<{ question: string }> {
     if (!this.ai.askBack) throw new Error('this model cannot ask back');
     return this.ai.askBack({ thought, locale, role });
+  }
+
+  /** A page whole and in parts, where the model can write it. */
+  canDigest(): boolean {
+    return typeof this.ai.digest === 'function';
+  }
+
+  async digest(title: string | null, text: string, locale?: 'en' | 'ko'): Promise<Digest & { sections: (Section & { summary: string })[] }> {
+    if (!this.ai.digest) throw new Error('this model cannot digest a page');
+    const sections = splitSections(text);
+    if (sections.length === 0) return { summary: '', sections: [] };
+    const out = await this.ai.digest({ title, sections, locale });
+    // The sections ride back with their summaries: the person picks by the
+    // summary and keeps the text, and the two must never come apart.
+    return { summary: out.summary, sections: sections.map((sec, i) => ({ ...sec, summary: out.sections[i]?.summary ?? firstSentence(sec.text) })) };
   }
 
   /** Whether the wired model takes a PDF as a document. */

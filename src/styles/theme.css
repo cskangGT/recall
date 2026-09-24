@@ -6826,3 +6826,156 @@ button.brief__line:hover {
   color: var(--text-faint);
   line-height: 1.5;
 }
+
+/* The opening of the text as read: two lines, quieter than the description. */
+.bar__preview-excerpt {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/*
+ * The page, whole and in parts, inside the link card. The summary reads
+ * first; the parts follow as a short list the eye can scan, each a star that
+ * is lit while it will be kept — the same mark as a pick on the map — and its
+ * one-line summary, with the text itself a press away. The list is as long
+ * as the page has parts — the box itself scrolls, so every part is seen on
+ * the way down to the buttons, none hidden in a scroll within a scroll.
+ */
+.bar__digest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--edge);
+}
+
+.bar__digest-head {
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.bar__digest-summary {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.bar__sections {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar__section {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 0 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid var(--edge);
+}
+
+.bar__section:first-child {
+  border-top: none;
+}
+
+.bar__section-star {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.bar__section--off .bar__section-star {
+  color: var(--text-faint);
+}
+
+.bar__section-body {
+  min-width: 0;
+}
+
+.bar__section-heading {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.bar__section-sum {
+  display: block;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.bar__section--off .bar__section-heading,
+.bar__section--off .bar__section-sum {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+}
+
+.bar__section-text {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-faint);
+  white-space: pre-wrap;
+}
+
+.bar__section-more {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bar__section-more:hover {
+  color: var(--text);
+}
+
+.bar__myline {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.bar__myline::placeholder {
+  color: var(--text-faint);
+}
+
+/*
+ * A page in parts makes the capture box tall. It then starts nearer the top
+ * and scrolls inside itself, so the buttons at its foot are never below the
+ * window's edge.
+ */
+.overlay:has(.bar__digest) {
+  padding-top: 6vh;
+}
+
+.bar--capture {
+  max-height: calc(100vh - 12vh);
+  overflow-y: auto;
+}

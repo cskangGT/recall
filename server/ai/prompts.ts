@@ -694,6 +694,73 @@ export function coerceAskBack(raw: unknown): { question: string } {
   return { question: typeof o.question === 'string' ? o.question.trim() : '' };
 }
 
+// ------------------------------------------------------------------ digest
+
+export const digestSchema = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    sections: {
+      type: 'array',
+      items: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'], additionalProperties: false },
+    },
+  },
+  required: ['summary', 'sections'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * A page, whole and in parts. The sections were cut before the model saw the
+ * page, and it is made to answer one summary per section, in order — so the
+ * whole is covered by construction, and "miss nothing" is a count the code
+ * can check rather than a hope.
+ */
+export function buildDigestPrompt(input: {
+  title: string | null;
+  sections: { heading: string | null; text: string }[];
+  locale?: 'en' | 'ko';
+}): string {
+  const n = input.sections.length;
+  return [
+    'Here is a web page, already cut into sections. Two things, both in the',
+    'language the page is written in (a Korean page gets Korean, never a translation):',
+    '',
+    '1. "summary": what the whole page says, in three to five sentences. State',
+    '   its claims, facts, numbers and names — never "this page is about". Every',
+    '   section must be reflected in it; nothing on the page may be missing.',
+    `2. "sections": exactly ${n} entries, in the same order, one per section.`,
+    '   Each "summary" is one or two sentences saying what THAT section says —',
+    '   its specific facts, figures, names, steps. Never skip or merge sections;',
+    '   a section with little in it still gets one line saying what little it is.',
+    '',
+    'Leave out site furniture if any slipped in (menus, cookie notices, related',
+    'links, share buttons) — but never leave out content.',
+    '',
+    input.title ? `Title: ${input.title}` : '',
+    '',
+    ...input.sections.flatMap((sec, i) => [`[${i + 1}]${sec.heading ? ` ${sec.heading}` : ''}`, sec.text, '']),
+  ]
+    .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+    .join('\n');
+}
+
+export function coerceDigest(
+  raw: unknown,
+  sections: { heading: string | null; text: string }[],
+  firstSentence: (text: string) => string,
+): { summary: string; sections: { summary: string }[] } {
+  const o = (raw ?? {}) as { summary?: unknown; sections?: unknown };
+  const given = Array.isArray(o.sections) ? o.sections : [];
+  // One per section, in order; a missing or empty one gets the section's own first sentence.
+  const each = sections.map((sec, i) => {
+    const g = given[i] as { summary?: unknown } | undefined;
+    const text = g && typeof g.summary === 'string' ? g.summary.trim() : '';
+    return { summary: text || firstSentence(sec.text) };
+  });
+  const summary = typeof o.summary === 'string' && o.summary.trim() ? o.summary.trim() : each.map((e) => e.summary).join(' ');
+  return { summary, sections: each };
+}
+
 export function coerceCondense(raw: unknown, fallbackTexts: string[]): { text: string } {
   const o = (raw ?? {}) as { text?: unknown };
   const text = typeof o.text === 'string' ? o.text.trim() : '';

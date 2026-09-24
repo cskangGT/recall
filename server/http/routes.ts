@@ -280,6 +280,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       // A PDF needs somewhere to be kept and a model that reads documents.
       pdf: Boolean(deps.saveImage) && deps.ingest.canReadPdf(),
       askBack: deps.ingest.canAskBack(),
+      digest: deps.ingest.canDigest(),
     });
   }
 
@@ -1006,6 +1007,27 @@ async function handleWorkspace(
       return ok(await deps.ingest.askBack(thought, locale, role));
     } catch (err) {
       return { status: 502, body: { error: err instanceof Error ? err.message : 'ask-back failed' } };
+    }
+  }
+
+  /*
+   * POST /api/workspaces/:id/digest — a page whole and in parts. The text is
+   * what the link look (or a file) read; the answer is one summary of all of
+   * it and one per section, with the sections' own text riding along so the
+   * person can pick parts by their summary and keep their words. Reads
+   * nothing and writes nothing.
+   */
+  if (req.method === 'POST' && resource === 'digest' && !resourceId) {
+    if (!deps.ingest.canDigest()) return { status: 501, body: { error: 'this model cannot digest a page' } };
+    const body = asRecord(req.body);
+    const text = typeof body.text === 'string' ? body.text.trim().slice(0, 20_000) : '';
+    if (!text) return badRequest('text is required');
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 300) || null : null;
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.digest(title, text, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'digest failed' } };
     }
   }
 

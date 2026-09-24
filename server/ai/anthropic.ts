@@ -9,11 +9,12 @@ import type {
   Reflection,
 } from './provider.ts';
 import {
-  MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
+  MODEL, answerSchema, buildAnswerPrompt, buildDigestPrompt, buildExtractPrompt, buildNamePrompt, coerceDigest, digestSchema,
   buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, askBackSchema, buildAskBackPrompt, coerceAskBack, coerceNormalize, extractSchema, nameByFallback,
   nameSchema, normalizeSchema, resolveAnswer, resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
+import { firstSentence } from '../link/digest.ts';
 
 /**
  * The real provider.
@@ -93,6 +94,10 @@ export class AnthropicProvider implements AiProvider {
       { type: 'text', text: buildNormalizePrompt(input) },
     ];
     return coerceNormalize(await this.json(content, normalizeSchema, 2048));
+  }
+
+  async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {
+    return coerceDigest(await this.json(buildDigestPrompt(input), digestSchema, 2048), input.sections, firstSentence);
   }
 
   async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
