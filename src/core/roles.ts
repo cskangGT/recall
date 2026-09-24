@@ -8,7 +8,7 @@
  * a person like them is usually deciding. None is required: 'skip' is the
  * general case, and the question is the same for everyone.
  */
-export const ROLES = ['planner', 'ceo', 'clevel', 'researcher', 'developer', 'designer', 'marketer'] as const;
+export const ROLES = ['planner', 'ceo', 'clevel', 'researcher', 'developer', 'designer', 'marketer', 'creator'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_KEY = 'mado.ob.role';
