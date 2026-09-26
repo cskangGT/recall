@@ -94,6 +94,24 @@ export interface CaptureBatchResult {
   graph: GraphPayload;
 }
 
+/** One note a reader holds, read and not yet kept. */
+export interface ImportNote {
+  title: string;
+  firstLine: string;
+  content: string;
+  chars: number;
+  /** ISO time the note was last changed. */
+  modified: string;
+  /** The way back to the original, where the source has addresses (Notion does; Apple Notes does not). */
+  url: string | null;
+}
+
+export interface ImportList {
+  notes: ImportNote[];
+  total: number;
+  droppedSecretLines: number;
+}
+
 export interface NotesImportResult extends CaptureBatchResult {
   notes: { total: number; imported: number; droppedSecretLines: number };
 }
@@ -122,10 +140,13 @@ export interface DataSource {
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
   /** Reads the Mac's Notes.app — only a local darwin server can. */
   importAppleNotes?(days?: number): Promise<NotesImportResult>;
+  /** What this Mac's Notes hold, read and handed back — nothing kept — so the person can choose. */
+  listAppleNotes?(days?: number): Promise<ImportList>;
   /** Reads a pasted link's title and excerpt so the person can decide to keep it. */
   previewLink?(url: string): Promise<LinkPreview>;
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
+  listNotionPages?(days?: number): Promise<ImportList>;
   /** `focus`: memory ids the person picked to think with — they lead the context. */
   ask?(question: string, history?: AskTurn[], focus?: string[]): Promise<AskResult>;
   /** The diary's look back over [from, to] — the memory's own voice, longer form. */
@@ -406,8 +427,14 @@ export class ApiDataSource implements DataSource {
         askBack?: boolean;
         digest?: boolean;
       };
-      if (!caps.appleNotes) this.importAppleNotes = undefined;
-      if (!caps.notion) this.importNotionPages = undefined;
+      if (!caps.appleNotes) {
+        this.importAppleNotes = undefined;
+        this.listAppleNotes = undefined;
+      }
+      if (!caps.notion) {
+        this.importNotionPages = undefined;
+        this.listNotionPages = undefined;
+      }
       if (!caps.condense) {
         this.condenseSource = undefined;
         this.condenseMemories = undefined;
@@ -444,6 +471,12 @@ export class ApiDataSource implements DataSource {
 
   previewLink?: (url: string) => Promise<LinkPreview> = (url) =>
     this.post<LinkPreview>('/link/preview', { url });
+
+  listAppleNotes?: (days?: number) => Promise<ImportList> = (days = 14) =>
+    this.post<ImportList>('/import/apple-notes/list', { days });
+
+  listNotionPages?: (days?: number) => Promise<ImportList> = (days = 14) =>
+    this.post<ImportList>('/import/notion/list', { days });
 
   importAppleNotes?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/apple-notes', {

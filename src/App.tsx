@@ -23,6 +23,7 @@ import { importFiles, isTextLike, isZip, titleFromFilename } from './capture/imp
 import { revealOnReturn } from './capture/revealOnReturn';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
+import { ImportPicker } from './components/ImportPicker';
 import { ReviewPanel } from './components/ReviewPanel';
 import { MemoryPage } from './components/MemoryPage';
 import { UpgradeSheet } from './components/UpgradeSheet';
@@ -515,6 +516,7 @@ export function App() {
       </div>
       <Inspector />
       <MemoryPage />
+      <ImportPicker />
       <BatchReveal />
       <ReviewPanel />
       <UpgradeSheet />

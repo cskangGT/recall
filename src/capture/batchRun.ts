@@ -1,7 +1,7 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
 import { t } from '../i18n';
-import type { CaptureBatchResult, CaptureInput, CaptureResult } from '../data/dataSource';
+import type { CaptureBatchResult, CaptureInput, CaptureResult, ImportList } from '../data/dataSource';
 import type { ReorgEvent } from '../core/applyReorg';
 import { runBatchPipeline, summarizeCategories, type BatchItem, type BatchResult } from './batch';
 
@@ -133,14 +133,46 @@ function syncDays(reader: 'notes' | 'notion'): number | undefined {
 
 export async function importAppleNotesFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
+  const list = source.listAppleNotes?.bind(source);
+  if (list) return openImportPicker('notes', () => list(syncDays('notes')));
   const read = source.importAppleNotes?.bind(source);
   return runReaderImport(read && (() => read(syncDays('notes'))), 'notes');
 }
 
 export async function importNotionFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
+  const list = source.listNotionPages?.bind(source);
+  if (list) return openImportPicker('notion', () => list(syncDays('notion')));
   const read = source.importNotionPages?.bind(source);
   return runReaderImport(read && (() => read(syncDays('notion'))), 'notion');
+}
+
+/**
+ * The look before keeping, for a reader: read what it holds, keep nothing,
+ * and put the list in front of the person to choose from. What they choose
+ * goes through the ordinary batch — words in hand, so nothing is read twice.
+ */
+async function openImportPicker(reader: 'notes' | 'notion', list: () => Promise<ImportList>): Promise<void> {
+  const ui = useUiStore.getState();
+  if (running || !useWorkspaceStore.getState().payload) return;
+  ui.setImportPick({ reader, loading: true, notes: [], total: 0, droppedSecretLines: 0 });
+  try {
+    const result = await list();
+    const since = lastSyncOf(reader);
+    // The read succeeded — the connection holds, and the next visit lists from here.
+    localStorage.setItem(`mado.ob.sync.${reader}`, new Date().toISOString());
+    if (result.droppedSecretLines > 0) useUiStore.getState().toast(t('toast.notesSecrets', { count: result.droppedSecretLines }));
+    useUiStore.getState().setImportPick({ reader, loading: false, notes: result.notes, total: result.total, droppedSecretLines: result.droppedSecretLines, since });
+  } catch (err) {
+    useUiStore.getState().setImportPick(null);
+    useUiStore.getState().toast(err instanceof Error ? t('import.failedWith', { message: err.message }) : t('import.failed'));
+  }
+}
+
+/** The chosen notes, kept: the same batch a file drop takes, with the way back on each. */
+export async function keepImportPicks(items: BatchItem[]): Promise<void> {
+  useUiStore.getState().setImportPick(null);
+  await ingestBatch(items);
 }
 
 async function runReaderImport(
@@ -230,7 +262,7 @@ async function batchViaEndpoint(
   const knownCategoryIds = new Set(before.categories.map((c) => c.id));
 
   const response = await captureBatch(
-    items.map((i) => ({ type: 'text' as const, content: i.content, title: i.title })),
+    items.map((i) => ({ type: 'text' as const, content: i.content, title: i.title, url: i.url })),
   );
 
   const addedMemoryIds = response.results.flatMap((r) => r.addedMemoryIds);

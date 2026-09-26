@@ -1,4 +1,5 @@
 import { forgetStep } from '../core/onboarding';
+import type { ImportNote } from '../data/dataSource';
 import { create } from 'zustand';
 import { t } from '../i18n';
 import type { Camera } from '../graph/camera';
@@ -49,6 +50,17 @@ export interface Toast {
 }
 
 /** Memory's three lenses, and which verb each one's bar is set to. */
+/** What a reader holds, listed for choosing: loading first, then the notes and when they were last synced. */
+export interface ImportPickState {
+  reader: 'notes' | 'notion' | 'instagram';
+  loading: boolean;
+  notes: ImportNote[];
+  total: number;
+  droppedSecretLines: number;
+  /** The last sync, ISO — notes changed after it are "new". */
+  since?: string | null;
+}
+
 /** A file read out, on its way to the card: its words, and where the file was stored. */
 export interface PendingRead {
   name: string;
@@ -277,6 +289,9 @@ interface UiState {
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
+  /** A reader's notes, read and waiting to be chosen from — the look before keeping, for an import. */
+  importPick: ImportPickState | null;
+  setImportPick: (state: ImportPickState | null) => void;
   setSkyCeremony: (state: { categoryIds: string[] } | null) => void;
   setUpgradeSheet: (open: boolean) => void;
   setAwaken: (on: boolean) => void;
@@ -532,6 +547,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
+  importPick: null,
+  setImportPick: (importPick) => set({ importPick }),
   setSkyCeremony: (skyCeremony) => set({ skyCeremony }),
   setUpgradeSheet: (upgradeSheet) => set({ upgradeSheet }),
   setAwaken: (awaken) => set({ awaken }),

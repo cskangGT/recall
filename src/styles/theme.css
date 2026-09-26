@@ -7009,3 +7009,73 @@ button.brief__line:hover {
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+
+/*
+ * Choosing what to bring in. The same overlay and box as the capture bar,
+ * the same star list as a page's parts: each note a row that is on or off,
+ * grouped by what came since the last time and the rest, with what is
+ * already in dimmed and off. The box scrolls as one.
+ */
+.importpick__search {
+  width: 100%;
+  margin: 4px 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.importpick__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.importpick__tools .spacer {
+  flex: 1;
+}
+
+.importpick__group {
+  margin: 10px 0 4px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.importpick__row {
+  grid-template-columns: 16px 1fr auto;
+}
+
+.importpick__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.importpick__already {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.importpick__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.importpick__foot .spacer {
+  flex: 1;
+}

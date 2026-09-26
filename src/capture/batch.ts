@@ -29,6 +29,8 @@ import { localVector } from './embedLocal';
 export interface BatchItem {
   title: string;
   content: string;
+  /** The way back to the original, where there is one — provenance, never fetched. */
+  url?: string;
 }
 
 export interface BatchCategorySummary {

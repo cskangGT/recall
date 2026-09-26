@@ -653,6 +653,47 @@ async function handleWorkspace(
     }
   }
 
+  /*
+   * POST /api/workspaces/:id/import/apple-notes/list
+   * POST /api/workspaces/:id/import/notion/list
+   *
+   * The look before keeping, for a reader: what the source holds, read and
+   * handed back — title, opening line, date, the way back, and the words
+   * themselves — with nothing kept. The person chooses on the list, and the
+   * chosen go through the ordinary batch capture, words in hand, so the
+   * source is not read twice.
+   */
+  if (req.method === 'POST' && resource === 'import' && resourceId && action === 'list') {
+    const reader =
+      resourceId === 'apple-notes' ? deps.readNotes
+      : resourceId === 'notion' ? deps.readNotionPages
+      : undefined;
+    if (resourceId !== 'apple-notes' && resourceId !== 'notion') return notFound();
+    if (!reader) return { status: 501, body: { error: `this server cannot reach ${resourceId}` } };
+    const body = asRecord(req.body);
+    const days = typeof body.days === 'number' && body.days > 0 ? Math.min(body.days, 3650) : 14;
+    try {
+      const read = await reader(days);
+      return ok({
+        notes: read.notes.slice(0, 200).map((n) => {
+          const firstLine = n.content.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+          return {
+            title: n.title || firstLine.slice(0, 60),
+            firstLine: firstLine.slice(0, 160),
+            content: n.content,
+            chars: n.content.length,
+            modified: n.modified.toISOString(),
+            url: n.url ?? null,
+          };
+        }),
+        total: read.total,
+        droppedSecretLines: read.droppedSecretLines,
+      });
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : `could not read ${resourceId}` } };
+    }
+  }
+
   if (req.method === 'POST' && resource === 'import' && resourceId && !action) {
     const reader =
       resourceId === 'apple-notes' ? deps.readNotes
