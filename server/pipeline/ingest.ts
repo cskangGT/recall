@@ -403,7 +403,11 @@ export class IngestPipeline {
       // document out, and what it read becomes the source's own text — the
       // original a person can open later is the words, not a file path.
       const pdf = isPdfPath(input.imagePath);
-      if (input.type === 'screenshot' || pdf) {
+      // A PDF that arrives with its words already in hand was read before it
+      // was kept (files/read): the person saw the text and chose from it.
+      // Reading it again would cost a second model pass and undo the choice.
+      const preread = pdf && Boolean(input.content?.trim());
+      if (input.type === 'screenshot' || (pdf && !preread)) {
         const normalized = await this.ai.normalize({
           type: input.type, text: input.content, imagePath: input.imagePath,
         });
@@ -935,6 +939,18 @@ export class IngestPipeline {
     // The sections ride back with their summaries: the person picks by the
     // summary and keeps the text, and the two must never come apart.
     return { summary: out.summary, sections: sections.map((sec, i) => ({ ...sec, summary: out.sections[i]?.summary ?? firstSentence(sec.text) })) };
+  }
+
+  /**
+   * A document read out and nothing kept: the text, redacted, and how much
+   * of it. The look-before-keeping step for a file, as the link has one.
+   */
+  async readFile(imagePath: string): Promise<{ text: string; chars: number; redacted: number }> {
+    if (!isPdfPath(imagePath)) throw new Error('only a PDF can be read this way');
+    const normalized = await this.ai.normalize({ type: 'text', text: '', imagePath });
+    const read = redact(normalized.ocr_text ?? '');
+    if (!read.text.trim()) throw new Error('nothing could be read out of that PDF');
+    return { text: read.text, chars: read.text.length, redacted: read.count };
   }
 
   /** Whether the wired model takes a PDF as a document. */

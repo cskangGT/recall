@@ -421,9 +421,13 @@ export function App() {
          */
         const [only] = files;
         if (only && isTextLike(only)) {
-          void only.text().then((content) =>
-            capture({ type: 'text', content, title: titleFromFilename(only.name) }),
-          );
+          // Seen first, then kept: the file's words go to the card, whole and
+          // in parts, with room for a line of the person's own.
+          void only.text().then((content) => {
+            const ui = useUiStore.getState();
+            ui.queueReads([{ name: only.name, title: titleFromFilename(only.name), kind: 'text', path: null, text: content, chars: content.length, redacted: 0 }]);
+            ui.setCaptureOpen(true);
+          });
           return;
         }
         // Anything else is the rehearsal's demo — in seed mode. A live server

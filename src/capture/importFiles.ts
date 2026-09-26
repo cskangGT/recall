@@ -63,6 +63,15 @@ export async function importFiles(files: File[]): Promise<void> {
     return;
   }
 
+  if (textFiles.length === 1) {
+    // One file is seen before it is kept — the card, as a link or a PDF gets.
+    const [only] = textFiles;
+    const content = await only!.text();
+    ui.queueReads([{ name: only!.name, title: titleFromFilename(only!.name), kind: 'text', path: null, text: content, chars: content.length, redacted: 0 }]);
+    ui.setCaptureOpen(true);
+    return;
+  }
+
   const items = await Promise.all(
     textFiles.map(async (f): Promise<BatchItem> => ({
       title: titleFromFilename(f.name),

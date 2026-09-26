@@ -49,6 +49,18 @@ export interface Toast {
 }
 
 /** Memory's three lenses, and which verb each one's bar is set to. */
+/** A file read out, on its way to the card: its words, and where the file was stored. */
+export interface PendingRead {
+  name: string;
+  title: string;
+  kind: 'pdf' | 'text';
+  /** The stored file, for a PDF; a text file has none. */
+  path: string | null;
+  text: string;
+  chars: number;
+  redacted: number;
+}
+
 export type Lens = 'browse' | 'map' | 'sources';
 export type FindVerb = 'search' | 'ask';
 
@@ -249,6 +261,11 @@ interface UiState {
   /** A picture on its way into the add bar — dropped or picked elsewhere, laid in when the bar opens. */
   pendingImage: string | null;
   setPendingImage: (dataUrl: string | null) => void;
+  /** Files read out and waiting to be seen, chosen from, and kept — one card at a time, in order. */
+  pendingReads: PendingRead[];
+  queueReads: (reads: PendingRead[]) => void;
+  shiftRead: () => void;
+  clearReads: () => void;
   /** Search, or ask Mado — chosen on the bar, remembered per lens. */
   findMode: Record<Lens, FindVerb>;
   setFindMode: (lens: Lens, verb: FindVerb) => void;
@@ -345,6 +362,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   setPicked: (picked) => set({ picked, highlightedIds: picked }),
   pendingImage: null,
   setPendingImage: (pendingImage) => set({ pendingImage }),
+  pendingReads: [],
+  queueReads: (reads) => set((s) => ({ pendingReads: [...s.pendingReads, ...reads] })),
+  shiftRead: () => set((s) => ({ pendingReads: s.pendingReads.slice(1) })),
+  clearReads: () => set({ pendingReads: [] }),
   // Browsing and brainstorming are conversations; the archive is for finding.
   findMode: { browse: 'ask', map: 'ask', sources: 'search' },
   setFindMode: (lens, verb) => set((s) => ({ findMode: { ...s.findMode, [lens]: verb } })),
@@ -458,7 +479,10 @@ export const useUiStore = create<UiState>((set, get) => ({
     rememberWelcomed();
     set({ ...CLEARED, place: 'today', view: 'browse', welcomeDismissed: true });
   },
-  setCaptureOpen: (captureOpen) => set({ captureOpen }),
+  // Closing the box abandons any files still waiting for their card. (Not an
+  // unmount cleanup: StrictMode's rehearsal unmount would empty the queue
+  // before the first card was ever seen.)
+  setCaptureOpen: (captureOpen) => set(captureOpen ? { captureOpen } : { captureOpen, pendingReads: [] }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCaptureStage: (captureStage) => set({ captureStage }),

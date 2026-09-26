@@ -1,14 +1,16 @@
-import { imageDataUrl, isPdf, takePdfs } from '../capture/images';
+import { imageDataUrl, isPdf, showWhatWasKept, sourceOf, takePdfs } from '../capture/images';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
-import { HttpError, type LinkFailure, type LinkPreview, type PageDigest } from '../data/dataSource';
+import { HttpError, type LinkFailure, type LinkPreview } from '../data/dataSource';
+import { ReadCard, readLineFor } from './ReadCard';
+import type { PendingRead } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
 import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
 import { runAsk } from '../ask/runAsk';
-import { t, PRODUCT } from '../i18n';
+import { t } from '../i18n';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
 
@@ -36,6 +38,41 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
     useUiStore.getState().setPendingImage(null);
   }, [pendingImage]);
   /*
+   * A file read out and waiting: its card stands in for the box. Kept, it
+   * becomes a source with the stored file as its original and the chosen
+   * words as its text; skipped, the next file's card comes up, and with none
+   * left the box closes. Closing the box by hand abandons the queue (the
+   * store empties it on close).
+   */
+  const pending = useUiStore((st) => st.pendingReads[0] ?? null);
+  const nextRead = () => {
+    const ui = useUiStore.getState();
+    ui.shiftRead();
+    if (ui.pendingReads.length === 0) ui.setCaptureOpen(false);
+  };
+  const keepFile = async (read: PendingRead, content: string) => {
+    const store = useWorkspaceStore.getState();
+    nextRead();
+    if (!store.source.capture) {
+      onSubmit({ type: 'text', content, title: read.title });
+      return;
+    }
+    const ui = useUiStore.getState();
+    ui.setCaptureStage('reading');
+    try {
+      const result = await store.source.capture({ type: 'text', title: read.title, content, imagePath: read.path ?? undefined });
+      useWorkspaceStore.getState().applyPayload(result.graph);
+      ui.dismissWelcome();
+      ui.toast(t('toast.fileKept', { name: read.title, memories: result.addedMemoryIds?.length ?? 0 }));
+      const sid = sourceOf(result);
+      if (sid && useUiStore.getState().pendingReads.length === 0) showWhatWasKept([sid]);
+    } catch (err) {
+      ui.toast(err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'));
+    } finally {
+      useUiStore.getState().setCaptureStage('idle');
+    }
+  };
+  /*
    * The look-before-keeping step for links. A pasted URL is not yet a memory:
    * the server reads the page, this card shows what it found, and the person
    * decides. What was fetched then rides into capture as the content, so a
@@ -48,70 +85,15 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
     | null
   >(null);
   const ref = useRef<HTMLTextAreaElement>(null);
-  /*
-   * The page, whole and in parts. Once the look has the text, Mado reads all
-   * of it and says what it comes to, then what each part says — and the
-   * person keeps only the parts they want, with a line of their own on top.
-   * The order the person asked for: see, shape, then keep.
-   */
-  const [digest, setDigest] = useState<
-    | { loading: true }
-    | { loading: false; failed: true }
-    | { loading: false; failed?: false; summary: string; sections: PageDigest['sections']; on: boolean[]; open: boolean[] }
-    | null
-  >(null);
-  const [myLine, setMyLine] = useState('');
-  const DIGEST_MIN = 600;
-  useEffect(() => {
-    if (!preview || preview.loading || preview.failed || !preview.text || preview.note || preview.chars < DIGEST_MIN) {
-      setDigest(null);
-      return;
-    }
-    const reader = useWorkspaceStore.getState().source.digest;
-    if (!reader) return;
-    let live = true;
-    setDigest({ loading: true });
-    reader(preview.title, preview.text).then(
-      (d) => {
-        if (!live) return;
-        if (d.sections.length === 0) setDigest(null);
-        else setDigest({ loading: false, summary: d.summary, sections: d.sections, on: d.sections.map(() => true), open: d.sections.map(() => false) });
-      },
-      () => live && setDigest({ loading: false, failed: true }),
-    );
-    return () => {
-      live = false;
-    };
-    // Only the page identity matters: a new look starts a new digest.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview && !preview.loading && !preview.failed ? preview.url : null]);
-
 
   useEffect(() => ref.current?.focus(), []);
 
   const detected = detectCaptureType({ text, hasImage });
 
-  const keepLink = () => {
+  // The card hands over what to keep, assembled; a failed read keeps the address alone.
+  const keepLink = (content = '') => {
     if (!preview || preview.loading) return;
-    // What the page says, whole — title, its own description, then the text —
-    // so the memories come from the article, not from its first four hundred
-    // characters of navigation. A read that failed keeps the address alone.
-    const parts: (string | null)[] = [];
-    const mine = myLine.trim();
-    if (mine) parts.push(`${t('capture.myLineLead')}${mine}`);
-    if (!preview.failed) {
-      parts.push(preview.title);
-      if (digest && !digest.loading && !digest.failed) {
-        // The gist first, then only the parts left on — their own words, whole.
-        parts.push(`${t('capture.summaryLead')}${digest.summary}`);
-        digest.sections.forEach((sec, i) => {
-          if (digest.on[i]) parts.push(sec.heading ? `${sec.heading}\n${sec.text}` : sec.text);
-        });
-      } else {
-        parts.push(preview.description, preview.text ?? preview.excerpt);
-      }
-    }
-    const enriched = parts.filter(Boolean).join('\n\n');
+    const enriched = content;
     setCaptureOpen(false);
     onSubmit({
       type: 'link',
@@ -123,10 +105,8 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
 
   const submit = () => {
     if (!text.trim() && !hasImage) return;
-    if (preview && !preview.loading) {
-      keepLink();
-      return;
-    }
+    // The card has its own keep; the box behind it does nothing on Enter.
+    if (preview && !preview.loading) return;
     // A link goes through the look first — where the server can look at all.
     const reader = useWorkspaceStore.getState().source.previewLink;
     if (detected.type === 'link' && !hasImage && reader && !preview) {
@@ -193,7 +173,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     <div className="overlay" {...useDismissable(() => setCaptureOpen(false))}>
       <div
-        className="bar bar--capture"
+        className={`bar bar--capture${pending ? ' bar--reading' : ''}`}
         data-testid="capture-bar"
         role="dialog"
         aria-modal="true"
@@ -260,127 +240,57 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             readImage(file);
           }}
         />
-        {preview && (
+        {pending && (
+          <ReadCard
+            prefix="file"
+            title={pending.title}
+            text={pending.text}
+            chars={pending.chars}
+            readLine={readLineFor({ chars: pending.chars, redacted: pending.redacted })}
+            askLine={t('capture.fileAsk')}
+            keepLabel={t('capture.linkKeep')}
+            skipLabel={t('capture.linkSkip')}
+            onKeep={(content) => void keepFile(pending, content)}
+            onSkip={() => nextRead()}
+          />
+        )}
+        {preview && preview.loading && (
           <div className="bar__preview" data-testid="link-preview">
-            {preview.loading ? (
-              <span className="bar__preview-reading">{t('capture.linkReading')}</span>
-            ) : (
-              <>
-                <span className="bar__preview-title">
-                  {preview.failed ? t('capture.linkFailed') : (preview.title ?? preview.url)}
-                </span>
-                {/* The page's own description, then the opening of what was
-                    actually read — so the eye can tell an article from a menu
-                    before anything is kept, not just trust a character count. */}
-                {!preview.failed && preview.description && (
-                  <span className="bar__preview-desc">{preview.description}</span>
-                )}
-                {!preview.failed && preview.excerpt && preview.excerpt !== preview.description && !(digest && !digest.loading && !digest.failed) && (
-                  <span className="bar__preview-excerpt" data-testid="link-preview-excerpt">
-                    {preview.excerpt}
-                  </span>
-                )}
-                {digest && (
-                  <div className="bar__digest" data-testid="link-digest">
-                    {digest.loading ? (
-                      <span className="bar__preview-reading">{t('capture.digesting')}</span>
-                    ) : digest.failed ? (
-                      <span className="bar__preview-note">{t('capture.digestFailed')}</span>
-                    ) : (
-                      <>
-                        <span className="bar__digest-head">{t('capture.digestHead')}</span>
-                        <p className="bar__digest-summary" data-testid="link-digest-summary">
-                          {digest.summary}
-                        </p>
-                        {digest.sections.length > 1 && (
-                          <>
-                            <span className="bar__digest-head">{t('capture.sectionsHead')}</span>
-                            <ul className="bar__sections" data-testid="link-sections">
-                              {digest.sections.map((sec, i) => (
-                                <li key={i} className={`bar__section${digest.on[i] ? '' : ' bar__section--off'}`} data-testid={`link-section-${i}`}>
-                                  <button
-                                    className="bar__section-star"
-                                    data-testid={`link-section-toggle-${i}`}
-                                    aria-pressed={digest.on[i]}
-                                    aria-label={digest.on[i] ? t('capture.sectionOff') : t('capture.sectionOn')}
-                                    onClick={() => setDigest({ ...digest, on: digest.on.map((v, j) => (j === i ? !v : v)) })}
-                                  >
-                                    {digest.on[i] ? '★' : '☆'}
-                                  </button>
-                                  <span className="bar__section-body">
-                                    {sec.heading && <span className="bar__section-heading">{sec.heading}</span>}
-                                    <span className="bar__section-sum">{sec.summary}</span>
-                                    {digest.open[i] && <p className="bar__section-text">{sec.text}</p>}
-                                  </span>
-                                  <button
-                                    className="bar__section-more"
-                                    data-testid={`link-section-text-${i}`}
-                                    onClick={() => setDigest({ ...digest, open: digest.open.map((v, j) => (j === i ? !v : v)) })}
-                                  >
-                                    {digest.open[i] ? t('capture.sectionHide') : t('capture.sectionShow')}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-                {!preview.failed && (
-                  <input
-                    className="bar__myline"
-                    data-testid="link-my-line"
-                    placeholder={t('capture.myLine')}
-                    value={myLine}
-                    onChange={(e) => setMyLine(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        keepLink();
-                      }
-                    }}
-                  />
-                )}
-                {/* How much of the page came through, and why not all of it. */}
-                <span className="bar__preview-note" data-testid="link-preview-note">
-                  {preview.failed
-                    ? t(`capture.linkFail.${preview.reason}`, { status: preview.httpStatus ?? 0 })
-                    : preview.note
-                      ? t(`capture.linkNote.${preview.note}`, { product: PRODUCT })
-                      : preview.truncated
-                        ? t('capture.linkReadCut', { n: preview.chars.toLocaleString() })
-                        : t('capture.linkRead', { n: preview.chars.toLocaleString() })}
-                </span>
-                <span className="bar__preview-ask">{preview.failed ? t('capture.linkAskAddress') : t('capture.linkAsk')}</span>
-                <span className="bar__preview-actions">
-                  <button
-                    className="bar__preview-keep"
-                    data-testid="link-preview-keep"
-                    disabled={Boolean(digest && !digest.loading && !digest.failed && digest.sections.length > 1 && !digest.on.some(Boolean))}
-                    autoFocus
-                    onClick={keepLink}
-                  >
-                    {digest && !digest.loading && !digest.failed && digest.sections.length > 1
-                      ? t('capture.linkKeepParts', { n: digest.on.filter(Boolean).length })
-                      : t('capture.linkKeep')}
-                  </button>
-                  <button
-                    className="bar__preview-skip"
-                    data-testid="link-preview-skip"
-                    onClick={() => {
-                      setPreview(null);
-                      setDigest(null);
-                      setMyLine('');
-                    }}
-                  >
-                    {t('capture.linkSkip')}
-                  </button>
-                </span>
-              </>
-            )}
+            <span className="bar__preview-reading">{t('capture.linkReading')}</span>
           </div>
+        )}
+        {preview && !preview.loading && preview.failed && (
+          <div className="bar__preview" data-testid="link-preview">
+            <span className="bar__preview-title">{t('capture.linkFailed')}</span>
+            <span className="bar__preview-note" data-testid="link-preview-note">
+              {t(`capture.linkFail.${preview.reason}`, { status: preview.httpStatus ?? 0 })}
+            </span>
+            <span className="bar__preview-ask">{t('capture.linkAskAddress')}</span>
+            <span className="bar__preview-actions">
+              <button className="bar__preview-keep" data-testid="link-preview-keep" autoFocus onClick={() => keepLink('')}>
+                {t('capture.linkKeep')}
+              </button>
+              <button className="bar__preview-skip" data-testid="link-preview-skip" onClick={() => setPreview(null)}>
+                {t('capture.linkSkip')}
+              </button>
+            </span>
+          </div>
+        )}
+        {preview && !preview.loading && !preview.failed && (
+          <ReadCard
+            prefix="link"
+            title={preview.title ?? preview.url}
+            description={preview.description}
+            excerpt={preview.excerpt}
+            text={preview.text}
+            chars={preview.chars}
+            readLine={readLineFor({ chars: preview.chars, truncated: preview.truncated, note: preview.note })}
+            askLine={t('capture.linkAsk')}
+            keepLabel={t('capture.linkKeep')}
+            skipLabel={t('capture.linkSkip')}
+            onKeep={keepLink}
+            onSkip={() => setPreview(null)}
+          />
         )}
         <div className="bar__foot">
           <div className="bar__types">

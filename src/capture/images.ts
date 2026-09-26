@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import type { PendingRead } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { t } from '../i18n';
 
@@ -115,7 +116,7 @@ export async function takeImages(files: File[]): Promise<boolean> {
  * One original opens as its page — the text, the memories taken from it, and
  * the way to check them; several land in the archive, newest first.
  */
-function showWhatWasKept(sourceIds: string[]): void {
+export function showWhatWasKept(sourceIds: string[]): void {
   const ui = useUiStore.getState();
   const ids = [...new Set(sourceIds)];
   if (ids.length === 1) ui.openSourcePage(ids[0]!);
@@ -123,7 +124,7 @@ function showWhatWasKept(sourceIds: string[]): void {
 }
 
 /** The source a capture made, read off the memories it added (or, with none, the newest source). */
-function sourceOf(result: { addedMemoryIds: string[]; graph: { memories: { id: string; source_id: string }[]; sources: { id: string; created_at: string }[] } }): string | null {
+export function sourceOf(result: { addedMemoryIds: string[]; graph: { memories: { id: string; source_id: string }[]; sources: { id: string; created_at: string }[] } }): string | null {
   const added = result.graph.memories.find((m) => result.addedMemoryIds.includes(m.id));
   if (added) return added.source_id;
   return [...result.graph.sources].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]?.id ?? null;
@@ -146,6 +147,46 @@ export async function takePdfs(files: File[]): Promise<boolean> {
   const store = useWorkspaceStore.getState();
   if (!store.source.capture || !store.source.readsPdf) {
     ui.toast(t('toast.pdfNotYet'));
+    return true;
+  }
+
+  /*
+   * The look before keeping. Where the server can read a file out without
+   * keeping it, each PDF is read and queued for the card — the text, whole
+   * and in parts, the person's own line, and only then a keep. The older
+   * path below (read and kept in one go) remains for a server without it.
+   */
+  const reader = store.source.readFile;
+  if (reader) {
+    ui.setCaptureStage('reading');
+    ui.toast(t('toast.pdfReading', { count: pdfs.length }));
+    const reads: PendingRead[] = [];
+    try {
+      for (const file of pdfs) {
+        if (file.size > MAX_PDF_BYTES) {
+          ui.toast(t('toast.pdfTooLarge', { name: file.name }));
+          continue;
+        }
+        const read = await reader(await readAsDataUrl(file));
+        reads.push({
+          name: file.name,
+          title: file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim(),
+          kind: 'pdf',
+          path: read.path,
+          text: read.text,
+          chars: read.chars,
+          redacted: read.redacted,
+        });
+      }
+    } catch (err) {
+      ui.toast(err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'));
+    } finally {
+      ui.setCaptureStage('idle');
+    }
+    if (reads.length > 0) {
+      useUiStore.getState().queueReads(reads);
+      useUiStore.getState().setCaptureOpen(true);
+    }
     return true;
   }
 

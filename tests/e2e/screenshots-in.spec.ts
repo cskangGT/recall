@@ -61,9 +61,22 @@ test('against a live server, a dropped screenshot is kept — not refused', asyn
   await expect(page.getByTestId('toast').last()).toContainText("can't read PDFs");
 });
 
-test('a dropped PDF goes to the server whole, as a text source named for the file', async ({ page }) => {
+test('a dropped PDF is read out first, seen on its card, and only then kept — with the stored file as its original', async ({ page }) => {
   await liveServer(page, true);
-  let sent: { type?: string; title?: string; fileData?: string } | null = null;
+  let read: { fileData?: string } | null = null;
+  await page.route('**/api/workspaces/*/files/read', (route) => {
+    read = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        path: '/kept/seed-round_memo.pdf',
+        text: 'Seed funds decide within two meetings.\nRunway should cover eighteen months.',
+        chars: 74,
+        redacted: 0,
+      }),
+    });
+  });
+  let sent: { type?: string; title?: string; content?: string; imagePath?: string; fileData?: string } | null = null;
   await page.route('**/api/workspaces/*/capture', (route) => {
     sent = route.request().postDataJSON();
     return route.fulfill({
@@ -73,15 +86,29 @@ test('a dropped PDF goes to the server whole, as a text source named for the fil
   });
 
   await drop(page, 'seed-round_memo.pdf', 'application/pdf');
-  await expect(page.getByTestId('toast').last()).toContainText('Read 1 PDF — 2 memories kept');
+  // The look before keeping: the file went to the server whole, and its words came back to a card.
+  const card = page.getByTestId('file-preview');
+  await expect(card).toBeVisible();
+  expect(read!.fileData).toMatch(/^data:application\/pdf;base64,/);
+  await expect(card).toContainText('seed round memo');
+  await expect(page.getByTestId('file-preview-note')).toContainText('74 characters');
+  expect(sent).toBeNull();
+
+  // A line of their own, then the keep: what was read rides in as the words,
+  // the stored file as the original — and the document is not read a second time.
+  await page.getByTestId('file-my-line').fill('For the next round.');
+  await page.getByTestId('file-preview-keep').click();
+  await expect(page.getByTestId('toast').last()).toContainText('2 memories kept');
   expect(sent!.type).toBe('text');
   expect(sent!.title).toBe('seed round memo');
-  expect(sent!.fileData).toMatch(/^data:application\/pdf;base64,/);
+  expect(sent!.imagePath).toBe('/kept/seed-round_memo.pdf');
+  expect(sent!.content).toContain('My note: For the next round.');
+  expect(sent!.content).toContain('Runway should cover eighteen months.');
+  expect(sent!.fileData).toBeUndefined();
 
   // "Kept two memories" is not where it ends: the original opens as its page,
   // with what was taken from it and the way to check them.
   const sourcePage = page.getByTestId('source-page');
   await expect(sourcePage).toBeVisible();
-  await expect(sourcePage.locator('.memory-row')).toHaveCount(await sourcePage.locator('.memory-row').count());
   expect(await sourcePage.locator('.memory-row').count()).toBeGreaterThan(0);
 });

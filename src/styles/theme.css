@@ -6979,3 +6979,10 @@ button.brief__line:hover {
   max-height: calc(100vh - 12vh);
   overflow-y: auto;
 }
+
+/* A file's card stands in for the box: the words to type and the foot step aside. */
+.bar--reading > textarea,
+.bar--reading .bar__foot,
+.bar--reading .bar__photo {
+  display: none;
+}

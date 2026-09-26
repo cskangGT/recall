@@ -1011,6 +1011,29 @@ async function handleWorkspace(
   }
 
   /*
+   * POST /api/workspaces/:id/files/read — a document read out, nothing kept.
+   * The file is stored (so a keep can point at it without a second upload)
+   * and the model reads it; the text comes back for the person to see and
+   * choose from before any of it becomes a memory.
+   */
+  if (req.method === 'POST' && resource === 'files' && resourceId === 'read' && !action) {
+    if (!deps.saveImage || !deps.ingest.canReadPdf()) return { status: 501, body: { error: 'this server cannot read files' } };
+    const body = asRecord(req.body);
+    if (typeof body.fileData !== 'string' || !body.fileData) return badRequest('fileData is required');
+    let path: string;
+    try {
+      path = await deps.saveImage(body.fileData);
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'could not store the file');
+    }
+    try {
+      return ok({ path, ...(await deps.ingest.readFile(path)) });
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'could not read the file' } };
+    }
+  }
+
+  /*
    * POST /api/workspaces/:id/digest — a page whole and in parts. The text is
    * what the link look (or a file) read; the answer is one summary of all of
    * it and one per section, with the sections' own text riding along so the

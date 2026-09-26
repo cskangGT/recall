@@ -155,3 +155,45 @@ describe('capture with a PDF', () => {
     expect(source.error_message).toContain('nothing could be read');
   });
 });
+
+/*
+ * The look before keeping, for a file: `files/read` stores the document and
+ * hands back what the model read, keeping nothing; a keep that then arrives
+ * with the words in hand and the stored path is not read a second time.
+ */
+describe('POST files/read, and a pre-read keep', () => {
+  const read = (deps: Deps, body: Record<string, unknown>) =>
+    handle({ method: 'POST', path: `/api/workspaces/${WS}/files/read`, body }, deps);
+
+  it('answers 501 where files cannot be kept or read', async () => {
+    expect((await read(depsWith({}), { fileData: PDF })).status).toBe(501);
+    expect((await read(depsWith({ saveImage: imageSaver(dir) }), { fileData: PDF })).status).toBe(501);
+  });
+
+  it('reads the document out and keeps no source', async () => {
+    const ai = new ReadingProvider();
+    const deps = depsWith({ saveImage: imageSaver(dir), ingest: new IngestPipeline(repo, ai, new FixtureEmbeddings()) });
+    const before = repo.listSources(WS).length;
+    const res = await read(deps, { fileData: PDF });
+    expect(res.status).toBe(200);
+    const body = res.body as { path: string; text: string; chars: number; redacted: number };
+    expect(body.path.endsWith('.pdf')).toBe(true);
+    expect(existsSync(body.path)).toBe(true);
+    expect(body.text).toContain('Runway should cover eighteen months');
+    expect(body.chars).toBe(body.text.length);
+    expect(repo.listSources(WS).length).toBe(before);
+    expect((await read(deps, {})).status).toBe(400);
+  });
+
+  it('a keep that brings the words and the stored path is not read again', async () => {
+    const ai = new ReadingProvider();
+    const deps = depsWith({ saveImage: imageSaver(dir), ingest: new IngestPipeline(repo, ai, new FixtureEmbeddings()) });
+    const stored = (await read(deps, { fileData: PDF })).body as { path: string };
+    ai.seen = undefined;
+    const res = await capture(deps, { type: 'text', title: 'Seed memo', content: 'My note: the part on runway.\n\nRunway should cover eighteen months.', imagePath: stored.path });
+    expect(res.status).toBe(200);
+    expect(ai.seen).toBeUndefined();
+    const source = repo.listSources(WS).find((s) => s.image_path === stored.path)!;
+    expect(source.raw_content).toContain('My note: the part on runway.');
+  });
+});

@@ -65,6 +65,14 @@ export interface LinkPreview {
   contentType: string | null;
 }
 
+/** A document read out and not yet kept: where it was stored, and its words. */
+export interface FileRead {
+  path: string;
+  text: string;
+  chars: number;
+  redacted: number;
+}
+
 export interface PageDigest {
   summary: string;
   sections: { heading: string | null; text: string; summary: string }[];
@@ -168,6 +176,8 @@ export interface DataSource {
   askBack?(thought: string, role?: string): Promise<{ question: string }>;
   /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
   digest?(title: string | null, text: string): Promise<PageDigest>;
+  /** Reads a PDF out (stored, nothing kept) so the person can see and choose before keeping. */
+  readFile?(fileData: string): Promise<FileRead>;
   /** What Mado would call a category made of these memories. A suggestion only. */
   suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
   /** A category made by hand around picked memories; they move in, locked. */
@@ -403,6 +413,7 @@ export class ApiDataSource implements DataSource {
         this.condenseMemories = undefined;
       }
       this.readsPdf = caps.pdf === true;
+      if (caps.pdf !== true) this.readFile = undefined;
       if (!caps.askBack) this.askBack = undefined;
       if (!caps.digest) this.digest = undefined;
       if (!caps.google) {
@@ -593,6 +604,8 @@ export class ApiDataSource implements DataSource {
 
   askBack?: (thought: string, role?: string) => Promise<{ question: string }> = (thought, role) =>
     this.post<{ question: string }>('/onboarding/ask-back', { thought, role, locale: currentLocale() });
+
+  readFile?: (fileData: string) => Promise<FileRead> = (fileData) => this.post<FileRead>('/files/read', { fileData });
 
   digest?: (title: string | null, text: string) => Promise<PageDigest> = (title, text) =>
     this.post<PageDigest>('/digest', { title, text, locale: currentLocale() });
