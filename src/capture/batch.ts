@@ -40,6 +40,22 @@ export interface BatchCategorySummary {
   isNew: boolean;
 }
 
+/**
+ * What the declaration renders: the count of what was kept, the chips of
+ * where it went, and — when the import knows it — the stretch of time it
+ * rescued. One shape for every path that ends in a reveal.
+ */
+export interface BatchSummary {
+  memories: number;
+  skipped: number;
+  sources: number;
+  categories: BatchCategorySummary[];
+  /** The stretch of time this batch rescued, when the import knows it. */
+  period?: { from: string; to: string } | null;
+  /** The batch's sources, in order — what "검수하기" walks through. */
+  sourceIds?: string[];
+}
+
 export interface BatchResult {
   payload: GraphPayload;
   addedMemoryIds: string[];
@@ -249,6 +265,86 @@ export function runBatchPipeline(
     skippedCount,
     categories,
     events,
+  };
+}
+
+/**
+ * The first observation — the one sentence a batch earns, if it earns one.
+ *
+ * A pile where one interest quietly absorbed most of what was kept is a
+ * pattern its owner usually did not know they had; a pile spread thin is not
+ * a pattern, and forcing a sentence onto it reads as horoscope. So the report
+ * speaks only when the top category took at least two memories and at least
+ * 40% of everything the batch kept — otherwise the plain declaration stands.
+ */
+export function observationOf(summary: {
+  memories: number;
+  categories: BatchCategorySummary[];
+}): BatchCategorySummary | null {
+  const top = summary.categories[0];
+  if (!top || top.added < 2) return null;
+  if (summary.memories === 0 || top.added / summary.memories < 0.4) return null;
+  return top;
+}
+
+/**
+ * The category chips for a set of added memories, biggest first — one builder
+ * for the endpoint path, the reader path, and a batch reconstructed after the
+ * fact. `knownCategoryIds` is the map as it was before the batch: anything
+ * outside it is a category this batch opened.
+ */
+export function summarizeCategories(
+  graph: GraphPayload,
+  addedMemoryIds: Iterable<string>,
+  knownCategoryIds: ReadonlySet<string>,
+): BatchCategorySummary[] {
+  const added = new Set(addedMemoryIds);
+  const byCategory = new Map<string, number>();
+  for (const m of graph.memories) {
+    if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
+  }
+  const nameOf = new Map(graph.categories.map((c) => [c.id, c.name] as const));
+  return [...byCategory.entries()]
+    .map(([id, count]) => ({
+      id,
+      name: nameOf.get(id) ?? '',
+      added: count,
+      isNew: !knownCategoryIds.has(id),
+    }))
+    .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name));
+}
+
+/**
+ * The same declaration, rebuilt from a loaded graph and the ids of the
+ * sources a batch wrote — for a batch that happened outside the page, where
+ * the CLI printed a link and the page has only the result to read from.
+ *
+ * Ids the graph does not know are dropped; none known, no summary. The dedupe
+ * count is not recoverable from a graph, so `skipped` is 0. A category is
+ * "new" when every memory in it came from these sources — the closest the
+ * after-the-fact view can get to "opened by this batch".
+ */
+export function summarizeSources(
+  graph: GraphPayload,
+  sourceIds: readonly string[],
+  period: { from: string; to: string } | null = null,
+): BatchSummary | null {
+  const present = new Set(graph.sources.map((s) => s.id));
+  const ids = [...new Set(sourceIds)].filter((id) => present.has(id));
+  if (ids.length === 0) return null;
+  const mine = new Set(ids);
+
+  const added = graph.memories.filter((m) => mine.has(m.source_id)).map((m) => m.id);
+  const known = new Set(
+    graph.memories.filter((m) => !mine.has(m.source_id)).map((m) => m.category_id),
+  );
+  return {
+    memories: added.length,
+    skipped: 0,
+    sources: ids.length,
+    categories: summarizeCategories(graph, added, known),
+    period,
+    sourceIds: ids,
   };
 }
 

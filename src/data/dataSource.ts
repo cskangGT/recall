@@ -1,4 +1,5 @@
 import type { GraphPayload } from '../core/types';
+import type { GoogleStatus, MeetingsResponse } from '../core/meetingTypes';
 import { currentLocale } from '../i18n';
 import { validateSeed } from './validateSeed';
 import workspaceJson from '../../seed/workspace.json';
@@ -19,7 +20,13 @@ export interface CaptureInput {
   title?: string;
   url?: string;
   imagePath?: string;
+  /** The photo itself, as a data URL — the server stores it and reads it back. */
+  imageData?: string;
   referencedUrls?: string[];
+  /** A PDF as a data URL — the server keeps it and has the model read it out. */
+  fileData?: string;
+  /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
+  diaryDate?: string;
 }
 
 export interface CaptureResult {
@@ -35,6 +42,40 @@ export interface CaptureResult {
   } | null;
   graph: GraphPayload;
   note?: string;
+  /** Secrets replaced or removed before anything was stored or sent. */
+  redacted?: number;
+}
+
+export type LinkNote = 'thin' | 'app' | 'login' | 'not-html' | null;
+export type LinkFailure = 'invalid' | 'scheme' | 'private' | 'status' | 'timeout' | 'network';
+
+export interface LinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  /** The opening of the text, for the card. */
+  excerpt: string | null;
+  /** The page's main text, capped — what rides into capture. */
+  text: string | null;
+  /** Characters of main text on the page, before the cap. */
+  chars: number;
+  truncated: boolean;
+  /** Why the text may be less than the page; null when it read well. */
+  note: LinkNote;
+  contentType: string | null;
+}
+
+/** A document read out and not yet kept: where it was stored, and its words. */
+export interface FileRead {
+  path: string;
+  text: string;
+  chars: number;
+  redacted: number;
+}
+
+export interface PageDigest {
+  summary: string;
+  sections: { heading: string | null; text: string; summary: string }[];
 }
 
 export interface CaptureBatchResult {
@@ -46,6 +87,7 @@ export interface CaptureBatchResult {
     touchedCategoryIds: string[];
     skipped: { text: string; similarity: number }[];
     note?: string;
+    redacted?: number;
   }[];
   /** Every structural operation the batch settled into, oldest first. */
   reorgs: NonNullable<CaptureResult['reorg']>[];
@@ -71,6 +113,8 @@ export interface AskTurn {
 
 export interface DataSource {
   readonly mode: 'seed' | 'api';
+  /** The server can take a PDF (capture with `fileData`). Absent or false: the door is not drawn. */
+  readsPdf?: boolean;
   load(): Promise<GraphPayload>;
   /** Only implemented in API mode; seed mode drives capture through the store. */
   capture?(input: CaptureInput): Promise<CaptureResult>;
@@ -78,9 +122,14 @@ export interface DataSource {
   captureBatch?(items: CaptureInput[]): Promise<CaptureBatchResult>;
   /** Reads the Mac's Notes.app — only a local darwin server can. */
   importAppleNotes?(days?: number): Promise<NotesImportResult>;
+  /** Reads a pasted link's title and excerpt so the person can decide to keep it. */
+  previewLink?(url: string): Promise<LinkPreview>;
   /** Reads Notion pages — present when the server holds a token. */
   importNotionPages?(days?: number): Promise<NotesImportResult>;
-  ask?(question: string, history?: AskTurn[]): Promise<AskResult>;
+  /** `focus`: memory ids the person picked to think with — they lead the context. */
+  ask?(question: string, history?: AskTurn[], focus?: string[]): Promise<AskResult>;
+  /** The diary's look back over [from, to] — the memory's own voice, longer form. */
+  diaryRetro?(from: string, to: string): Promise<{ reflection: string; days: number }>;
   /**
    * `ask`, with the answer text arriving as it is generated. `onDelta` gets
    * each new run of text; the resolved result is exactly what `ask` would
@@ -90,6 +139,7 @@ export interface DataSource {
     question: string,
     onDelta: (text: string) => void,
     history?: AskTurn[],
+    focus?: string[],
   ): Promise<AskResult>;
   /**
    * The AI's half of a user-driven merge: why these memories overlap and the
@@ -103,20 +153,66 @@ export interface DataSource {
   ): Promise<{ mergedMemoryId: string; graph: GraphPayload }>;
   undo?(reorgId: string): Promise<GraphPayload>;
   moveMemory?(memoryId: string, categoryId: string): Promise<GraphPayload>;
+  /** Puts a memory down (or picks it back up) — it stays, and leaves "on the table". */
+  settleMemory?(memoryId: string, settled: boolean): Promise<GraphPayload>;
   /** Removes a memory. Not reversible — see Repository.deleteMemory. */
   deleteMemory?(memoryId: string): Promise<GraphPayload>;
+  /**
+   * Throws a source away whole, memories and all. Not a review verdict —
+   * teaches nothing. Not reversible; the UI asks twice.
+   */
+  deleteSource?(sourceId: string): Promise<GraphPayload>;
+  /**
+   * One draft for what a source comes to. Writes nothing — the review card
+   * stages it, and the person's confirm applies it through reviewSource.
+   * Closed by the capability probe on a server without a model.
+   */
+  condenseSource?(sourceId: string): Promise<{ text: string }>;
+  /** One text for what a handful of picked memories come to. Reads only. */
+  condenseMemories?(memoryIds: string[]): Promise<{ text: string }>;
+  /** The link that brings this workspace back anywhere. Null where the workspace is fixed (the developer's corpus). */
+  returnLink?(): Promise<string | null>;
+  /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
+  askBack?(thought: string, role?: string): Promise<{ question: string }>;
+  /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
+  digest?(title: string | null, text: string): Promise<PageDigest>;
+  /** Reads a PDF out (stored, nothing kept) so the person can see and choose before keeping. */
+  readFile?(fileData: string): Promise<FileRead>;
+  /** What Mado would call a category made of these memories. A suggestion only. */
+  suggestCategoryName?(memoryIds: string[]): Promise<{ name: string }>;
+  /** A category made by hand around picked memories; they move in, locked. */
+  createCategory?(name: string, memoryIds: string[], parentId?: string | null): Promise<{ categoryId: string; graph: GraphPayload }>;
   updateCategory?(
     categoryId: string,
     fields: { name?: string; parentId?: string | null },
   ): Promise<GraphPayload>;
   /** Re-runs a capture whose processing failed. Only the API can do this. */
   retrySource?(sourceId: string): Promise<GraphPayload>;
+  /**
+   * Applies one source's review verdicts atomically — unlisted memories are
+   * kept. The server records every verdict as the curation signal (spec §21).
+   */
+  reviewSource?(
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<GraphPayload>;
   setAutoReorganize?(enabled: boolean): Promise<GraphPayload>;
   /**
    * Starts a Pro checkout and returns the Stripe-hosted URL to redirect to.
    * The plan flips when the server's webhook confirms payment, never client-side.
    */
   upgrade?(returnUrl: string): Promise<{ url: string }>;
+  /**
+   * Google Calendar. All four are closed by the probe on a server without an
+   * OAuth client — the rail draws the meetings door only while `listMeetings`
+   * is here, so a server that cannot open it never shows it.
+   */
+  googleStatus?(): Promise<GoogleStatus>;
+  /** Starts the OAuth dance; the caller sends the browser to `url`. */
+  connectGoogle?(): Promise<{ url: string }>;
+  disconnectGoogle?(): Promise<void>;
+  /** The synced window, with what Mado remembers attached. `refresh` re-reads the calendar. */
+  listMeetings?(refresh?: boolean): Promise<MeetingsResponse>;
 }
 
 export const SeedDataSource: DataSource = {
@@ -126,29 +222,146 @@ export const SeedDataSource: DataSource = {
   },
 };
 
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    /** A machine-readable reason, where the server gives one (a link that could not be read says why). */
+    readonly reason?: string,
+    readonly httpStatus?: number,
+  ) {
     super(message);
     this.name = 'HttpError';
   }
 }
 
+const INVITE_KEY = 'mado.invite';
+
+/**
+ * The invite token, resolved once per load: a `?invite=` in the link wins and
+ * is remembered, so a tester clicks one link once and every later visit still
+ * writes. Pure over its inputs for the tests; the wrapper below feeds it the
+ * real location and storage.
+ */
+export function resolveInvite(
+  search: string,
+  stored: string | null,
+  remember: (token: string) => void = () => {},
+): string | null {
+  const fromLink = new URLSearchParams(search).get('invite');
+  if (fromLink && fromLink.trim().length > 0) {
+    remember(fromLink);
+    return fromLink;
+  }
+  return stored;
+}
+
+const WORKSPACE_KEY = 'mado.workspace';
+
+/**
+ * A workspace named in the link (`?ws=`) becomes this browser's — that is
+ * the whole of "coming back": the link is the account until there is one.
+ * Pure over its inputs; the wrapper below feeds it the real location.
+ */
+export function resolveWorkspaceFromLink(search: string, remember: (id: string) => void): string | null {
+  const id = new URLSearchParams(search).get('ws');
+  if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+  remember(id);
+  return id;
+}
+
+/** The link that brings this workspace back, anywhere — invite included, since the gate wants it. */
+export function returnLinkFor(origin: string, workspaceId: string, invite: string | null): string {
+  const params = new URLSearchParams();
+  params.set('ws', workspaceId);
+  if (invite) params.set('invite', invite);
+  return `${origin}/?${params.toString()}`;
+}
+
+function currentInvite(): string | null {
+  if (typeof window === 'undefined') return null;
+  return resolveInvite(
+    window.location.search,
+    localStorage.getItem(INVITE_KEY),
+    (token) => localStorage.setItem(INVITE_KEY, token),
+  );
+}
+
 export class ApiDataSource implements DataSource {
   readonly mode = 'api' as const;
 
+  /**
+   * `workspaceId` fixed (dev's `?api=1` keeps everyone on ws_demo, where the
+   * local server's corpus lives) or absent — the hosted case, where each
+   * visitor gets their own workspace: minted once via POST /workspaces,
+   * remembered in localStorage, and shared by every later visit. Without
+   * this, the first tester who deleted something would delete it for all.
+   */
+  private wsPromise: Promise<string> | null = null;
+
   constructor(
-    private readonly workspaceId = 'ws_demo',
+    private readonly workspaceId?: string,
     private readonly base = '/api',
   ) {}
 
+  private ensureWorkspace(): Promise<string> {
+    if (this.workspaceId) return Promise.resolve(this.workspaceId);
+    this.wsPromise ??= (async () => {
+      // A link that names a workspace wins over what this browser had: that
+      // is what following the link means.
+      const fromLink = resolveWorkspaceFromLink(window.location.search, (id) =>
+        localStorage.setItem(WORKSPACE_KEY, id),
+      );
+      if (fromLink) {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('ws');
+        params.delete('invite');
+        const query = params.toString();
+        window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+        return fromLink;
+      }
+      const stored = localStorage.getItem(WORKSPACE_KEY);
+      if (stored) return stored;
+      const invite = currentInvite();
+      // The locale rides along so the starter corpus arrives in the visitor's
+      // language — the Korean seed is a different authored workspace, not a
+      // translation.
+      const response = await fetch(`${this.base}/workspaces`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(invite ? { 'x-recall-invite': invite } : {}),
+        },
+        body: JSON.stringify({ locale: currentLocale() }),
+      });
+      const body = (await response.json()) as { workspaceId?: string; error?: string };
+      if (!response.ok || !body.workspaceId) {
+        // Do not cache a failure — the next request should try again.
+        this.wsPromise = null;
+        throw new HttpError(response.status, body.error ?? 'could not create a workspace');
+      }
+      localStorage.setItem(WORKSPACE_KEY, body.workspaceId);
+      return body.workspaceId;
+    })();
+    return this.wsPromise;
+  }
+
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}${path}`, {
+    // The invite rides on every request as a header — never a query parameter,
+    // which would leak it into access logs and shared links (routes.ts says
+    // the same from the server's side).
+    const invite = currentInvite();
+    const workspace = await this.ensureWorkspace();
+    const response = await fetch(`${this.base}/workspaces/${workspace}${path}`, {
       ...init,
-      headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+      headers: {
+        ...(init?.body ? { 'content-type': 'application/json' } : {}),
+        ...(invite ? { 'x-recall-invite': invite } : {}),
+      },
     });
-    const body = (await response.json()) as T & { error?: string };
+    const body = (await response.json()) as T & { error?: string; reason?: string; httpStatus?: number };
     if (!response.ok) {
-      throw new HttpError(response.status, body.error ?? `request failed (${response.status})`);
+      throw new HttpError(response.status, body.error ?? `request failed (${response.status})`, body.reason, body.httpStatus);
     }
     return body;
   }
@@ -164,7 +377,54 @@ export class ApiDataSource implements DataSource {
     // Validated on arrival, with the same validator the seed goes through. A
     // backend that starts returning a malformed payload should fail here, not
     // three layers up in the renderer.
-    return validateSeed(await this.request<GraphPayload>('/graph'));
+    const [graph] = await Promise.all([this.request<GraphPayload>('/graph'), this.probe()]);
+    return validateSeed(graph);
+  }
+
+  /**
+   * Asks the server which import doors it can open, once, before the first
+   * paint that could draw them. Doors default to open: only a server that
+   * answers "no" closes one, so a failed probe never hides a working door.
+   */
+  /** Whether this server can keep a PDF and has a model that reads one. Closed until the probe says so. */
+  readsPdf = false;
+
+  private probed = false;
+
+  private async probe(): Promise<void> {
+    if (this.probed) return;
+    this.probed = true;
+    try {
+      const response = await fetch(`${this.base}/capabilities`);
+      if (!response.ok) return;
+      const caps = (await response.json()) as {
+        appleNotes?: boolean;
+        notion?: boolean;
+        condense?: boolean;
+        google?: boolean;
+        pdf?: boolean;
+        askBack?: boolean;
+        digest?: boolean;
+      };
+      if (!caps.appleNotes) this.importAppleNotes = undefined;
+      if (!caps.notion) this.importNotionPages = undefined;
+      if (!caps.condense) {
+        this.condenseSource = undefined;
+        this.condenseMemories = undefined;
+      }
+      this.readsPdf = caps.pdf === true;
+      if (caps.pdf !== true) this.readFile = undefined;
+      if (!caps.askBack) this.askBack = undefined;
+      if (!caps.digest) this.digest = undefined;
+      if (!caps.google) {
+        this.listMeetings = undefined;
+        this.googleStatus = undefined;
+        this.connectGoogle = undefined;
+        this.disconnectGoogle = undefined;
+      }
+    } catch {
+      // Leave the doors as they are.
+    }
   }
 
   async capture(input: CaptureInput): Promise<CaptureResult> {
@@ -182,39 +442,48 @@ export class ApiDataSource implements DataSource {
     return { ...result, graph: validateSeed(result.graph) };
   }
 
-  async importAppleNotes(days = 14): Promise<NotesImportResult> {
+  previewLink?: (url: string) => Promise<LinkPreview> = (url) =>
+    this.post<LinkPreview>('/link/preview', { url });
+
+  importAppleNotes?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/apple-notes', {
       days,
       locale: currentLocale(),
     });
     return { ...result, graph: validateSeed(result.graph) };
-  }
+  };
 
-  async importNotionPages(days = 14): Promise<NotesImportResult> {
+  importNotionPages?: (days?: number) => Promise<NotesImportResult> = async (days = 14) => {
     const result = await this.post<NotesImportResult>('/import/notion', {
       days,
       locale: currentLocale(),
     });
     return { ...result, graph: validateSeed(result.graph) };
-  }
+  };
 
   upgrade(returnUrl: string): Promise<{ url: string }> {
     return this.post<{ url: string }>('/billing/checkout', { returnUrl });
   }
 
-  ask(question: string, history?: AskTurn[]): Promise<AskResult> {
-    return this.post<AskResult>('/ask', { question, history });
+  ask(question: string, history?: AskTurn[], focus?: string[]): Promise<AskResult> {
+    return this.post<AskResult>('/ask', { question, history, focus });
   }
 
   async askStream(
     question: string,
     onDelta: (text: string) => void,
     history?: AskTurn[],
+    focus?: string[],
   ): Promise<AskResult> {
-    const response = await fetch(`${this.base}/workspaces/${this.workspaceId}/ask/stream`, {
+    const invite = currentInvite();
+    const workspace = await this.ensureWorkspace();
+    const response = await fetch(`${this.base}/workspaces/${workspace}/ask/stream`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ question, history }),
+      headers: {
+        'content-type': 'application/json',
+        ...(invite ? { 'x-recall-invite': invite } : {}),
+      },
+      body: JSON.stringify({ question, history, focus }),
     });
     if (!response.ok || !response.body) {
       throw new HttpError(response.status, `stream failed (${response.status})`);
@@ -245,6 +514,14 @@ export class ApiDataSource implements DataSource {
     }
     if (!result) throw new HttpError(502, 'stream ended without a result');
     return result;
+  }
+
+  diaryRetro(from: string, to: string): Promise<{ reflection: string; days: number }> {
+    return this.post<{ reflection: string; days: number }>('/diary/retro', {
+      from,
+      to,
+      locale: currentLocale(),
+    });
   }
 
   mergePreview(memoryIds: string[]): Promise<{ reason: string; merged_text: string }> {
@@ -280,10 +557,79 @@ export class ApiDataSource implements DataSource {
     return validateSeed(graph);
   }
 
+  async deleteSource(sourceId: string): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/sources/${encodeURIComponent(sourceId)}`,
+      { method: 'DELETE' },
+    );
+    return validateSeed(graph);
+  }
+
+  // Assigned, not declared as a method, so the probe can close the door by
+  // setting it to undefined — the same shape as importAppleNotes.
+  condenseSource?: (sourceId: string) => Promise<{ text: string }> = (sourceId) =>
+    this.post<{ text: string }>(`/sources/${encodeURIComponent(sourceId)}/condense-preview`, {
+      locale: currentLocale(),
+    });
+
+  // The calendar door, assigned for the same reason.
+  googleStatus?: () => Promise<GoogleStatus> = () => this.request<GoogleStatus>('/google');
+
+  connectGoogle?: () => Promise<{ url: string }> = () =>
+    this.post<{ url: string }>('/google/connect');
+
+  disconnectGoogle?: () => Promise<void> = async () => {
+    await this.post<{ disconnected: boolean }>('/google/disconnect');
+  };
+
+  listMeetings?: (refresh?: boolean) => Promise<MeetingsResponse> = (refresh = false) =>
+    this.request<MeetingsResponse>(`/meetings${refresh ? '?refresh=1' : ''}`);
+
   async moveMemory(memoryId: string, categoryId: string): Promise<GraphPayload> {
     const { graph } = await this.post<{ graph: GraphPayload }>(
       `/memories/${encodeURIComponent(memoryId)}/category`,
       { categoryId },
+    );
+    return validateSeed(graph);
+  }
+
+  condenseMemories?: (memoryIds: string[]) => Promise<{ text: string }> = (memoryIds) =>
+    this.post<{ text: string }>('/memories/condense-preview', { memoryIds, locale: currentLocale() });
+
+  async returnLink(): Promise<string | null> {
+    if (this.workspaceId) return null;
+    const id = await this.ensureWorkspace();
+    return returnLinkFor(window.location.origin, id, currentInvite());
+  }
+
+  askBack?: (thought: string, role?: string) => Promise<{ question: string }> = (thought, role) =>
+    this.post<{ question: string }>('/onboarding/ask-back', { thought, role, locale: currentLocale() });
+
+  readFile?: (fileData: string) => Promise<FileRead> = (fileData) => this.post<FileRead>('/files/read', { fileData });
+
+  digest?: (title: string | null, text: string) => Promise<PageDigest> = (title, text) =>
+    this.post<PageDigest>('/digest', { title, text, locale: currentLocale() });
+
+  suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
+    this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });
+
+  async createCategory(
+    name: string,
+    memoryIds: string[],
+    parentId: string | null = null,
+  ): Promise<{ categoryId: string; graph: GraphPayload }> {
+    const result = await this.post<{ categoryId: string; graph: GraphPayload }>('/categories', {
+      name,
+      memoryIds,
+      parentId,
+    });
+    return { ...result, graph: validateSeed(result.graph) };
+  }
+
+  async settleMemory(memoryId: string, settled: boolean): Promise<GraphPayload> {
+    const { graph } = await this.request<{ graph: GraphPayload }>(
+      `/memories/${encodeURIComponent(memoryId)}`,
+      { method: 'PATCH', body: JSON.stringify({ settled }) },
     );
     return validateSeed(graph);
   }
@@ -293,6 +639,17 @@ export class ApiDataSource implements DataSource {
       method: 'PATCH',
       body: JSON.stringify({ autoReorganize: enabled }),
     });
+    return validateSeed(graph);
+  }
+
+  async reviewSource(
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<GraphPayload> {
+    const { graph } = await this.post<{ graph: GraphPayload }>(
+      `/sources/${encodeURIComponent(sourceId)}/review`,
+      input,
+    );
     return validateSeed(graph);
   }
 
@@ -353,7 +710,11 @@ export function isOffline(search = typeof window === 'undefined' ? '' : window.l
 export function selectDataSource(search = typeof window === 'undefined' ? '' : window.location.search): DataSource {
   if (isOffline(search)) return SeedDataSource;
   const params = new URLSearchParams(search);
-  if (params.get('api') === '1') return new ApiDataSource();
+  // `?api=1` is the developer's door and keeps everyone on the local server's
+  // one corpus; a build shipped with a server gives each visitor their own.
+  if (params.get('api') === '1') return new ApiDataSource('ws_demo');
+  // The hosted case, in development: each visitor minted their own workspace.
+  if (params.get('api') === 'visitor') return new ApiDataSource();
   const builtForApi = (import.meta.env ?? {}).VITE_API_DEFAULT === '1';
   return builtForApi ? new ApiDataSource() : SeedDataSource;
 }

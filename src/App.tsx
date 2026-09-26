@@ -3,25 +3,37 @@ import { MapCanvas, type RunningAnimation } from './components/MapCanvas';
 import { ArcBrowser } from './components/ArcBrowser';
 import { Sky } from './components/Sky';
 import { SourcesView } from './components/SourcesView';
+import { DiaryView } from './components/DiaryView';
+import { MeetingsView } from './components/MeetingsView';
+import { isImage, isPdf, takeImages, takePdfs } from './capture/images';
+import { ArchiveFind } from './components/ArchiveFind';
 import { MapSearch } from './components/MapSearch';
+import { ThinkSwitch } from './components/ThinkTogether';
+import { OnboardingGuide } from './components/OnboardingGuide';
 import { Inspector } from './components/Inspector';
 import { CaptureBar, AskBar } from './components/CommandBar';
 import { ChangeBanner } from './components/ChangeBanner';
 import { Settings } from './components/Settings';
 import { LeftRail, TopBar, StatusTicker, Toasts, TooSmall, Loading } from './components/Chrome';
-import { useUiStore } from './store/uiStore';
+import { readStep } from './core/onboarding';
+import { useUiStore, hasBeenWelcomed } from './store/uiStore';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { ingestItem } from './capture/ingest';
-import { importFiles, isTextLike, isZip } from './capture/importFiles';
+import { importFiles, isTextLike, isZip, titleFromFilename } from './capture/importFiles';
+import { revealOnReturn } from './capture/revealOnReturn';
 import { t } from './i18n';
 import { BatchReveal } from './components/BatchReveal';
+import { ReviewPanel } from './components/ReviewPanel';
+import { MemoryPage } from './components/MemoryPage';
+import { UpgradeSheet } from './components/UpgradeSheet';
 import type { CaptureInput } from './data/dataSource';
 import { buildCaptureStory } from './capture/story';
+import { firstFlight } from './capture/firstFlight';
 import { reorgMotion } from './capture/reorgMotion';
 import { type ReorgEvent } from './core/applyReorg';
 import { undoLastReorg } from './capture/undo';
 import { fitToBounds } from './graph/camera';
-import { FOCUS_FRACTION } from './arc/layout';
+import { FOCUS_FRACTION, homeIndexOpen } from './arc/layout';
 
 const MIN_VIEWPORT_WIDTH = 1280;
 
@@ -38,7 +50,7 @@ const MIN_VIEWPORT_WIDTH = 1280;
 const MIN_VIEWPORT_HEIGHT = 760;
 
 /** Must match `--rail-w` and `--inspector-w` in theme.css. */
-const RAIL_W = 56;
+const RAIL_W = 64;
 const INSPECTOR_W = 360;
 
 export function App() {
@@ -50,6 +62,9 @@ export function App() {
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const view = useUiStore((s) => s.view);
   const openCategoryId = useUiStore((s) => s.openCategoryId);
+  const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
+  const place = useUiStore((s) => s.place);
+  const memoryCount = useWorkspaceStore((s) => s.payload?.memories.length ?? 0);
   const dropActive = useUiStore((s) => s.dropActive);
 
   const [animation, setAnimation] = useState<RunningAnimation | null>(null);
@@ -66,8 +81,10 @@ export function App() {
   // `?skipWelcome=1` exists for the rehearsal script and the E2E suite, which
   // must not spend a keystroke on a greeting to reach the thing under test.
   useEffect(() => {
+    // It lands in Browse, categories out — past the greeting *and* past home's
+    // doors, because what the rehearsal and the suite want is the corpus.
     if (new URLSearchParams(window.location.search).get('skipWelcome') === '1') {
-      useUiStore.getState().dismissWelcome();
+      useUiStore.getState().goBrowse();
     }
   }, []);
 
@@ -77,11 +94,66 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('upgraded') !== '1') return;
-    useUiStore.getState().toast(t('toast.upgraded'));
     params.delete('upgraded');
     const query = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    // The webhook that flips the plan often lands after this redirect. Ask
+    // again for a few beats rather than showing a stale free sky; when Pro is
+    // confirmed, the awakening plays — once.
+    let tries = 0;
+    const confirm = async () => {
+      const plan = useWorkspaceStore.getState().payload?.workspace.plan;
+      if (plan === 'pro' || plan === undefined) {
+        useUiStore.getState().setAwaken(true);
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      if (++tries > 5) {
+        useUiStore.getState().toast(t('toast.upgraded'));
+        return;
+      }
+      await useWorkspaceStore.getState().load().catch(() => {});
+      setTimeout(() => void confirm(), 2000);
+    };
+    setTimeout(() => void confirm(), 400);
   }, []);
+
+  // Back from `npm run import:instagram` / `import:notes`: the CLI printed a
+  // link carrying the ids it wrote, and the page plays their declaration once
+  // the graph is in — the summary is read out of it, not requested.
+  useEffect(() => {
+    if (loading) return;
+    revealOnReturn();
+  }, [loading]);
+
+  /*
+   * The calendar comes a beat after the graph, and only where the server has
+   * a door for it (loadMeetings is a no-op otherwise). Back from Google the
+   * link says how it went: the param is stripped so a reload does not say it
+   * twice, and a success opens the meetings page on a fresh read.
+   */
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const google = params.get('google');
+    if (google !== null) {
+      params.delete('google');
+      const query = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+      const ui = useUiStore.getState();
+      if (google === 'connected') {
+        ui.toast(t('toast.googleConnected'));
+        // Mid-welcome, the return lands back on the calendar beat — the week
+        // is read out there. Anywhere else, it opens the meetings page.
+        const midWelcome = !hasBeenWelcomed() && readStep() === 'learn';
+        if (!midWelcome) ui.setView('meetings');
+      } else if (google === 'failed') {
+        ui.toast(t('toast.googleFailed'));
+      }
+    }
+    void useWorkspaceStore.getState().loadMeetings(google === 'connected');
+    void useWorkspaceStore.getState().loadLately();
+  }, [loading]);
 
   useEffect(() => {
     const onResize = () =>
@@ -136,6 +208,10 @@ export function App() {
     // The ghost sits where the processing indicator was: right edge, mid-height.
     const camera = ui.camera ?? fitToBounds(ws.nodes, { w: 1200, h: 800 });
     const ghost = { x: camera.x + 520 / camera.zoom, y: camera.y };
+
+    // The onboarding beat: the very first kept thought ends on the map,
+    // where its star visibly joins the big picture.
+    firstFlight(result.addedMemoryIds);
 
     const motion = ws.payload
       ? reorgMotion(result.event, ws.payload)
@@ -214,11 +290,20 @@ export function App() {
         return;
       }
       if (e.key === 't' || e.key === 'T') {
-        ui.setView('browse');
+        ui.goBrowse();
         return;
       }
       if (e.key === 's' || e.key === 'S') {
         ui.setView('sources');
+        return;
+      }
+      if (e.key === 'd' || e.key === 'D') {
+        ui.setView('diary');
+        return;
+      }
+      // Only where the door is drawn; elsewhere the key does nothing.
+      if ((e.key === 'm' || e.key === 'M') && useWorkspaceStore.getState().source.listMeetings) {
+        ui.setView('meetings');
         return;
       }
       /*
@@ -279,7 +364,7 @@ export function App() {
 
   return (
     <div
-      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : ''}`}
+      className={`shell${view === 'browse' ? ' shell--mono sky sky--dusk' : view === 'diary' || view === 'meetings' ? ' shell--diary sky sky--dusk' : ' shell--diary shell--lens sky sky--dusk'}`}
       // Dropping a screenshot on the window is the shortest path from "I saw
       // something" to "Recall has it" — shorter than ⌘K, and the gesture people
       // already use for files.
@@ -304,12 +389,51 @@ export function App() {
          * pick can never behave differently. `busy` still guards both paths.
          */
         const files = Array.from(e.dataTransfer.files);
+        /*
+         * A screenshot dropped on the window is a screenshot to keep. Against
+         * a live server it used to be refused as "unreadable" — the one kind
+         * of file people drag most. (In seed mode a bare drop is still the
+         * rehearsal's demo, unless the add bar is open to receive it.)
+         */
+        const live = useWorkspaceStore.getState().source.mode === 'api';
+        if (files.some(isImage) && (live || useUiStore.getState().captureOpen)) {
+          void takeImages(files);
+          return;
+        }
+        if (live && files.some(isPdf) && !files.some(isZip) && !files.some(isTextLike)) {
+          void takePdfs(files);
+          return;
+        }
         if (files.some(isZip) || files.filter(isTextLike).length >= 2) {
           if (busy.current) return;
           busy.current = true;
           void importFiles(files).finally(() => {
             busy.current = false;
           });
+          return;
+        }
+        /*
+         * One text file is read and captured as itself. It used to fall
+         * through to the bare `capture()` below — which, against a live
+         * server, posts the seed's demo screenshot: a source called "demo
+         * capture" that fails on a file the server does not have, while the
+         * note the person actually dropped went nowhere.
+         */
+        const [only] = files;
+        if (only && isTextLike(only)) {
+          // Seen first, then kept: the file's words go to the card, whole and
+          // in parts, with room for a line of the person's own.
+          void only.text().then((content) => {
+            const ui = useUiStore.getState();
+            ui.queueReads([{ name: only.name, title: titleFromFilename(only.name), kind: 'text', path: null, text: content, chars: content.length, redacted: 0 }]);
+            ui.setCaptureOpen(true);
+          });
+          return;
+        }
+        // Anything else is the rehearsal's demo — in seed mode. A live server
+        // has no demo to play and says so instead.
+        if (useWorkspaceStore.getState().source.mode === 'api') {
+          useUiStore.getState().toast(t('toast.nothingReadable'));
           return;
         }
         void capture();
@@ -325,7 +449,7 @@ export function App() {
       */}
       {view === 'browse' && (
         <Sky
-          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : FOCUS_FRACTION.closed)}%`}
+          crestTop={`${100 * (openCategoryId !== null ? FOCUS_FRACTION.open : place !== 'home' && homeIndexOpen(welcomeDismissed, memoryCount) ? FOCUS_FRACTION.home : FOCUS_FRACTION.closed)}%`}
         />
       )}
 
@@ -335,18 +459,25 @@ export function App() {
         </div>
       )}
       <LeftRail />
-      {view === 'browse' && <TopBar />}
+      <TopBar />
       <div className="canvas-wrap">
         {view === 'browse' ? (
           <ArcBrowser />
         ) : view === 'sources' ? (
           <SourcesView />
+        ) : view === 'diary' ? (
+          <DiaryView />
+        ) : view === 'meetings' ? (
+          <MeetingsView />
         ) : (
           <MapCanvas animation={animation} onAnimationDone={onAnimationDone} />
         )}
         {/* The map is everything at once, so it needs a way to find one thing
             in it. Browse has the composer in the same slot. */}
+        {view === 'map' && nodes.length > 0 && <ThinkSwitch />}
+        <OnboardingGuide />
         {view === 'map' && nodes.length > 0 && <MapSearch />}
+        {view === 'sources' && <ArchiveFind />}
         {view === 'map' && nodes.length === 0 && (
           <div className="canvas-empty">
             <h2>{t('map.empty.title')}</h2>
@@ -368,10 +499,11 @@ export function App() {
         */}
         {view !== 'browse' && <StatusTicker />}
         <Toasts />
-        {/* Map and Sources have no composer, so they still need a visible way
-            in. Browse has one in the composer, and two `+` on one screen is the
-            duplication this change exists to remove. */}
-        {view !== 'browse' && (
+        {/* The map and the archive have no composer, so they keep a visible way
+            in. Browse has one in the composer; the diary and the meetings have
+            their own place to write, and a second `+` floating under it was a
+            button with nothing to say. The rail's `+` is on every page. */}
+        {(view === 'map' || view === 'sources') && (
           <button
             className="fab"
             data-testid="fab"
@@ -382,7 +514,10 @@ export function App() {
         )}
       </div>
       <Inspector />
+      <MemoryPage />
       <BatchReveal />
+      <ReviewPanel />
+      <UpgradeSheet />
       {captureOpen && <CaptureBar onSubmit={capture} />}
       {askOpen && <AskBar />}
       {settingsOpen && <Settings />}

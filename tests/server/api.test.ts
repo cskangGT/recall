@@ -177,6 +177,95 @@ describe('POST undo', () => {
   });
 });
 
+describe('POST categories — a category made by hand around picked memories', () => {
+  it('creates it locked and theirs, and moves the picks in, locked', async () => {
+    const before = repo.getGraphPayload(WS);
+    const picks = before.memories.slice(0, 3).map((m) => m.id);
+    const res = await post(`${base}/categories`, { name: '채용 원칙', memoryIds: picks });
+    expect(res.status).toBe(200);
+    const { categoryId, graph } = res.body as { categoryId: string; graph: GraphPayload };
+    const made = graph.categories.find((c) => c.id === categoryId)!;
+    expect(made.name).toBe('채용 원칙');
+    expect(made.parent_id).toBeNull();
+    expect(made.name_locked).toBe(true);
+    expect(made.user_created).toBe(true);
+    for (const id of picks) {
+      const m = graph.memories.find((x) => x.id === id)!;
+      expect(m.category_id).toBe(categoryId);
+      expect(m.category_locked).toBe(true);
+    }
+  });
+
+  it('needs a name, known memories, and a root as a parent', async () => {
+    const payload = repo.getGraphPayload(WS);
+    expect((await post(`${base}/categories`, { name: '  ', memoryIds: [] })).status).toBe(400);
+    expect((await post(`${base}/categories`, { name: 'x', memoryIds: ['mem_nope'] })).status).toBe(404);
+    const child = payload.categories.find((c) => c.parent_id !== null)!;
+    expect((await post(`${base}/categories`, { name: 'x', memoryIds: [], parentId: child.id })).status).toBe(400);
+    const root = payload.categories.find((c) => c.parent_id === null)!;
+    const ok = await post(`${base}/categories`, { name: 'under', memoryIds: [], parentId: root.id });
+    expect(ok.status).toBe(200);
+    expect((ok.body as { graph: GraphPayload }).graph.categories.find((c) => c.name === 'under')!.parent_id).toBe(root.id);
+  });
+});
+
+describe('POST onboarding/ask-back — a question on their own words', () => {
+  it('is a closed door on the fixture, and open where the model asks back', async () => {
+    expect((await post(`${base}/onboarding/ask-back`, { thought: 'hire or wait' })).status).toBe(501);
+    class Asking extends FixtureProvider {
+      async askBack(input: { thought: string }) {
+        return { question: `What is in the way of "${input.thought}"?` };
+      }
+    }
+    const asking = { ...deps, ingest: new IngestPipeline(repo, new Asking(), new FixtureEmbeddings()) };
+    const res = await handle({ method: 'POST', path: `${base}/onboarding/ask-back`, body: { thought: 'hire or wait' } }, asking);
+    expect(res.status).toBe(200);
+    expect((res.body as { question: string }).question).toContain('hire or wait');
+    expect((await handle({ method: 'POST', path: `${base}/onboarding/ask-back`, body: {} }, asking)).status).toBe(400);
+  });
+});
+
+describe('POST categories/suggest-name — what Mado would call these', () => {
+  it('names the picks through the same namer, avoiding names already taken', async () => {
+    const ids = repo.getGraphPayload(WS).memories.slice(0, 3).map((m) => m.id);
+    const res = await post(`${base}/categories/suggest-name`, { memoryIds: ids });
+    expect(res.status).toBe(200);
+    const { name } = res.body as { name: string };
+    expect(name.length).toBeGreaterThan(0);
+    expect(repo.getGraphPayload(WS).categories.some((c) => c.name === name)).toBe(false);
+    expect((await post(`${base}/categories/suggest-name`, { memoryIds: [] })).status).toBe(400);
+    expect((await post(`${base}/categories/suggest-name`, { memoryIds: ['mem_nope'] })).status).toBe(404);
+  });
+});
+
+describe('POST memories/condense-preview — what picked memories come to', () => {
+  it('is a closed door on a model that cannot condense, and wants two or more', async () => {
+    const ids = repo.getGraphPayload(WS).memories.slice(0, 2).map((m) => m.id);
+    expect((await post(`${base}/memories/condense-preview`, { memoryIds: ids })).status).toBe(501);
+  });
+});
+
+describe('PATCH memory — putting it down', () => {
+  it('stamps the time, keeps the memory, and picks it back up', async () => {
+    const memory = repo.getGraphPayload(WS).memories[0]!;
+    const down = await patch(`${base}/memories/${memory.id}`, { settled: true });
+    expect(down.status).toBe(200);
+    const settled = (down.body as { graph: GraphPayload }).graph.memories.find((m) => m.id === memory.id)!;
+    expect(settled.text).toBe(memory.text);
+    expect(settled.settled_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const up = await patch(`${base}/memories/${memory.id}`, { settled: false });
+    const held = (up.body as { graph: GraphPayload }).graph.memories.find((m) => m.id === memory.id)!;
+    expect(held.settled_at ?? null).toBeNull();
+  });
+
+  it('404s an unknown memory and 400s anything but a boolean', async () => {
+    expect((await patch(`${base}/memories/mem_nope`, { settled: true })).status).toBe(404);
+    const id = repo.getGraphPayload(WS).memories[0]!.id;
+    expect((await patch(`${base}/memories/${id}`, { settled: 'yes' })).status).toBe(400);
+  });
+});
+
 describe('POST memory category — a user correction', () => {
   it('moves the memory and locks the assignment', async () => {
     const payload = repo.getGraphPayload(WS);

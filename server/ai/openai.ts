@@ -1,15 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
-  AiProvider, AnswerResult, AskTurn, EmbeddingProvider, ExtractResult, MergeDraft, NameCluster,
+  AskBack,
+  AiProvider, AnswerResult, AskTurn, CondenseDraft, EmbeddingProvider, ExtractResult, MergeDraft,
+  NameCluster,
   NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
+  Reflection,
 } from './provider.ts';
+import { firstSentence } from '../link/digest.ts';
 import {
-  answerSchema, answerSoFar, buildAnswerPrompt, buildExtractPrompt, buildMergePrompt,
-  buildNamePrompt, buildNormalizePrompt, coerceExtract, coerceMerge, coerceNormalize,
-  extractSchema, mergeSchema, nameByFallback, nameSchema, normalizeSchema, resolveAnswer,
-  resolveNames,
+  answerSchema, buildDigestPrompt, coerceDigest, digestSchema, answerSoFar, askBackSchema, buildAnswerPrompt, buildAskBackPrompt, buildCondensePrompt, coerceAskBack, buildExtractPrompt,
+  buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
+  coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
+  mergeSchema, nameByFallback, nameSchema,
+  normalizeSchema, resolveAnswer, resolveNames, retroSchema,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
@@ -185,6 +190,8 @@ const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 /** Strong instruction-following, and the "returning none is valid" line in the
  *  extract prompt needs a model that will actually return none. */
 export const CHAT_MODEL = 'gpt-4.1';
+/** A document is read out at length; a screenshot is not. */
+const PDF_MAX_TOKENS = 12_000;
 
 const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -196,6 +203,7 @@ const MIME: Record<string, string> = {
 
 export class OpenAiProvider implements AiProvider {
   readonly name = 'openai';
+  readonly readsPdf = true;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly fetchImpl: typeof fetch;
@@ -250,6 +258,19 @@ export class OpenAiProvider implements AiProvider {
     }
 
     const ext = path.extname(input.imagePath).toLowerCase();
+    if (ext === '.pdf') {
+      // Chat Completions takes a PDF as a file part: the model gets each
+      // page's text and its image, so scans and slides read too.
+      const pdf = await readFile(input.imagePath, { encoding: 'base64' });
+      const content = [
+        { type: 'text', text: buildPdfNormalizePrompt(input) },
+        {
+          type: 'file',
+          file: { filename: path.basename(input.imagePath), file_data: `data:application/pdf;base64,${pdf}` },
+        },
+      ];
+      return coerceNormalize(await this.json(content, 'normalize', normalizeSchema, PDF_MAX_TOKENS));
+    }
     const mediaType = MIME[ext];
     if (!mediaType) throw new Error(`Unsupported image type: ${ext || input.imagePath}`);
     const data = await readFile(input.imagePath, { encoding: 'base64' });
@@ -265,6 +286,7 @@ export class OpenAiProvider implements AiProvider {
     content: string;
     sceneDescription?: string;
     type: SourceType;
+    rejectedExamples?: string[];
   }): Promise<ExtractResult> {
     return coerceExtract(
       await this.json(buildExtractPrompt(input), 'extract', extractSchema, 4096),
@@ -310,13 +332,41 @@ export class OpenAiProvider implements AiProvider {
     question: string;
     retrieved: RetrievedMemory[];
     history?: AskTurn[];
+    reflective?: Reflection;
   }): Promise<AnswerResult> {
     return resolveAnswer(await this.json(buildAnswerPrompt(input), 'answer', answerSchema, 2048), input.retrieved);
+  }
+
+  async retrospect(input: {
+    entries: { date: string; text: string }[];
+    memories?: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ reflection: string }> {
+    return coerceRetro(await this.json(buildRetroPrompt(input), 'retro', retroSchema, 2048));
   }
 
   async mergeMemories(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft> {
     return coerceMerge(
       await this.json(buildMergePrompt(input), 'merge', mergeSchema, 2048),
+      input.texts,
+    );
+  }
+
+  async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
+    return coerceAskBack(await this.json(buildAskBackPrompt(input), 'ask_back', askBackSchema, 300));
+  }
+
+  async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {
+    return coerceDigest(await this.json(buildDigestPrompt(input), 'digest', digestSchema, 2048), input.sections, firstSentence);
+  }
+
+  async condenseSource(input: {
+    title: string;
+    texts: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<CondenseDraft> {
+    return coerceCondense(
+      await this.json(buildCondensePrompt(input), 'condense', condenseSchema, 1024),
       input.texts,
     );
   }
@@ -330,7 +380,7 @@ export class OpenAiProvider implements AiProvider {
    * the pipeline validates.
    */
   async answerStream(
-    input: { question: string; retrieved: RetrievedMemory[]; history?: AskTurn[] },
+    input: { question: string; retrieved: RetrievedMemory[]; history?: AskTurn[]; reflective?: Reflection },
     onDelta: (text: string) => void,
   ): Promise<AnswerResult> {
     const response = await this.fetchImpl(CHAT_ENDPOINT, {

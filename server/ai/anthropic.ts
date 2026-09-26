@@ -2,16 +2,19 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
+  AskBack,
   AiProvider, AnswerResult, AskTurn, ExtractResult, NameCluster, NamedCluster,
   NormalizeInput, NormalizeResult, RetrievedMemory,
   NameOperation,
+  Reflection,
 } from './provider.ts';
 import {
-  MODEL, answerSchema, buildAnswerPrompt, buildExtractPrompt, buildNamePrompt,
-  buildNormalizePrompt, coerceExtract, coerceNormalize, extractSchema, nameByFallback,
+  MODEL, answerSchema, buildAnswerPrompt, buildDigestPrompt, buildExtractPrompt, buildNamePrompt, coerceDigest, digestSchema,
+  buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, askBackSchema, buildAskBackPrompt, coerceAskBack, coerceNormalize, extractSchema, nameByFallback,
   nameSchema, normalizeSchema, resolveAnswer, resolveNames,
 } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
+import { firstSentence } from '../link/digest.ts';
 
 /**
  * The real provider.
@@ -36,6 +39,7 @@ const MIME: Record<string, 'image/png' | 'image/jpeg' | 'image/gif' | 'image/web
 
 export class AnthropicProvider implements AiProvider {
   readonly name = 'anthropic';
+  readonly readsPdf = true;
   private readonly client: Anthropic;
 
   constructor(apiKey?: string) {
@@ -72,6 +76,15 @@ export class AnthropicProvider implements AiProvider {
     }
 
     const ext = path.extname(input.imagePath).toLowerCase();
+    if (ext === '.pdf') {
+      // A document block: the model reads each page's text and its image.
+      const pdf = await readFile(input.imagePath, { encoding: 'base64' });
+      const content = [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+        { type: 'text', text: buildPdfNormalizePrompt(input) },
+      ];
+      return coerceNormalize(await this.json(content, normalizeSchema, 12_000));
+    }
     const mediaType = MIME[ext];
     if (!mediaType) throw new Error(`Unsupported image type: ${ext || input.imagePath}`);
     const data = await readFile(input.imagePath, { encoding: 'base64' });
@@ -81,6 +94,14 @@ export class AnthropicProvider implements AiProvider {
       { type: 'text', text: buildNormalizePrompt(input) },
     ];
     return coerceNormalize(await this.json(content, normalizeSchema, 2048));
+  }
+
+  async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {
+    return coerceDigest(await this.json(buildDigestPrompt(input), digestSchema, 2048), input.sections, firstSentence);
+  }
+
+  async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
+    return coerceAskBack(await this.json(buildAskBackPrompt(input), askBackSchema, 300));
   }
 
   async extract(input: {
@@ -130,6 +151,7 @@ export class AnthropicProvider implements AiProvider {
     question: string;
     retrieved: RetrievedMemory[];
     history?: AskTurn[];
+    reflective?: Reflection;
   }): Promise<AnswerResult> {
     const raw = await this.json(buildAnswerPrompt(input), answerSchema, 2048);
     return resolveAnswer(raw, input.retrieved);

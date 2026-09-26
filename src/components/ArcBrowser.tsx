@@ -2,20 +2,25 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
-import { arcPositions, fitArc, arcCapacity, seatByRank, paginate } from '../arc/layout';
+import { arcPositions, fitArc, arcCapacity, seatByRank, paginate, homeIndexOpen } from '../arc/layout';
 import { corpusNow, interestScores, rankByInterest, savesFrom } from '../arc/interest';
 import { filterByKeywords, keywordsFor } from '../arc/keywords';
 import { useInterestStore } from '../store/interestStore';
 import { starShape } from '../arc/star';
 import { Thinker, FIGURE_DEBUG, DEBUG_SCALE } from './Thinker';
 import { Composer } from './Composer';
+import { Briefing } from './Briefing';
 import { CaptureStoryPanel } from './CaptureStoryPanel';
-import { currentPlan, freeCutoff, isArchivedByPlan, FREE_WINDOW_DAYS } from '../core/plan';
-import { startUpgrade } from '../billing/upgrade';
-import { importFiles } from '../capture/importFiles';
-import { importAppleNotesFlow, importNotionFlow } from '../capture/batchRun';
+import { effectivePlan, freeCutoff, isArchivedByPlan, sleepingCountOf, trialDaysLeft, FREE_WINDOW_DAYS } from '../core/plan';
+import { Welcome } from './Welcome';
+import { Home } from './Home';
+import { FolderView } from './FolderView';
+import { SourceChips } from './SourceChips';
+import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep } from '../core/onboarding';
 import { runAsk } from '../ask/runAsk';
-import { t, PRODUCT } from '../i18n';
+import { morningCardOf, localDay, mondayOf, type MorningCard } from '../core/morning';
+import { attendeeLine, formatTime } from '../core/meetings';
+import { t, PRODUCT, currentLocale } from '../i18n';
 import type { SourceType } from '../core/types';
 
 /**
@@ -77,11 +82,7 @@ export function ArcBrowser() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 900, h: 900 });
   const [dragId, setDragId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fillOpen, setFillOpen] = useState(false);
-  const canImportNotes = Boolean(useWorkspaceStore((s) => s.source.importAppleNotes));
-  const canImportNotion = Boolean(useWorkspaceStore((s) => s.source.importNotionPages));
-  const hasSourceChoices = canImportNotes || canImportNotion;
   const [dropId, setDropId] = useState<string | null>(null);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
   /** Drives the fan-out animation; bumped on every level change. */
@@ -150,8 +151,32 @@ export function ArcBrowser() {
 
   const openRow = openCategoryId ? categoryRows.find((r) => r.id === openCategoryId) : undefined;
   const isOpen = showingAnswer || openRow !== undefined;
+  /*
+   * Home, once the greeting has stepped aside, is an index of the categories:
+   * the constellation says it in light, the index says it in words the eye
+   * can read — name, size, the last two things kept. It takes the reading
+   * list's place and the arc gives up radius for it, the same trade the open
+   * state makes. An empty workspace has nothing to index and keeps its
+   * invitation.
+   */
+  // Three places share this sky (uiStore.place): home is the scene and its
+  // doors, with the arc put away like the greeting's; today is the day's
+  // sheet; browse is the categories, walked by hand.
+  const place = useUiStore((s) => s.place);
+  const browseMode = useUiStore((s) => s.browseMode);
+  const setBrowseMode = useUiStore((s) => s.setBrowseMode);
+  const homeScene = welcomeDismissed && place === 'home' && !isOpen;
+  const sceneUp = !welcomeDismissed || homeScene;
+  const indexOpen =
+    !isOpen && !homeScene && homeIndexOpen(welcomeDismissed, payload?.memories.length ?? 0);
+  const laidOpen = isOpen || indexOpen;
+  const atHome = place === 'today';
+  const homeParts = !indexOpen || atHome;
 
-  const geometry = useMemo(() => fitArc(viewport, isOpen), [viewport, isOpen]);
+  const geometry = useMemo(
+    () => fitArc(viewport, laidOpen, indexOpen),
+    [viewport, laidOpen, indexOpen],
+  );
 
   /*
    * How interesting each top-level category is, right now.
@@ -166,6 +191,18 @@ export function ArcBrowser() {
     const saves = savesFrom(payload);
     return interestScores(saves, interestEvents, corpusNow(saves, new Date()));
   }, [payload, interestEvents]);
+
+  /** Every category at this level, ranked as the arc ranks — the index shows all of them. */
+  const indexRows = useMemo(() => {
+    const level = categoryRows.filter((r) =>
+      effectiveLevelId === null ? r.depth === 0 : r.parentId === effectiveLevelId,
+    );
+    const byId = new Map(level.map((r) => [r.id, r]));
+    return rankByInterest(
+      level.map((r) => r.id),
+      scores,
+    ).map((id) => byId.get(id)!);
+  }, [categoryRows, effectiveLevelId, scores]);
 
   const nodes = useMemo((): ArcNode[] => {
     const level = categoryRows.filter((r) =>
@@ -213,10 +250,12 @@ export function ArcBrowser() {
       row,
     }));
 
-    if (slice.hidden > 0) {
+    // At home the index below already lists every category; an overflow
+    // mark on the arc would be a second count that disagrees with it.
+    if (slice.hidden > 0 && !indexOpen) {
       folders.push({
         id: '__more__',
-        label: `${slice.hidden} more`,
+        label: t('arc.more', { count: slice.hidden }),
         count: null,
         kind: 'more',
         row: null,
@@ -257,7 +296,7 @@ export function ArcBrowser() {
       });
     }
     return folders;
-  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page]);
+  }, [categoryRows, effectiveLevelId, answer, answerMemories.length, scores, geometry.radius, page, indexOpen]);
 
   const points = useMemo(
     () => arcPositions(nodes.length, geometry.radius),
@@ -286,13 +325,22 @@ export function ArcBrowser() {
   const planCutoff = useMemo(
     () =>
       payload
-        ? freeCutoff(payload.memories, currentPlan(undefined, payload.workspace.plan))
+        ? freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace))
         : null,
     [payload],
   );
   const archivedCount = showingAnswer
     ? 0
     : contents.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length;
+
+  /*
+   * The answer as Pro's demo: citations are never redacted (above), so when
+   * an answer leaned on sleeping memories, one line under it says so. The
+   * moment a question touches the locked past is the moment the lock matters.
+   */
+  const sleepingCited = showingAnswer
+    ? answerMemories.filter((m) => isArchivedByPlan(m.created_at, planCutoff)).length
+    : 0;
 
   /*
    * The keyword lens. Sentences have to be read; keywords can be scanned — so
@@ -303,6 +351,135 @@ export function ArcBrowser() {
    */
   const [lensKeywords, setLensKeywords] = useState<string[]>([]);
   useEffect(() => setLensKeywords([]), [openCategoryId]);
+
+  /*
+   * The first-drop ceremony plays only once the reveal is out of the way —
+   * the sky it narrates has to be visible. A few seconds, then the store
+   * clears and every star returns.
+   */
+  const ceremony = useUiStore((s) => s.skyCeremony);
+  const awaken = useUiStore((s) => s.awaken);
+  useEffect(() => {
+    if (!awaken) return;
+    const id = setTimeout(() => useUiStore.getState().setAwaken(false), 4200);
+    return () => clearTimeout(id);
+  }, [awaken]);
+  const revealOpen = useUiStore((s) => Boolean(s.batchReveal));
+  const ceremonyActive = Boolean(ceremony) && !revealOpen;
+  /*
+   * The morning card: computed once against the first payload of the session,
+   * shown at most once per calendar day, and only when something new actually
+   * found something old overnight (morningCardOf's rules).
+   */
+  const [morning, setMorning] = useState<MorningCard | null | undefined>(undefined);
+  /*
+   * Computed against the first payload, and once more when the calendar
+   * arrives — it comes a beat after the graph, and a meeting today outranks
+   * whatever the graph alone had to say. Never again after that: a capture
+   * mid-session must not conjure a card. A dismissal is remembered by the
+   * day, so the second computation cannot bring back what was put away.
+   */
+  const meetingsWindow = useWorkspaceStore((s) => s.meetings);
+  const morningSeen = useRef({ payload: false, meetings: false });
+  /*
+   * However the greeting was left — the last step's "not now", a bulk drop,
+   * "look around first", the map — this is where the first hour closes. If
+   * the hour had begun (a first thought was kept) and the day made memories,
+   * the day is stamped, and the card below says so instead of its usual line.
+   */
+  useEffect(() => {
+    if (!welcomeDismissed || !payload || readStep() === 'done') return;
+    const began = localStorage.getItem(STEP_KEY) !== null;
+    writeStep('done');
+    const today = localDay(new Date());
+    if (began && payload.memories.some((m) => localDay(new Date(m.created_at)) === today)) {
+      localStorage.setItem(FIRST_DAY_KEY, today);
+    }
+  }, [welcomeDismissed, payload]);
+  useEffect(() => {
+    // Not while the greeting is up: the card belongs to home, and the first
+    // day's stamp is only written as the greeting is left.
+    if (!payload || !welcomeDismissed) return;
+    const seen = morningSeen.current;
+    const calendar = meetingsWindow?.connected ? meetingsWindow.meetings : null;
+    if (seen.payload && (seen.meetings || calendar === null)) return;
+    seen.payload = true;
+    if (calendar !== null) seen.meetings = true;
+    const today = localDay(new Date());
+    if (localStorage.getItem('mado.ob.morning') === today) {
+      setMorning(null);
+      return;
+    }
+    setMorning(
+      // Where home opens on the briefing, today's meetings are its first
+      // block — a card above it saying the same thing is an echo, not a door.
+      morningCardOf(
+        payload,
+        new Date(),
+        homeIndexOpen(true, payload.memories.length) ? [] : (calendar ?? []),
+        {
+          firstDayStamp: localStorage.getItem(FIRST_DAY_KEY),
+          firstBundle: localStorage.getItem('mado.ob.firstBundle'),
+          weekStamp: localStorage.getItem('mado.ob.weekCard'),
+          canRetro: Boolean(useWorkspaceStore.getState().source.diaryRetro),
+        },
+      ),
+    );
+  }, [payload, meetingsWindow, welcomeDismissed]);
+  const closeMorning = () => {
+    // The weekly offer is made once a week, taken or not.
+    if (morning?.kind === 'week') localStorage.setItem('mado.ob.weekCard', mondayOf(new Date()));
+    localStorage.setItem('mado.ob.morning', localDay(new Date()));
+    setMorning(null);
+  };
+
+  /*
+   * The sleep card: the week's honest loss report, or — in a trial's last
+   * days — what is about to be lost. Value first (never before this person's
+   * own first drop), never beside the morning card, and rate-limited by the
+   * calendar, not by sessions.
+   */
+  const [sleepCard, setSleepCard] = useState<'week' | 'trial' | null | undefined>(undefined);
+  useEffect(() => {
+    if (sleepCard !== undefined || morning === undefined || !payload) return;
+    if (morning !== null || !localStorage.getItem('mado.ob.firstDrop')) {
+      setSleepCard(null);
+      return;
+    }
+    const tDays = trialDaysLeft(payload.workspace);
+    if (tDays !== null && tDays <= 3) {
+      if (localStorage.getItem('mado.ob.trialCard') !== localDay(new Date())) {
+        setSleepCard('trial');
+        return;
+      }
+    } else if (tDays === null && effectivePlan(undefined, payload.workspace) === 'free') {
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      if (
+        sleepingCountOf(payload.memories, planCutoff) > 0 &&
+        localStorage.getItem('mado.ob.sleepCard') !== localDay(monday)
+      ) {
+        setSleepCard('week');
+        return;
+      }
+    }
+    setSleepCard(null);
+  }, [payload, morning, sleepCard, planCutoff]);
+  const closeSleepCard = () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (sleepCard === 'trial') localStorage.setItem('mado.ob.trialCard', localDay(new Date()));
+    else localStorage.setItem('mado.ob.sleepCard', localDay(monday));
+    setSleepCard(null);
+  };
+
+  useEffect(() => {
+    if (!ceremonyActive) return;
+    const reduced =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const id = setTimeout(() => useUiStore.getState().setSkyCeremony(null), reduced ? 2600 : 4200);
+    return () => clearTimeout(id);
+  }, [ceremonyActive]);
 
   // Derived from readable rows only: an archived memory's text is behind the
   // paywall, and a chip that quotes it would be reading it out loud.
@@ -386,10 +563,15 @@ export function ArcBrowser() {
        * for INPUT targets, so a focused composer would swallow all four and type
        * the letters instead. Handling Enter here keeps both.
        */
-      if (!welcomeDismissed) {
+      if (sceneUp) {
         if (e.key !== 'Enter') return;
-        e.preventDefault();
-        dismissWelcome();
+        // Enter on the greeting goes to the one thing it asks for. Not an
+        // autofocus: G, T, S and `,` must keep working on the first frame.
+        const first = document.getElementById('welcome-first-input');
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
         return;
       }
 
@@ -423,7 +605,7 @@ export function ArcBrowser() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, openCategoryId, arcLevelId, categoryRows, welcomeDismissed, dismissWelcome]);
+  }, [nodes, openCategoryId, arcLevelId, categoryRows, sceneUp, dismissWelcome]);
 
   // ----------------------------------------------------------------- drag
   const finishDrop = (node: ArcNode) => {
@@ -473,80 +655,17 @@ export function ArcBrowser() {
 
   if (!payload) return <div className="arc" data-testid="arc-browser" ref={shellRef} />;
 
-  /*
-   * The fill door, shared by both greetings. On an empty workspace it is the
-   * whole point of the screen; on a seeded one it stands beside "look around".
-   * One door either way: when the local Mac server offers a second source it
-   * opens into the choice, otherwise it IS the file picker.
-   */
-  const fillDoor = (
-    <>
-      <button
-        className="arc__door arc__door--fill"
-        data-testid="door-fill"
-        aria-expanded={hasSourceChoices ? fillOpen : undefined}
-        onClick={() => {
-          if (hasSourceChoices) setFillOpen((v) => !v);
-          else fileInputRef.current?.click();
-        }}
-      >
-        <span className="arc__door-name">{t('welcome.fill')}</span>
-        <span className="arc__door-hint">{t('welcome.fillHint', { product: PRODUCT })}</span>
-      </button>
-    </>
-  );
-
-  const fillSources = fillOpen && hasSourceChoices && (
-    <div className="arc__sources" data-testid="fill-sources">
-      <button
-        className="arc__source"
-        data-testid="source-files"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {t('welcome.sourceFiles')}
-      </button>
-      {canImportNotes && (
-        <button
-          className="arc__source"
-          data-testid="source-notes"
-          onClick={() => void importAppleNotesFlow()}
-        >
-          {t('welcome.notes')}
-        </button>
-      )}
-      {canImportNotion && (
-        <button
-          className="arc__source"
-          data-testid="source-notion"
-          onClick={() => void importNotionFlow()}
-        >
-          {t('welcome.notion')}
-        </button>
-      )}
-    </div>
-  );
-
-  const fileInput = (
-    <input
-      ref={fileInputRef}
-      type="file"
-      multiple
-      hidden
-      data-testid="door-fill-input"
-      accept=".txt,.md,.markdown,.csv,.json,.zip,text/*"
-      onChange={(e) => {
-        const files = Array.from(e.target.files ?? []);
-        e.target.value = '';
-        if (files.length > 0) void importFiles(files);
-      }}
-    />
-  );
+  const fillSources = fillOpen && <SourceChips />;
 
   const heading = showingAnswer
-    ? t('answer.heading')
+    ? answer?.found
+      ? t('find.heading')
+      : t('answer.heading')
     : openRow
       ? openRow.label
-      : t('welcome.prompt');
+      : payload && payload.memories.length === 0
+        ? t('welcome.emptyPrompt')
+        : t('welcome.prompt');
 
   /*
    * The composer's placeholder is the one place a question can be recommended
@@ -584,7 +703,7 @@ export function ArcBrowser() {
      * said so, and you cannot aim at a box you cannot see.
      */
     <div
-      className={`arc${dragId !== null ? ' arc--dragging' : ''}`}
+      className={`arc${dragId !== null ? ' arc--dragging' : ''}${ceremonyActive ? ' arc--ceremony' : ''}${awaken ? ' arc--awaken' : ''}`}
       data-testid="arc-browser"
       ref={shellRef}
     >
@@ -653,7 +772,7 @@ export function ArcBrowser() {
           already standing under, which is what makes "look around" mean looking
           rather than navigating.
         */}
-        {(welcomeDismissed ? nodes : []).map((node, i) => {
+        {(sceneUp ? [] : nodes).map((node, i) => {
           const point = points[i];
           if (!point) return null;
           const active = openCategoryId === node.id;
@@ -684,6 +803,9 @@ export function ArcBrowser() {
                 // The category the last capture landed in, so the account in the
                 // panel and the thing on the arc are visibly the same category.
                 lastCapture?.destination === node.label ? 'arc__node--landed' : '',
+                ceremonyActive && ceremony!.categoryIds.includes(node.id)
+                  ? 'arc__node--ceremony-new'
+                  : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -742,62 +864,257 @@ export function ArcBrowser() {
       {/* The figure sits on the crest, at the arc's focus, looking at what is
           above it. */}
       <div
-        className={`arc__thinker${isOpen ? ' arc__thinker--small' : ''}`}
+        className={`arc__thinker${laidOpen ? ' arc__thinker--small' : ''}`}
         style={{ left: geometry.focus.x, top: geometry.focus.y }}
       >
-        <Thinker size={(isOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
+        <Thinker size={(laidOpen ? 120 : 190) * (FIGURE_DEBUG ? DEBUG_SCALE : 1)} />
       </div>
 
+      {ceremonyActive && (
+        <p className="arc__ceremony" data-testid="sky-ceremony">
+          {t('ceremony.line')}
+        </p>
+      )}
+
+      {awaken && (
+        <p className="arc__ceremony" data-testid="awaken-line">
+          {t('awaken.line')}
+        </p>
+      )}
+
       {!isOpen &&
-        (welcomeDismissed ? (
-          <p className="arc__prompt">{heading}</p>
-        ) : (
-          <div className="arc__greeting" data-testid="welcome">
-            {/*
-              Two greetings, because there are two ways to arrive.
-              The count was written for the seeded workspace, where it is the
-              whole pitch: value before you have typed anything. Against an
-              empty one it read "0 memories from 0 sources, already sorted" —
-              a claim about nothing, made confidently, which is the worst
-              possible first sentence for a product whose entire proposition is
-              that it can be trusted to file things for you.
-            */}
-            {payload.memories.length === 0 ? (
-              <>
-                <p className="arc__greeting-line">{t('welcome.emptyTitle')}</p>
-                <p className="arc__greeting-aside">{t('welcome.emptyAside')}</p>
-                <div className="arc__doors">{fillDoor}</div>
-                {fillSources}
-                {fileInput}
-              </>
-            ) : (
-              <>
-                <p className="arc__greeting-line">{t('welcome.title')}</p>
-                {/* The scale belongs in the sentence, where the eye already is —
-                    the Inspector used to shout it from the corner instead. */}
-                <p className="arc__greeting-aside">
-                  {t('welcome.sub', {
-                    memories: payload.memories.length,
-                    sources: payload.sources.length,
-                  })}
-                </p>
-                {/*
-                  Two doors, because there are two kinds of first visit: someone
-                  ready to pour their own files in, and someone who wants to see
-                  what the tool even is before feeding it anything. The second
-                  door is the old Enter-to-look-around, given a surface.
-                */}
-                <div className="arc__doors">
-                  {fillDoor}
-                  <button className="arc__door" data-testid="door-browse" onClick={dismissWelcome}>
-                    <span className="arc__door-name">{t('welcome.browse')}</span>
+        (homeScene ? (
+          <Home />
+        ) : welcomeDismissed ? (
+          <div
+            className={indexOpen ? 'reading reading--index' : 'arc__home'}
+            data-testid={indexOpen ? (atHome ? 'today' : 'category-index') : 'arc-home'}
+            style={indexOpen ? { top: geometry.listTop } : undefined}
+          >
+            {/* What is said once a day is said first — under a long briefing the
+                card was below the fold, which is the same as not saying it. */}
+            {morning && !fillOpen && homeParts && (
+              <div className="arc__morning" data-testid="morning-card">
+                <button
+                  className="arc__morning-body"
+                  onClick={() => {
+                    closeMorning();
+                    const ui = useUiStore.getState();
+                    if (morning.kind === 'firstDay') return;
+                    if (morning.kind === 'holding') {
+                      ui.goToday();
+                      return;
+                    }
+                    if (morning.kind === 'week') {
+                      ui.setRetroRange({ from: morning.from, to: morning.to });
+                      ui.setView('diary');
+                      return;
+                    }
+                    if (morning.kind === 'meetings') {
+                      ui.setView('meetings');
+                    } else if (morning.kind === 'diary') {
+                      ui.setView('diary');
+                    } else {
+                      ui.openCategory(morning.recent.category_id);
+                      ui.select(morning.recent.id);
+                    }
+                  }}
+                >
+                  {morning.kind === 'firstDay' ? (
+                    <span className="arc__morning-line" data-testid="morning-first-day">
+                      {t('morning.firstDay', { count: morning.count, product: PRODUCT })}
+                    </span>
+                  ) : morning.kind === 'holding' ? (
+                    <span className="arc__morning-line" data-testid="morning-holding">
+                      {t('morning.holding', { name: morning.name })}
+                    </span>
+                  ) : morning.kind === 'week' ? (
+                    <span className="arc__morning-line" data-testid="morning-week">
+                      {t('morning.week', { days: morning.days })}
+                    </span>
+                  ) : morning.kind === 'meetings' ? (
+                    <span className="arc__morning-line" data-testid="morning-meetings">
+                      {t(morning.count === 1 ? 'morning.meetings.one' : 'morning.meetings', {
+                        count: morning.count,
+                        time: formatTime(morning.first, currentLocale()),
+                        who: attendeeLine(morning.first)
+                          ? t('meetings.attendees', { names: attendeeLine(morning.first) })
+                          : morning.first.title,
+                      })}
+                    </span>
+                  ) : morning.kind === 'diary' ? (
+                    <span className="arc__morning-line">{t('morning.diary')}</span>
+                  ) : (
+                    <>
+                      <span className="arc__morning-line">{t('morning.link')}</span>
+                      <span className="arc__morning-mem">{morning.recent.text}</span>
+                      <span className="arc__morning-mem arc__morning-mem--old">{morning.older.text}</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('morning.dismiss')}
+                  onClick={closeMorning}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {!morning && (sleepCard === 'week' || sleepCard === 'trial') && payload && (
+              <div className="arc__morning arc__morning--sleep" data-testid="sleep-card">
+                <div className="arc__morning-body arc__morning-body--static">
+                  <span className="arc__morning-line">
+                    {sleepCard === 'trial'
+                      ? t('sleepcard.trial', {
+                          days: trialDaysLeft(payload.workspace) ?? 0,
+                          count: sleepingCountOf(
+                            payload.memories,
+                            freeCutoff(payload.memories, 'free'),
+                          ),
+                        })
+                      : t('sleepcard.title', {
+                          count: sleepingCountOf(payload.memories, planCutoff),
+                        })}
+                  </span>
+                  {/* Two real sleeping memories, blurred — the loss is a fact,
+                      shown as one, never a mock. */}
+                  {payload.memories
+                    .filter((m) =>
+                      isArchivedByPlan(
+                        m.created_at,
+                        sleepCard === 'trial' ? freeCutoff(payload.memories, 'free') : planCutoff,
+                      ),
+                    )
+                    .slice(0, 2)
+                    .map((m) => (
+                      <span key={m.id} className="arc__morning-mem arc__sleep-mem" aria-hidden="true">
+                        {m.text}
+                      </span>
+                    ))}
+                  <button
+                    className="arc__sleep-wake"
+                    data-testid="sleep-card-wake"
+                    onClick={() => {
+                      closeSleepCard();
+                      useUiStore.getState().setUpgradeSheet(true);
+                    }}
+                  >
+                    {t('paywall.cta')}
                   </button>
                 </div>
-                {fillSources}
-                {fileInput}
-              </>
+                <button
+                  className="arc__morning-close"
+                  aria-label={t('sleepcard.dismiss')}
+                  onClick={closeSleepCard}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {/* Home opens on the briefing — what Mado holds, said first — and
+                the prompt only where there is no index to brief about. */}
+            {indexOpen ? atHome && <Briefing /> : <p className="arc__prompt">{heading}</p>}
+            {/* The quiet door to today's page — home should always know the
+                way to the diary. */}
+            {/* The three doors stand only where there is no briefing to hold
+                them — home keeps the diary in its mind line and the import
+                door in its pile. */}
+            {!indexOpen && (
+            <span className="arc__homelinks">
+              <button
+                className="arc__diarylink"
+                data-testid="home-diary-link"
+                onClick={() => useUiStore.getState().setView('diary')}
+              >
+                ✎ {t('arc.diaryLink')}
+              </button>
+              {/* The import door must outlive the welcome — 'bring in my Mac
+                  notes' is a mid-session thought, not a first-visit one. */}
+              <button
+                className={`arc__diarylink${fillOpen ? ' arc__diarylink--open' : ''}`}
+                data-testid="home-import-link"
+                onClick={() => setFillOpen((v) => !v)}
+              >
+                ⤓ {t('arc.importLink')}
+              </button>
+              {/* The third door: not a record of the day, not an import —
+                  a thought that needs a place. Opens the memory-add bar,
+                  where Mado reads and files what gets poured in. */}
+              <button
+                className="arc__diarylink"
+                data-testid="home-think-link"
+                onClick={() => useUiStore.getState().setCaptureOpen(true)}
+              >
+                ✦ {t('arc.thinkLink')}
+              </button>
+            </span>
+            )}
+            {!indexOpen && fillSources}
+            {/* The categories are Browse's page; at home the arc above already
+                names them, and a second list of them was the page's heaviest echo. */}
+            {indexOpen && !atHome && (
+              <div className="index__head">
+                <span className="brief__eyebrow index__eyebrow">{t('index.title')}</span>
+                {/* Two ways to walk the same categories: the index under the
+                    stars, or folders in a window — the desktop grammar some
+                    hands already know. A taste, remembered. */}
+                <div className="sources__modes" role="group" aria-label={t('browse.mode.aria')}>
+                  {(['index', 'folders'] as const).map((m) => (
+                    <button
+                      key={m}
+                      className={`sources__mode${browseMode === m ? ' sources__mode--on' : ''}`}
+                      data-testid={`browse-mode-${m}`}
+                      aria-pressed={browseMode === m}
+                      onClick={() => setBrowseMode(m)}
+                    >
+                      {t(m === 'index' ? 'browse.mode.index' : 'sources.mode.folders')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {indexOpen && !atHome && browseMode === 'folders' && <FolderView />}
+            {indexOpen && !atHome && browseMode === 'index' && (
+              <div className="index" role="list">
+                {indexRows.map((row) => {
+                  const inside = payload!.memories
+                    .filter((m) => {
+                      if (m.category_id === row.id) return true;
+                      const home = categoryRows.find((c) => c.id === m.category_id);
+                      return home?.parentId === row.id;
+                    })
+                    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+                    .slice(0, 2);
+                  const children = categoryRows.filter((c) => c.parentId === row.id).length;
+                  return (
+                    <button
+                      key={row.id}
+                      className="index__card"
+                      role="listitem"
+                      data-testid={`index-card-${row.id}`}
+                      onClick={() =>
+                        activate({ id: row.id, label: row.label, count: row.count, kind: 'folder', row })
+                      }
+                    >
+                      <span className="index__name">{row.label}</span>
+                      <span className="index__meta">
+                        {t('index.count', { count: row.count ?? 0 })}
+                        {children > 0 ? ` · ${t('index.children', { count: children })}` : ''}
+                      </span>
+                      {inside.map((m) => (
+                        <span key={m.id} className="index__peek">
+                          {m.text}
+                        </span>
+                      ))}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
+        ) : (
+          <Welcome />
         ))}
 
       {/* The conversation never moves. It is docked here on the first frame and
@@ -805,6 +1122,8 @@ export function ArcBrowser() {
       <Composer
         firstRun={!welcomeDismissed}
         onSubmitted={dismissWelcome}
+        onLookAround={() => useUiStore.getState().goBrowse()}
+        modes={welcomeDismissed && (isOpen || place === 'browse')}
         placeholder={composerHint}
       />
 
@@ -979,11 +1298,13 @@ export function ArcBrowser() {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
                 e.stopPropagation();
-                select(memory.id);
+                useUiStore.getState().openMemoryPage(memory.id);
               }}
               onDragStart={() => setDragId(memory.id)}
               onDragEnd={() => setDragId(null)}
-              onClick={() => select(memory.id)}
+              // Picking a memory opens it as a page in the middle — found,
+              // now read — and selects it, so the inspector follows too.
+              onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
             >
               <span className="item__icon" title={source ? SOURCE_LABEL[source.type] : undefined}>
                 {source ? SOURCE_ICON[source.type] : '·'}
@@ -1023,7 +1344,19 @@ export function ArcBrowser() {
             <button
               className="reading__upgrade"
               data-testid="plan-upgrade"
-              onClick={() => void startUpgrade()}
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
+            >
+              {t('paywall.cta')}
+            </button>
+          </div>
+        )}
+        {sleepingCited > 0 && (
+          <div className="reading__paywall" data-testid="answer-sleeping">
+            <span>{t('answer.sleeping', { count: sleepingCited })}</span>
+            <button
+              className="reading__upgrade"
+              data-testid="answer-wake"
+              onClick={() => useUiStore.getState().setUpgradeSheet(true)}
             >
               {t('paywall.cta')}
             </button>

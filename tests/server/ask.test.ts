@@ -202,3 +202,63 @@ describe('AskPipeline', () => {
     expect(rows.some((r) => r.refused === 0)).toBe(true);
   });
 });
+
+describe('a reflective question', () => {
+  it('is answered by looking around the last two weeks, not refused', async () => {
+    const result = await ask.ask(WS, '내가 요즘 관심있는게 뭐야?');
+    expect(result.refused).toBe(false);
+    expect(result.citations.length).toBeGreaterThan(0);
+    const payload = repo.getGraphPayload(WS);
+    const newest = payload.memories.map((m) => m.created_at).sort().at(-1)!;
+    const cutoff = Date.parse(newest) - 14 * 864e5;
+    for (const c of result.citations) {
+      const m = payload.memories.find((x) => x.id === c.memory_id)!;
+      expect(Date.parse(m.created_at)).toBeGreaterThanOrEqual(cutoff);
+    }
+  });
+
+  it('still refuses when there is nothing at all to look back on', async () => {
+    repo.createWorkspace({ id: 'ws_empty', name: 'empty' });
+    const result = await ask.ask('ws_empty', 'what have I been into lately?');
+    expect(result.refused).toBe(true);
+  });
+});
+
+/**
+ * Thinking with picked memories: the picks lead the context, in the order
+ * picked, and are never refused — the person is holding them. Retrieval still
+ * fills what room is left, without repeating a pick, and the model is told
+ * how many at the head are the person's own.
+ */
+describe('ask with focus — the picks lead', () => {
+  class Watching extends FixtureProvider {
+    seen: { retrieved: RetrievedMemory[]; focused?: number } | null = null;
+    async answer(input: { question: string; retrieved: RetrievedMemory[]; focused?: number }): Promise<AnswerResult> {
+      this.seen = { retrieved: input.retrieved, focused: input.focused };
+      return {
+        answer: input.retrieved.slice(0, 2).map((_, i) => `[${i + 1}]`).join(' '),
+        citations: input.retrieved.slice(0, 2).map((r, i) => ({ n: i + 1, memory_id: r.memory_id, source_id: r.source_id })),
+        refused: false,
+      };
+    }
+  }
+
+  it('puts the picks first and tells the model how many, and never refuses them', async () => {
+    const ai = new Watching();
+    const pipeline = new AskPipeline(repo, ai, new FixtureEmbeddings());
+    const picks = repo.listMemories(WS).slice(5, 8).map((m) => m.id);
+    // A question retrieval alone would refuse.
+    const result = await pipeline.ask(WS, 'zzqx', [], picks);
+    expect(result.refused).toBe(false);
+    expect(ai.seen!.focused).toBe(3);
+    expect(ai.seen!.retrieved.slice(0, 3).map((r) => r.memory_id)).toEqual(picks);
+    expect(new Set(ai.seen!.retrieved.map((r) => r.memory_id)).size).toBe(ai.seen!.retrieved.length);
+  });
+
+  it('ignores ids it does not know, and without picks behaves as before', async () => {
+    const ai = new Watching();
+    const pipeline = new AskPipeline(repo, ai, new FixtureEmbeddings());
+    expect((await pipeline.ask(WS, 'zzqx', [], ['mem_nope'])).refused).toBe(true);
+    expect((await pipeline.ask(WS, 'zzqx', [], [])).refused).toBe(true);
+  });
+});

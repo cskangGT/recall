@@ -1,7 +1,11 @@
+import { imageDataUrl, isPdf, showWhatWasKept, sourceOf, takePdfs } from '../capture/images';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureInput } from '../data/dataSource';
 import { useDismissable } from './useDismissable';
 import { useUiStore } from '../store/uiStore';
+import { HttpError, type LinkFailure, type LinkPreview } from '../data/dataSource';
+import { ReadCard, readLineFor } from './ReadCard';
+import type { PendingRead } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { detectCaptureType, TYPE_LABEL } from '../capture/detectType';
 import { isQuestion, SUGGESTED_QUESTIONS } from '../ask/scriptedAsk';
@@ -10,18 +14,117 @@ import { t } from '../i18n';
 import { search, groupByCategory } from '../search/search';
 import type { SourceType } from '../core/types';
 
+const LINK_FAILURES: readonly string[] = ['invalid', 'scheme', 'private', 'status', 'timeout', 'network'];
+const isLinkFailure = (r: unknown): r is LinkFailure => typeof r === 'string' && LINK_FAILURES.includes(r);
+
 export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => void }) {
   const setCaptureOpen = useUiStore((s) => s.setCaptureOpen);
   const [text, setText] = useState('');
-  const [hasImage, setHasImage] = useState(false);
+  /** The photo laid beside the words — kept as a data URL until submit. */
+  const [image, setImage] = useState<string | null>(null);
+  const hasImage = image !== null;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const readImage = (file: File) => {
+    // Scaled down when large, so a full-size retina capture still arrives.
+    void imageDataUrl(file).then(setImage, () =>
+      useUiStore.getState().toast(t('toast.captureFailed')),
+    );
+  };
+  // A picture dropped on the window or picked from the fill door arrives here.
+  const pendingImage = useUiStore((st) => st.pendingImage);
+  useEffect(() => {
+    if (!pendingImage) return;
+    setImage(pendingImage);
+    useUiStore.getState().setPendingImage(null);
+  }, [pendingImage]);
+  /*
+   * A file read out and waiting: its card stands in for the box. Kept, it
+   * becomes a source with the stored file as its original and the chosen
+   * words as its text; skipped, the next file's card comes up, and with none
+   * left the box closes. Closing the box by hand abandons the queue (the
+   * store empties it on close).
+   */
+  const pending = useUiStore((st) => st.pendingReads[0] ?? null);
+  const nextRead = () => {
+    const ui = useUiStore.getState();
+    ui.shiftRead();
+    if (ui.pendingReads.length === 0) ui.setCaptureOpen(false);
+  };
+  const keepFile = async (read: PendingRead, content: string) => {
+    const store = useWorkspaceStore.getState();
+    nextRead();
+    if (!store.source.capture) {
+      onSubmit({ type: 'text', content, title: read.title });
+      return;
+    }
+    const ui = useUiStore.getState();
+    ui.setCaptureStage('reading');
+    try {
+      const result = await store.source.capture({ type: 'text', title: read.title, content, imagePath: read.path ?? undefined });
+      useWorkspaceStore.getState().applyPayload(result.graph);
+      ui.dismissWelcome();
+      ui.toast(t('toast.fileKept', { name: read.title, memories: result.addedMemoryIds?.length ?? 0 }));
+      const sid = sourceOf(result);
+      if (sid && useUiStore.getState().pendingReads.length === 0) showWhatWasKept([sid]);
+    } catch (err) {
+      ui.toast(err instanceof Error ? t('toast.captureFailedWith', { message: err.message }) : t('toast.captureFailed'));
+    } finally {
+      useUiStore.getState().setCaptureStage('idle');
+    }
+  };
+  /*
+   * The look-before-keeping step for links. A pasted URL is not yet a memory:
+   * the server reads the page, this card shows what it found, and the person
+   * decides. What was fetched then rides into capture as the content, so a
+   * kept link's memories come from the page, not from its address.
+   */
+  const [preview, setPreview] = useState<
+    | { loading: true; url: string }
+    | ({ loading: false; failed?: false } & LinkPreview)
+    | { loading: false; url: string; failed: true; reason: LinkFailure; httpStatus?: number }
+    | null
+  >(null);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => ref.current?.focus(), []);
 
   const detected = detectCaptureType({ text, hasImage });
 
+  // The card hands over what to keep, assembled; a failed read keeps the address alone.
+  const keepLink = (content = '') => {
+    if (!preview || preview.loading) return;
+    const enriched = content;
+    setCaptureOpen(false);
+    onSubmit({
+      type: 'link',
+      content: enriched || preview.url,
+      url: preview.url,
+      referencedUrls: detected.referencedUrls,
+    });
+  };
+
   const submit = () => {
     if (!text.trim() && !hasImage) return;
+    // The card has its own keep; the box behind it does nothing on Enter.
+    if (preview && !preview.loading) return;
+    // A link goes through the look first — where the server can look at all.
+    const reader = useWorkspaceStore.getState().source.previewLink;
+    if (detected.type === 'link' && !hasImage && reader && !preview) {
+      const url = text.trim();
+      setPreview({ loading: true, url });
+      reader(url).then(
+        (p) => setPreview({ loading: false, ...p }),
+        (err: unknown) =>
+          setPreview({
+            loading: false,
+            url,
+            failed: true,
+            reason: err instanceof HttpError && isLinkFailure(err.reason) ? err.reason : 'network',
+            httpStatus: err instanceof HttpError ? err.httpStatus : undefined,
+          }),
+      );
+      return;
+    }
     setCaptureOpen(false);
     /*
      * What you typed, sent on.
@@ -38,7 +141,14 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     onSubmit(
       hasImage
-        ? { type: 'screenshot', content: text.trim(), imagePath: '/seed/demo-screenshot.png' }
+        ? {
+            type: 'screenshot',
+            content: text.trim(),
+            // The API stores the photo itself; the seed pipeline has no
+            // storage and falls back to its demo file as before.
+            imageData: image ?? undefined,
+            imagePath: '/seed/demo-screenshot.png',
+          }
         : {
             type: detected.type,
             content: text.trim(),
@@ -63,7 +173,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
      */
     <div className="overlay" {...useDismissable(() => setCaptureOpen(false))}>
       <div
-        className="bar"
+        className={`bar bar--capture${pending ? ' bar--reading' : ''}`}
         data-testid="capture-bar"
         role="dialog"
         aria-modal="true"
@@ -79,11 +189,16 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
           rows={3}
           placeholder={t('capture.placeholder')}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setPreview(null);
+          }}
           onPaste={(e) => {
-            if (Array.from(e.clipboardData.items).some((i) => i.type.startsWith('image/'))) {
-              setHasImage(true);
-            }
+            const item = Array.from(e.clipboardData.items).find((i) =>
+              i.type.startsWith('image/'),
+            );
+            const file = item?.getAsFile();
+            if (file) readImage(file);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -92,19 +207,117 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             }
           }}
         />
+        {image && (
+          <div className="bar__photo" data-testid="capture-photo">
+            <img className="bar__photo-img" src={image} alt="" />
+            <button
+              className="bar__photo-remove"
+              data-testid="capture-photo-remove"
+              aria-label={t('capture.photoRemove')}
+              onClick={() => setImage(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,.pdf,application/pdf"
+          hidden
+          data-testid="capture-photo-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            // A PDF is not laid beside the words — it is its own original. The
+            // bar steps aside and the document is read.
+            if (isPdf(file)) {
+              setCaptureOpen(false);
+              void takePdfs([file]);
+              return;
+            }
+            readImage(file);
+          }}
+        />
+        {pending && (
+          <ReadCard
+            prefix="file"
+            title={pending.title}
+            text={pending.text}
+            chars={pending.chars}
+            readLine={readLineFor({ chars: pending.chars, redacted: pending.redacted })}
+            askLine={t('capture.fileAsk')}
+            keepLabel={t('capture.linkKeep')}
+            skipLabel={t('capture.linkSkip')}
+            onKeep={(content) => void keepFile(pending, content)}
+            onSkip={() => nextRead()}
+          />
+        )}
+        {preview && preview.loading && (
+          <div className="bar__preview" data-testid="link-preview">
+            <span className="bar__preview-reading">{t('capture.linkReading')}</span>
+          </div>
+        )}
+        {preview && !preview.loading && preview.failed && (
+          <div className="bar__preview" data-testid="link-preview">
+            <span className="bar__preview-title">{t('capture.linkFailed')}</span>
+            <span className="bar__preview-note" data-testid="link-preview-note">
+              {t(`capture.linkFail.${preview.reason}`, { status: preview.httpStatus ?? 0 })}
+            </span>
+            <span className="bar__preview-ask">{t('capture.linkAskAddress')}</span>
+            <span className="bar__preview-actions">
+              <button className="bar__preview-keep" data-testid="link-preview-keep" autoFocus onClick={() => keepLink('')}>
+                {t('capture.linkKeep')}
+              </button>
+              <button className="bar__preview-skip" data-testid="link-preview-skip" onClick={() => setPreview(null)}>
+                {t('capture.linkSkip')}
+              </button>
+            </span>
+          </div>
+        )}
+        {preview && !preview.loading && !preview.failed && (
+          <ReadCard
+            prefix="link"
+            title={preview.title ?? preview.url}
+            description={preview.description}
+            excerpt={preview.excerpt}
+            text={preview.text}
+            chars={preview.chars}
+            readLine={readLineFor({ chars: preview.chars, truncated: preview.truncated, note: preview.note })}
+            askLine={t('capture.linkAsk')}
+            keepLabel={t('capture.linkKeep')}
+            skipLabel={t('capture.linkSkip')}
+            onKeep={keepLink}
+            onSkip={() => setPreview(null)}
+          />
+        )}
         <div className="bar__foot">
           <div className="bar__types">
             {(['text', 'link', 'screenshot'] as SourceType[]).map((t) => (
               <button
                 key={t}
                 className={`bar__type${detected.type === t ? ' bar__type--on' : ''}`}
-                onClick={() => t === 'screenshot' && setHasImage(!hasImage)}
+                onClick={() => {
+                  if (t !== 'screenshot') return;
+                  if (hasImage) setImage(null);
+                  else fileRef.current?.click();
+                }}
               >
                 {TYPE_LABEL[t]}
               </button>
             ))}
           </div>
-          <span>{t('capture.submit')}</span>
+          <span className="bar__foot-right">
+            <button
+              className="bar__photo-add"
+              data-testid="capture-photo-add"
+              onClick={() => fileRef.current?.click()}
+            >
+              {t('capture.photoAdd')}
+            </button>
+            <span>{t('capture.submit')}</span>
+          </span>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import type {
   AnswerCitation, AskTurn, ExtractResult, ExtractedMemory, MergeDraft, NameCluster, NamedCluster,
-  NormalizeInput, NormalizeResult, RetrievedMemory,
+  NormalizeInput, NormalizeResult, RetrievedMemory, Reflection,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
 import type { EntityKind, MemoryKind } from '../../src/core/types.ts';
@@ -50,6 +50,32 @@ export function buildNormalizePrompt(input: NormalizeInput): string {
     'scene_description: one sentence naming what this *is*, in the second person',
     '  ("A screenshot of a thread about…"). Not a description of pixels.',
     'has_meaningful_text: false for a photo with no readable content worth keeping.',
+    input.text ? `\nAccompanying text:\n${input.text}` : '',
+  ].join('\n');
+}
+
+/**
+ * A PDF is not a picture of words. A one-page note should come back whole; a
+ * forty-page report transcribed verbatim would overrun any output budget and
+ * bury what it says. So the instruction scales: keep everything when it is
+ * short, and when it is long keep every section's substance — names, numbers,
+ * dates, decisions and claims — in the document's own language and order.
+ */
+export function buildPdfNormalizePrompt(input: NormalizeInput): string {
+  return [
+    'Read this PDF so it can be filed in a personal memory system.',
+    '',
+    'ocr_text: the text of the document, in its own language.',
+    '  - Up to a few pages: every word, verbatim, in reading order.',
+    '  - Longer: go section by section and keep the substance of each — names, numbers,',
+    '    dates, decisions, claims, lists — under its heading. Drop boilerplate, page',
+    '    furniture and repeated headers. Do not summarize into a paragraph; keep it a',
+    '    faithful, skimmable rendering of what the document says.',
+    '  - Describe a chart, table or figure in a line when it carries information.',
+    'scene_description: one sentence naming what this document *is*, in the second person',
+    '  ("A pitch deck for…", "Your lease agreement with…").',
+    'detected_context: "document" unless another value clearly fits better.',
+    'has_meaningful_text: false only for an empty or unreadable file.',
     input.text ? `\nAccompanying text:\n${input.text}` : '',
   ].join('\n');
 }
@@ -113,6 +139,7 @@ export function buildExtractPrompt(input: {
   content: string;
   sceneDescription?: string;
   type: string;
+  rejectedExamples?: string[];
 }): string {
   return [
     'Pull out the things worth remembering from this, as atomic memories.',
@@ -133,6 +160,19 @@ export function buildExtractPrompt(input: {
     `At most ${MAX_MEMORIES}. Returning none is a valid answer — plenty of things`,
     'are not worth remembering, and an empty list is better than padding.',
     '',
+    /*
+     * The curation signal (spec §21): what this person cut in review teaches
+     * what not to extract. Negative examples, verbatim — the strongest
+     * personalization a prompt can carry without a fine-tune.
+     */
+    ...(input.rejectedExamples && input.rejectedExamples.length > 0
+      ? [
+          'This person reviewed past extractions and REMOVED ones like these.',
+          'Do not extract anything similar in kind:',
+          ...input.rejectedExamples.map((t) => `- ${t}`),
+          '',
+        ]
+      : []),
     'suggested_title: five words or fewer, naming the source, not the contents.',
     '',
     input.sceneDescription ? `What this capture is: ${input.sceneDescription}` : '',
@@ -354,6 +394,8 @@ export function buildAnswerPrompt(input: {
   question: string;
   retrieved: RetrievedMemory[];
   history?: AskTurn[];
+  reflective?: Reflection;
+  focused?: number;
 }): string {
   const numbered = input.retrieved
     .map(
@@ -380,13 +422,63 @@ export function buildAnswerPrompt(input: {
         ]
       : [];
 
+  /*
+   * A reflective question ("what have I been into lately?") is answered by
+   * looking around, not looking up: the memories below are a sample of the
+   * last two weeks, spread across the interests that took the most. The task
+   * is the shape of the fortnight — what kept coming back, what was new —
+   * in three or four sentences, still citing what it leans on. The refusal
+   * clause stays for an empty list only; a fortnight with things in it is
+   * never "nothing saved about that".
+   */
+  const task = input.reflective
+    ? [
+        'The memories below are what this person kept in the last two weeks',
+        `(${input.reflective.from} to ${input.reflective.to}), sampled across`,
+        'their interests. The interests, by how much each took:',
+        ...input.reflective.interests.map((i) => `  - ${i.name} (${i.count})`),
+        '',
+        'Open with one sentence about their own way — a pattern in what they keep',
+        'or how they think, said to them ("넌 … 편이야" / "you tend to …") — then',
+        'They are asking what has been on their mind lately. Answer by looking',
+        'around, not looking up: say what these weeks were mostly about, what',
+        'kept coming back, what was new — three or four sentences, concrete,',
+        'naming the interests and one or two specific things kept. Every',
+        'sentence must carry at least one [n] citation from the memories it',
+        'leans on. Refuse only if there are no memories at all.',
+        '',
+      ]
+    : input.focused && input.focused > 0
+      ? [
+          /*
+           * Thinking together: the person picked these out by hand, on the
+           * map, and is asking with them in front of them. They come first,
+           * and the task is to think across them — what they have in common,
+           * what one says about another, what is missing between them —
+           * before anything else that came up.
+           */
+          `The first ${input.focused} memories below are ones this person picked out by hand`,
+          'to think with — they are looking at them right now. Build the answer on',
+          'those first: draw the connections among them, say what one implies for',
+          'another, name what is missing between them. Any memories after those are',
+          'what else came up, and may be leaned on only where they add to the picks.',
+          '',
+          'Every sentence must carry at least one [n] citation. Cite by number.',
+          'Three or four sentences. Think out loud with them, in their own terms —',
+          'you are their memory joining in, not a stranger summarizing.',
+          '',
+        ]
+      : [
+          'Answer using only the numbered memories below. They are the entire world.',
+          '',
+          'Every sentence must carry at least one [n] citation. Cite by number.',
+          'Two or three sentences. Say what the person decided or believes, in their',
+          'own terms — you are reminding them, not briefing a stranger.',
+          '',
+        ];
+
   return [
-    'Answer using only the numbered memories below. They are the entire world.',
-    '',
-    'Every sentence must carry at least one [n] citation. Cite by number.',
-    'Two or three sentences. Say what the person decided or believes, in their',
-    'own terms — you are reminding them, not briefing a stranger.',
-    '',
+    ...task,
     /*
      * The voice, fixed rather than left to the model's mood: Mado answers as
      * the person's own memory surfacing, not as an assistant reporting on
@@ -504,6 +596,178 @@ export function coerceMerge(raw: unknown, fallbackTexts: string[]): MergeDraft {
   };
 }
 
+export const condenseSchema = {
+  type: 'object',
+  properties: { text: { type: 'string' } },
+  required: ['text'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * One source, many memories, and the person wants one.
+ *
+ * Unlike a merge, this *is* allowed to lose: a source that produced six
+ * fragments usually amounts to one or two things worth keeping, and the ask
+ * is for that — what this source comes to, said once. Specific facts that
+ * carry the point (a number, a name, a place) stay; the fluff around them
+ * goes. Still nothing may be added: the model condenses what is there, it
+ * does not write what might be. The person edits the result before it is
+ * saved, so the draft should read like a memory they would write themselves.
+ */
+export function buildCondensePrompt(input: {
+  title: string;
+  texts: string[];
+  locale?: 'en' | 'ko';
+}): string {
+  const lines = [
+    'A person saved one thing, and these are the separate memories that were',
+    'extracted from it. Too many, they feel — they want ONE memory that says',
+    'what this source comes to.',
+    '',
+    `The source: ${input.title || '(untitled)'}`,
+    '',
+    'Return one field, `text`: ONE memory, two to four sentences at most,',
+    'written as a note to self. Keep the specific facts that carry the point',
+    '— numbers, names, places, the concrete claim — and let the rest go.',
+    'Nothing may be added: no fact that does not appear below. Write it in',
+    'the same language the memories themselves are written in.',
+    input.locale === 'ko' ? '(The viewer reads Korean; the memories below are most likely Korean.)' : '',
+    '',
+    'The memories:',
+    ...input.texts.map((t, i) => `${i + 1}. ${t}`),
+  ];
+  return lines.filter((l) => l !== '').join('\n');
+}
+
+// ------------------------------------------------------------------ ask-back
+
+export const askBackSchema = {
+  type: 'object',
+  properties: { question: { type: 'string' } },
+  required: ['question'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The first conversation's second beat. The person has just written the one
+ * thing they cannot decide; Mado asks back — as their own memory would —
+ * what is in the way, so that what they answer becomes the stars the next
+ * beat is made of. One question, on their actual words, never generic.
+ */
+const ROLE_WORDS: Record<string, string> = {
+  planner: 'a product planner / PM',
+  ceo: 'a founder / CEO',
+  clevel: 'a C-level executive (CTO, COO, CMO, CFO…) running a function',
+  researcher: 'a researcher or professor',
+  developer: 'a software developer',
+  designer: 'a designer',
+  marketer: 'a marketer',
+  creator: 'a content creator or influencer',
+  sales: 'in sales or business development',
+};
+
+export function buildAskBackPrompt(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): string {
+  const who = input.role && ROLE_WORDS[input.role] ? `They are ${ROLE_WORDS[input.role]}.` : '';
+  return [
+    'A person has just written down the one thing they cannot decide right now:',
+    who,
+    '',
+    `  "${input.thought}"`,
+    '',
+    'Ask them back ONE question that gets them to say what is in the way — the',
+    'two or three things holding the decision open. Name what they wrote (the',
+    'specific choice, the people or numbers in it) so the question is plainly',
+    'about their thing, not a template. Then ask for two or three things, one',
+    'per line. Two sentences at most.',
+    '',
+    'Voice: you are this person\'s own memory speaking — warm, direct, familiar',
+    '(반말 in Korean: "~야", "~줘"). No "I" as an assistant, no praise, no',
+    'preamble. Return only the question.',
+    input.locale === 'ko'
+      ? 'Write it in Korean.'
+      : 'Write it in English — unless they wrote in another language, then in that one.',
+  ].join('\n');
+}
+
+export function coerceAskBack(raw: unknown): { question: string } {
+  const o = (raw ?? {}) as { question?: unknown };
+  return { question: typeof o.question === 'string' ? o.question.trim() : '' };
+}
+
+// ------------------------------------------------------------------ digest
+
+export const digestSchema = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    sections: {
+      type: 'array',
+      items: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'], additionalProperties: false },
+    },
+  },
+  required: ['summary', 'sections'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * A page, whole and in parts. The sections were cut before the model saw the
+ * page, and it is made to answer one summary per section, in order — so the
+ * whole is covered by construction, and "miss nothing" is a count the code
+ * can check rather than a hope.
+ */
+export function buildDigestPrompt(input: {
+  title: string | null;
+  sections: { heading: string | null; text: string }[];
+  locale?: 'en' | 'ko';
+}): string {
+  const n = input.sections.length;
+  return [
+    'Here is a web page, already cut into sections. Two things, both in the',
+    'language the page is written in (a Korean page gets Korean, never a translation):',
+    '',
+    '1. "summary": what the whole page says, in three to five sentences. State',
+    '   its claims, facts, numbers and names — never "this page is about". Every',
+    '   section must be reflected in it; nothing on the page may be missing.',
+    `2. "sections": exactly ${n} entries, in the same order, one per section.`,
+    '   Each "summary" is one or two sentences saying what THAT section says —',
+    '   its specific facts, figures, names, steps. Never skip or merge sections;',
+    '   a section with little in it still gets one line saying what little it is.',
+    '',
+    'Leave out site furniture if any slipped in (menus, cookie notices, related',
+    'links, share buttons) — but never leave out content.',
+    '',
+    input.title ? `Title: ${input.title}` : '',
+    '',
+    ...input.sections.flatMap((sec, i) => [`[${i + 1}]${sec.heading ? ` ${sec.heading}` : ''}`, sec.text, '']),
+  ]
+    .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+    .join('\n');
+}
+
+export function coerceDigest(
+  raw: unknown,
+  sections: { heading: string | null; text: string }[],
+  firstSentence: (text: string) => string,
+): { summary: string; sections: { summary: string }[] } {
+  const o = (raw ?? {}) as { summary?: unknown; sections?: unknown };
+  const given = Array.isArray(o.sections) ? o.sections : [];
+  // One per section, in order; a missing or empty one gets the section's own first sentence.
+  const each = sections.map((sec, i) => {
+    const g = given[i] as { summary?: unknown } | undefined;
+    const text = g && typeof g.summary === 'string' ? g.summary.trim() : '';
+    return { summary: text || firstSentence(sec.text) };
+  });
+  const summary = typeof o.summary === 'string' && o.summary.trim() ? o.summary.trim() : each.map((e) => e.summary).join(' ');
+  return { summary, sections: each };
+}
+
+export function coerceCondense(raw: unknown, fallbackTexts: string[]): { text: string } {
+  const o = (raw ?? {}) as { text?: unknown };
+  const text = typeof o.text === 'string' ? o.text.trim() : '';
+  // A model that returns nothing must not cost the person their content.
+  return { text: text.length > 0 ? text : fallbackTexts.join(' · ') };
+}
+
 // ------------------------------------------------------------------ streaming
 
 /**
@@ -545,4 +809,47 @@ export function answerSoFar(partialJson: string): string {
     } else out += next; // \" \\ \/ and anything else escaped literally
   }
   return out;
+}
+
+// ---------------------------------------------------------------- retrospect
+
+export const retroSchema = {
+  type: 'object',
+  properties: { reflection: { type: 'string' } },
+  required: ['reflection'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * The look back. Same fixed voice as Ask — the remembering itself, never a
+ * report — but given room: a stretch of days wants a paragraph about how the
+ * thinking moved, not two cited sentences.
+ */
+export function buildRetroPrompt(input: {
+  entries: { date: string; text: string }[];
+  memories?: string[];
+  locale?: 'en' | 'ko';
+}): string {
+  return [
+    'Look back over these diary days as this person\'s own memory — you ARE',
+    'the remembering, not an assistant summarizing files. Say how the thinking',
+    'moved: what kept coming back, what shifted, what quietly resolved.',
+    'Four to seven sentences. Recall, never report — no "the entries show",',
+    'no "you wrote". In Korean use the soft recollective register (…였지,',
+    '…하고 있었잖아), never the formal report style. Answer in the language',
+    'the entries are written in. Mention days naturally ("8월 초에는…"),',
+    'not as a list.',
+    '',
+    'The days:',
+    ...input.entries.map((e) => `[${e.date}]\n${e.text}`),
+    ...(input.memories && input.memories.length > 0
+      ? ['', 'Also saved during these days (context, not the subject):',
+         ...input.memories.map((m) => `- ${m}`)]
+      : []),
+  ].join('\n');
+}
+
+export function coerceRetro(raw: unknown): { reflection: string } {
+  const o = (raw ?? {}) as { reflection?: unknown };
+  return { reflection: typeof o.reflection === 'string' ? o.reflection.trim() : '' };
 }

@@ -1,3 +1,6 @@
+import { isPdfPath } from '../link/saveImage.ts';
+import { splitSections, firstSentence, type Digest, type Section } from '../link/digest.ts';
+import { redact } from '../secrets/redact.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
 import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
@@ -8,6 +11,7 @@ import { evaluateReorg } from '../../src/core/gates.ts';
 import { applyReorg } from '../../src/core/applyReorg.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
 import { RELATES_TO_MIN_SIMILARITY, DUPLICATE_SIMILARITY } from '../../src/core/thresholds.ts';
+import { normalizeEntityName } from '../entities/normalize.ts';
 
 /**
  * The ingest pipeline — spec §5.3, §8.3, §8.4.
@@ -40,6 +44,8 @@ export interface IngestInput {
   referencedUrls?: string[];
   /** The viewer's language — category names are UI, not content. */
   locale?: 'en' | 'ko';
+  /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
+  diaryDate?: string;
 }
 
 export interface IngestResult {
@@ -57,6 +63,8 @@ export interface IngestResult {
   reorg: ReorgEventRow | null;
   /** Populated when extraction produced nothing or a stage failed. */
   note?: string;
+  /** Secrets replaced or removed before anything was stored or sent. */
+  redacted: number;
 }
 
 export interface BatchIngestResult {
@@ -247,6 +255,17 @@ export class IngestPipeline {
   ): Promise<IngestResult> {
     const sourceId = id('src');
 
+    /*
+     * ---- 0. Secrets never leave the process. Before the row is written and
+     * long before a model sees a word: keys, tokens, card and resident
+     * numbers replaced in place, password lines dropped. The count rides the
+     * result so the person is told, not surprised.
+     */
+    const redaction = redact(input.content ?? '');
+    const titleRedaction = redact(input.title ?? '');
+    input = { ...input, content: redaction.text, title: titleRedaction.text || input.title };
+    const redacted = redaction.count + titleRedaction.count;
+
     // ---- 1. Persist the raw source first. A capture is never lost.
     const source: SourceRow = {
       id: sourceId,
@@ -258,6 +277,7 @@ export class IngestPipeline {
       raw_content: input.content ?? '',
       scene_description: null,
       url: input.url ?? null,
+      diary_date: input.diaryDate ?? null,
       image_path: input.imagePath ?? null,
       referenced_urls: input.referencedUrls ?? [],
       status: 'processing',
@@ -266,7 +286,8 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    return this.process(input.workspaceId, source, { ...options, locale: input.locale });
+    const result = await this.process(input.workspaceId, source, { ...options, locale: input.locale });
+    return { ...result, redacted: result.redacted + redacted };
   }
 
   /**
@@ -374,25 +395,59 @@ export class IngestPipeline {
     };
 
     try {
+      let redactedInProcess = 0;
       // ---- 2. Normalize (screenshots only — spec §10.1)
       let content = input.content ?? '';
       let sceneDescription: string | undefined;
-      if (input.type === 'screenshot') {
+      // A kept PDF is normalized too, whatever its type: the model reads the
+      // document out, and what it read becomes the source's own text — the
+      // original a person can open later is the words, not a file path.
+      const pdf = isPdfPath(input.imagePath);
+      // A PDF that arrives with its words already in hand was read before it
+      // was kept (files/read): the person saw the text and chose from it.
+      // Reading it again would cost a second model pass and undo the choice.
+      const preread = pdf && Boolean(input.content?.trim());
+      if (input.type === 'screenshot' || (pdf && !preread)) {
         const normalized = await this.ai.normalize({
           type: input.type, text: input.content, imagePath: input.imagePath,
         });
-        content = normalized.ocr_text || input.content || '';
+        if (pdf && !normalized.ocr_text.trim()) {
+          throw new Error('nothing could be read out of that PDF');
+        }
+        // What was read out of a picture or a document is text like any
+        // other, and can carry a key photographed off a screen.
+        const read = redact(normalized.ocr_text);
+        redactedInProcess += read.count;
+        content = pdf
+          ? [input.content?.trim(), read.text].filter(Boolean).join('\n\n')
+          : read.text || input.content || '';
         sceneDescription = normalized.scene_description;
+        this.repo.updateSourceContent(sourceId, {
+          // A screenshot keeps the words written beside it; only an empty one
+          // takes what was read, so its page has something to show.
+          raw_content: pdf || !input.content?.trim() ? content : null,
+          scene_description: sceneDescription || null,
+        });
       }
 
       // ---- 3. Extract
-      const extracted = await this.ai.extract({ content, sceneDescription, type: input.type });
+      // The curation signal rides in: the last few extractions this person
+      // removed in review become negative examples (spec §21).
+      const rejectedExamples = this.repo
+        .listCuration(input.workspaceId, 'discard', 5)
+        .map((c) => c.memory_text);
+      const extracted = await this.ai.extract({
+        content,
+        sceneDescription,
+        type: input.type,
+        rejectedExamples,
+      });
 
       if (extracted.memories.length === 0) {
         this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
         return {
           sourceId, status: 'no_memories', addedMemoryIds: [], touchedCategoryIds: [],
-          skipped: [], reorg: null,
+          skipped: [], reorg: null, redacted: redactedInProcess,
           note: "Saved, but Mado couldn't find anything to remember in this. It's in your Sources.",
         };
       }
@@ -445,7 +500,7 @@ export class IngestPipeline {
         }
       }
 
-      return { sourceId, status: 'complete', ...result, reorg };
+      return { sourceId, status: 'complete', ...result, reorg, redacted: redactedInProcess };
     } catch (err) {
       this.repo.updateSourceStatus(sourceId, 'failed', {
         error_message: err instanceof Error ? err.message : String(err),
@@ -453,7 +508,7 @@ export class IngestPipeline {
       });
       return {
         sourceId, status: 'failed', addedMemoryIds: [], touchedCategoryIds: [],
-        skipped: [], reorg: null,
+        skipped: [], reorg: null, redacted: 0,
         note: "Couldn't process that — it's saved and you can retry.",
       };
     }
@@ -545,9 +600,20 @@ export class IngestPipeline {
       } else if (step.kind === 'joins') {
         categoryId = createdByCluster.get(step.clusterId)!;
       } else {
+        /*
+         * The parent the plan chose may be provisional: a cluster opened two
+         * memories ago in this same batch, known to the plan only by its
+         * synthetic id. That cluster's real row was inserted when its own
+         * `new` step ran (plan order is index order), so resolve through the
+         * same map `joins` uses. Writing the synthetic id was a FOREIGN KEY
+         * failure on any long note that opened a category and then a child
+         * beside it.
+         */
+        const parentId =
+          step.parentId === null ? null : (createdByCluster.get(step.parentId) ?? step.parentId);
         const created: Category = {
           id: id('cat'),
-          parent_id: step.parentId,
+          parent_id: parentId,
           name: names.get(step.clusterId) ?? fallbackName([extractedMemory.text], [[extractedMemory.text]]),
           rationale: `auto-created at similarity ${step.score.toFixed(3)}`,
           name_locked: false, user_created: false,
@@ -601,7 +667,7 @@ export class IngestPipeline {
           id: id('ent'),
           name: entity.name,
           kind: entity.kind,
-          normalized_name: entity.name.trim().toLowerCase(),
+          normalized_name: normalizeEntityName(entity.name),
         });
         this.repo.linkMemoryEntity(memoryId, entityId);
       }
@@ -765,11 +831,198 @@ export class IngestPipeline {
     return row;
   }
 
+  // ------------------------------------------------------------ user review
+
+  /**
+   * Applies one source's review verdicts atomically — the visible half of the
+   * curation feature. Discards delete the row but keep the text in a verdict
+   * record (charter: nothing is lost); edits re-embed and lock the assignment
+   * (a user edit is a fact); keeps are recorded too, because "this survived
+   * review" is as much taste signal as a cut. Edges rebuild once at the end.
+   */
+  async reviewSource(
+    workspaceId: string,
+    sourceId: string,
+    input: { discard: string[]; edits: { memoryId: string; text: string }[] },
+  ): Promise<void> {
+    const memories = this.repo.listMemories(workspaceId);
+    const bySource = memories.filter((m) => m.source_id === sourceId);
+    const byId = new Map(bySource.map((m) => [m.id, m]));
+
+    for (const mid of input.discard) {
+      if (!byId.has(mid)) throw new Error(`memory ${mid} is not from this source`);
+    }
+    for (const e of input.edits) {
+      if (!byId.has(e.memoryId)) throw new Error(`memory ${e.memoryId} is not from this source`);
+      if (e.text.trim().length === 0) throw new Error('an edited memory must not be empty');
+      if (input.discard.includes(e.memoryId)) {
+        throw new Error('a memory cannot be both edited and discarded');
+      }
+    }
+
+    // Embeddings before the transaction opens — it must stay synchronous.
+    const editVectors = new Map<string, number[]>();
+    if (input.edits.length > 0) {
+      const vectors = await this.embeddings.embed(
+        input.edits.map((e) => e.text.trim()),
+        'document',
+      );
+      input.edits.forEach((e, i) => editVectors.set(e.memoryId, vectors[i]!));
+    }
+
+    const at = now();
+    const record = (memoryText: string, verdict: 'keep' | 'discard' | 'edit', editedText: string | null) =>
+      this.repo.insertCuration(workspaceId, {
+        id: id('cur'),
+        source_id: sourceId,
+        memory_text: memoryText,
+        verdict,
+        edited_text: editedText,
+        created_at: at,
+      });
+
+    this.repo.transaction(() => {
+      const touched = new Set([...input.discard, ...input.edits.map((e) => e.memoryId)]);
+      for (const mid of input.discard) {
+        record(byId.get(mid)!.text, 'discard', null);
+        this.repo.deleteMemory(mid);
+      }
+      for (const e of input.edits) {
+        const memory = byId.get(e.memoryId)!;
+        record(memory.text, 'edit', e.text.trim());
+        this.repo.updateMemoryText(e.memoryId, e.text.trim(), editVectors.get(e.memoryId)!);
+        // A user edit is a fact — no reorganization may reassign it.
+        this.repo.assign({
+          memoryId: e.memoryId,
+          categoryId: memory.category_id,
+          confidence: memory.confidence,
+          assignedBy: 'user',
+          locked: true,
+        });
+      }
+      for (const m of bySource) {
+        if (!touched.has(m.id)) record(m.text, 'keep', null);
+      }
+      this.repo.setSourceReviewed(sourceId, at);
+    });
+
+    this.rebuildEdges(workspaceId);
+  }
+
   // -------------------------------------------------------------- user merge
 
   /** Whether the wired model can explain and draft a merge at all. */
   canMerge(): boolean {
     return typeof this.ai.mergeMemories === 'function';
+  }
+
+  /** The first conversation's ask-back, where the model can write one. */
+  canAskBack(): boolean {
+    return typeof this.ai.askBack === 'function';
+  }
+
+  async askBack(thought: string, locale?: 'en' | 'ko', role?: string): Promise<{ question: string }> {
+    if (!this.ai.askBack) throw new Error('this model cannot ask back');
+    return this.ai.askBack({ thought, locale, role });
+  }
+
+  /** A page whole and in parts, where the model can write it. */
+  canDigest(): boolean {
+    return typeof this.ai.digest === 'function';
+  }
+
+  async digest(title: string | null, text: string, locale?: 'en' | 'ko'): Promise<Digest & { sections: (Section & { summary: string })[] }> {
+    if (!this.ai.digest) throw new Error('this model cannot digest a page');
+    const sections = splitSections(text);
+    if (sections.length === 0) return { summary: '', sections: [] };
+    const out = await this.ai.digest({ title, sections, locale });
+    // The sections ride back with their summaries: the person picks by the
+    // summary and keeps the text, and the two must never come apart.
+    return { summary: out.summary, sections: sections.map((sec, i) => ({ ...sec, summary: out.sections[i]?.summary ?? firstSentence(sec.text) })) };
+  }
+
+  /**
+   * A document read out and nothing kept: the text, redacted, and how much
+   * of it. The look-before-keeping step for a file, as the link has one.
+   */
+  async readFile(imagePath: string): Promise<{ text: string; chars: number; redacted: number }> {
+    if (!isPdfPath(imagePath)) throw new Error('only a PDF can be read this way');
+    const normalized = await this.ai.normalize({ type: 'text', text: '', imagePath });
+    const read = redact(normalized.ocr_text ?? '');
+    if (!read.text.trim()) throw new Error('nothing could be read out of that PDF');
+    return { text: read.text, chars: read.text.length, redacted: read.count };
+  }
+
+  /** Whether the wired model takes a PDF as a document. */
+  canReadPdf(): boolean {
+    return this.ai.readsPdf === true;
+  }
+
+  canCondense(): boolean {
+    return typeof this.ai.condenseSource === 'function';
+  }
+
+  /**
+   * One source's memories → one draft. Reads, never writes: the draft lands
+   * in the review card as a staged rewrite-plus-drops, and only the person's
+   * confirm applies it — through the same review route as any other verdict,
+   * so the curation signal is recorded like any other.
+   */
+  async condenseSource(
+    workspaceId: string,
+    sourceId: string,
+    locale?: 'en' | 'ko',
+  ): Promise<{ text: string }> {
+    if (!this.ai.condenseSource) throw new Error('this model cannot condense');
+    const source = this.repo.listSources(workspaceId).find((s) => s.id === sourceId);
+    if (!source) throw new Error(`unknown source ${sourceId}`);
+    const texts = this.repo.listMemories(workspaceId)
+      .filter((m) => m.source_id === sourceId)
+      .map((m) => m.text);
+    if (texts.length === 0) throw new Error('nothing to condense');
+    return this.ai.condenseSource({ title: source.title ?? '', texts, locale });
+  }
+
+  /**
+   * A name for a category the person is about to make around picked
+   * memories — the same namer every reorganization uses, with the existing
+   * category names forbidden so it does not hand back one they already have.
+   * A suggestion only; the person types the name that is kept.
+   */
+  async suggestCategoryName(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ name: string }> {
+    const all = this.repo.listMemories(workspaceId);
+    const texts = memoryIds.map((id) => {
+      const m = all.find((x) => x.id === id);
+      if (!m) throw new Error(`unknown memory ${id}`);
+      return m.text;
+    });
+    const [named] = await this.ai.nameClusters({
+      operation: 'new_category',
+      clusters: [{ cluster_id: 'picked', sample_texts: texts.slice(0, 12) }],
+      forbiddenNames: this.repo.listCategories(workspaceId).map((c) => c.name),
+      locale,
+    });
+    return { name: named?.name?.trim() || texts[0]!.slice(0, 40) };
+  }
+
+  /** What a handful of picked memories come to, in one text. Reads, never writes. */
+  async condenseMemories(
+    workspaceId: string,
+    memoryIds: string[],
+    locale?: 'en' | 'ko',
+  ): Promise<{ text: string }> {
+    if (!this.ai.condenseSource) throw new Error('this model cannot condense');
+    const all = this.repo.listMemories(workspaceId);
+    const texts = memoryIds.map((id) => {
+      const m = all.find((x) => x.id === id);
+      if (!m) throw new Error(`unknown memory ${id}`);
+      return m.text;
+    });
+    return this.ai.condenseSource({ title: '', texts, locale });
   }
 
   /**

@@ -25,11 +25,12 @@ test('the 60-second demo path runs end to end with no backend (AC-42)', async ({
   // the map, which is the surface Beat 2 reorganizes.
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByTestId('inspector')).toContainText('47 memories');
-  await expect(page.getByTestId('inspector')).toContainText('22 sources');
 
+  // The totals live on the map's panel; home's panel says what moved lately.
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
+  await expect(page.getByTestId('inspector')).toContainText('47 memories');
+  await expect(page.getByTestId('inspector')).toContainText('22 sources');
 
   // ---- Beat 2: the magic
   await page.keyboard.press('Meta+k');

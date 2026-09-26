@@ -1,7 +1,8 @@
+import { isReflectiveQuestion, recentSample } from '../../src/core/reflect.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../db/repository.ts';
-import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
-import { applyFloor, fuse, CONTEXT_LIMIT, RETRIEVE_LIMIT } from '../search/retrieve.ts';
+import type { AiProvider, AskTurn, EmbeddingProvider, RetrievedMemory, Reflection } from '../ai/provider.ts';
+import { expandMemories, relevantTo, CONTEXT_LIMIT } from '../search/retrieve.ts';
 
 /**
  * Ask — spec §9.2.
@@ -68,14 +69,15 @@ export class AskPipeline {
     workspaceId: string,
     question: string,
     history: AskTurn[] = [],
+    focus: string[] = [],
   ): AsyncGenerator<{ event: 'delta'; data: { text: string } } | { event: 'done'; data: AskResult }> {
-    const prepared = await this.prepare(workspaceId, question, history);
+    const prepared = await this.prepare(workspaceId, question, history, focus);
     if ('refusal' in prepared) {
       this.record(workspaceId, question, prepared.refusal);
       yield { event: 'done', data: prepared.refusal };
       return;
     }
-    const { payload, context, survivingCount } = prepared;
+    const { payload, context, survivingCount, reflective, focused } = prepared;
 
     /*
      * The provider pushes deltas through a callback; a generator pulls. The
@@ -92,11 +94,11 @@ export class AskPipeline {
     const streamFn = this.ai.answerStream?.bind(this.ai);
     const flight = (
       streamFn
-        ? streamFn({ question, retrieved: context, history }, (text) => {
+        ? streamFn({ question, retrieved: context, history, reflective, focused }, (text) => {
             pending.push(text);
             wake();
           })
-        : this.ai.answer({ question, retrieved: context, history })
+        : this.ai.answer({ question, retrieved: context, history, reflective, focused })
     ).finally(wake);
 
     let settled = false;
@@ -119,14 +121,59 @@ export class AskPipeline {
     yield { event: 'done', data: result };
   }
 
-  async ask(workspaceId: string, question: string, history: AskTurn[] = []): Promise<AskResult> {
-    const prepared = await this.prepare(workspaceId, question, history);
+  /** Whether the wired model can look back at all. */
+  canRetrospect(): boolean {
+    return typeof this.ai.retrospect === 'function';
+  }
+
+  /**
+   * The look back (일기 회고): every diary entry whose day falls in [from, to],
+   * oldest first, plus a capped sample of what else arrived those days, given
+   * to the model to say how the thinking moved. Reads only; records nothing.
+   */
+  async retrospect(
+    workspaceId: string,
+    from: string,
+    to: string,
+    locale?: 'en' | 'ko',
+  ): Promise<{ reflection: string; days: number }> {
+    if (!this.ai.retrospect) throw new Error('this model cannot look back');
+    const payload = this.repo.getGraphPayload(workspaceId);
+
+    const entries = payload.sources
+      .filter((s) => s.diary_date && s.diary_date >= from && s.diary_date <= to)
+      .sort((a, b) => a.diary_date!.localeCompare(b.diary_date!) || a.created_at.localeCompare(b.created_at))
+      .map((s) => ({ date: s.diary_date!, text: s.raw_content }));
+    if (entries.length === 0) return { reflection: '', days: 0 };
+
+    const diarySourceIds = new Set(
+      payload.sources.filter((s) => s.diary_date).map((s) => s.id),
+    );
+    const memories = payload.memories
+      .filter((m) => {
+        const day = m.created_at.slice(0, 10);
+        return day >= from && day <= to && !diarySourceIds.has(m.source_id);
+      })
+      .slice(0, 12)
+      .map((m) => m.text);
+
+    const { reflection } = await this.ai.retrospect({ entries, memories, locale });
+    return { reflection, days: new Set(entries.map((e) => e.date)).size };
+  }
+
+  async ask(
+    workspaceId: string,
+    question: string,
+    history: AskTurn[] = [],
+    focus: string[] = [],
+  ): Promise<AskResult> {
+    const prepared = await this.prepare(workspaceId, question, history, focus);
     if ('refusal' in prepared) {
       this.record(workspaceId, question, prepared.refusal);
       return prepared.refusal;
     }
-    const { payload, context, survivingCount } = prepared;
-    const generated = await this.ai.answer({ question, retrieved: context, history });
+    const { payload, context, survivingCount, reflective, focused } = prepared;
+    const generated = await this.ai.answer({ question, retrieved: context, history, reflective, focused });
     return this.finish(workspaceId, question, payload, context, survivingCount, generated);
   }
 
@@ -135,15 +182,78 @@ export class AskPipeline {
     workspaceId: string,
     question: string,
     history: AskTurn[],
+    focus: string[] = [],
   ): Promise<
     | { refusal: AskResult }
     | {
         payload: ReturnType<Repository['getGraphPayload']>;
         context: RetrievedMemory[];
         survivingCount: number;
+        reflective?: Reflection;
+        /** How many of `context` are the person's own picks, at its head. */
+        focused?: number;
       }
   > {
     const payload = this.repo.getGraphPayload(workspaceId);
+
+    /*
+     * Thinking with picked memories. The picks are the context — they come
+     * first, in the order they were picked, and they are never refused: the
+     * person is holding them, so "nothing saved about that" would be false.
+     * Retrieval still runs, to fill what room is left with whatever else
+     * bears on the question; a hit that is already a pick is not repeated.
+     */
+    const picked = focus
+      .map((id) => payload.memories.find((m) => m.id === id))
+      .filter((m): m is NonNullable<typeof m> => m !== undefined)
+      .slice(0, CONTEXT_LIMIT);
+    if (picked.length > 0) {
+      const have = new Set(picked.map((m) => m.id));
+      const room = CONTEXT_LIMIT - picked.length;
+      const extra =
+        room > 0
+          ? (
+              await relevantTo(
+                payload,
+                (q, n) => this.repo.keywordSearch(workspaceId, q, n),
+                this.embeddings,
+                question,
+              )
+            )
+              .map((r) => r.memory)
+              .filter((m) => !have.has(m.id))
+              .slice(0, room)
+          : [];
+      return {
+        payload,
+        context: expandMemories(payload, [...picked, ...extra]),
+        survivingCount: picked.length + extra.length,
+        focused: picked.length,
+      };
+    }
+
+    /*
+     * "What have I been into lately?" resembles no memory, so retrieval would
+     * refuse it — and it is exactly the question a memory answers by looking
+     * around. The last two weeks, sampled across interests, stand in for the
+     * retrieval set; the citation contract downstream is unchanged.
+     */
+    if (isReflectiveQuestion(question)) {
+      const sample = recentSample(payload);
+      if (sample.picks.length === 0 || !sample.from || !sample.to) {
+        return { refusal: refusal(0) };
+      }
+      return {
+        payload,
+        context: expandMemories(payload, sample.picks),
+        survivingCount: sample.picks.length,
+        reflective: {
+          from: sample.from,
+          to: sample.to,
+          interests: sample.interests.map((i) => ({ name: i.name, count: i.count })),
+        },
+      };
+    }
 
     /*
      * A follow-up retrieves on the conversation, not on itself. "Which of
@@ -160,11 +270,14 @@ export class AskPipeline {
     const previous = history.at(-1);
     const retrievalText = previous ? `${previous.question}\n${question}` : question;
 
-    const [questionVector] = await this.embeddings.embed([retrievalText], 'query');
-    const keywordHits = this.repo.keywordSearch(workspaceId, retrievalText, RETRIEVE_LIMIT);
-
-    const fused = fuse(payload, questionVector!, keywordHits, RETRIEVE_LIMIT);
-    const surviving = applyFloor(fused);
+    // No limit on purpose: the refusal below counts everything that cleared
+    // the floor, and only the context handed to the model is capped.
+    const surviving = await relevantTo(
+      payload,
+      (q, n) => this.repo.keywordSearch(workspaceId, q, n),
+      this.embeddings,
+      retrievalText,
+    );
 
     if (surviving.length < MIN_SUPPORTING_MEMORIES) {
       return { refusal: refusal(surviving.length) };
@@ -172,19 +285,7 @@ export class AskPipeline {
 
     // Context expansion (spec §9.2 step 5): the model sees each memory with its
     // category and source, so it can attribute rather than guess.
-    const categoryName = new Map(payload.categories.map((c) => [c.id, c.name]));
-    const sourceById = new Map(payload.sources.map((s) => [s.id, s]));
-    const context: RetrievedMemory[] = surviving.slice(0, CONTEXT_LIMIT).map((r) => {
-      const source = sourceById.get(r.memory.source_id);
-      return {
-        memory_id: r.memory.id,
-        source_id: r.memory.source_id,
-        text: r.memory.text,
-        category_name: categoryName.get(r.memory.category_id) ?? 'Uncategorised',
-        source_title: source?.title ?? 'Unknown source',
-        source_type: source?.type ?? 'text',
-      };
-    });
+    const context = expandMemories(payload, surviving.slice(0, CONTEXT_LIMIT).map((r) => r.memory));
 
     return { payload, context, survivingCount: surviving.length };
   }

@@ -3,6 +3,7 @@ import { ingestBatch } from './batchRun';
 import { parseInstagramZip, IMPORT_WINDOW_DAYS } from './instagramZip';
 import { t } from '../i18n';
 import type { BatchItem } from './batch';
+import { takeImages, takePdfs } from './images';
 
 /**
  * Files in, reveal out — shared by every way files arrive.
@@ -54,7 +55,20 @@ export async function importFiles(files: File[]): Promise<void> {
 
   const textFiles = files.filter(isTextLike);
   if (textFiles.length === 0) {
+    // Screenshots are kept as screenshots; a PDF is named, not called unreadable.
+    const images = await takeImages(files);
+    const pdfs = await takePdfs(files);
+    if (images || pdfs) return;
     ui.toast(t('toast.nothingReadable'));
+    return;
+  }
+
+  if (textFiles.length === 1) {
+    // One file is seen before it is kept — the card, as a link or a PDF gets.
+    const [only] = textFiles;
+    const content = await only!.text();
+    ui.queueReads([{ name: only!.name, title: titleFromFilename(only!.name), kind: 'text', path: null, text: content, chars: content.length, redacted: 0 }]);
+    ui.setCaptureOpen(true);
     return;
   }
 

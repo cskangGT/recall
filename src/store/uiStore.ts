@@ -1,12 +1,25 @@
+import { forgetStep } from '../core/onboarding';
 import { create } from 'zustand';
 import { t } from '../i18n';
 import type { Camera } from '../graph/camera';
 import type { ReorgEvent } from '../core/applyReorg';
 import type { ScriptedAnswer } from '../ask/scriptedAsk';
 import type { CaptureStory } from '../capture/story';
-import type { BatchCategorySummary } from '../capture/batch';
+import type { BatchSummary } from '../capture/batch';
 
 export type CaptureStage = 'idle' | 'reading' | 'extracting' | 'connecting' | 'reorganizing';
+
+/*
+ * Two arrivals. The greeting belongs to the first: once a person has left it
+ * through any door, it is remembered, the next visit opens on home, and the
+ * logo means home for them. Settings keeps the way back to the first screen.
+ */
+const WELCOMED_KEY = 'mado.ob.welcomed';
+export const hasBeenWelcomed = (): boolean =>
+  typeof localStorage !== 'undefined' && localStorage.getItem(WELCOMED_KEY) === '1';
+const rememberWelcomed = (): void => {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(WELCOMED_KEY, '1');
+};
 
 /**
  * The reveal a bulk drop plays: dots pour in while items are read, gather
@@ -20,14 +33,7 @@ export interface BatchRevealState {
   total: number;
   /** Items read so far — drives the pour of dots. */
   read: number;
-  summary: {
-    memories: number;
-    skipped: number;
-    sources: number;
-    categories: BatchCategorySummary[];
-    /** The stretch of time this batch rescued, when the import knows it. */
-    period?: { from: string; to: string } | null;
-  } | null;
+  summary: BatchSummary | null;
 }
 
 export const STAGE_LABEL: Record<Exclude<CaptureStage, 'idle'>, string> = {
@@ -42,7 +48,26 @@ export interface Toast {
   text: string;
 }
 
-export type View = 'map' | 'browse' | 'sources';
+/** Memory's three lenses, and which verb each one's bar is set to. */
+/** A file read out, on its way to the card: its words, and where the file was stored. */
+export interface PendingRead {
+  name: string;
+  title: string;
+  kind: 'pdf' | 'text';
+  /** The stored file, for a PDF; a text file has none. */
+  path: string | null;
+  text: string;
+  chars: number;
+  redacted: number;
+}
+
+export type Lens = 'browse' | 'map' | 'sources';
+export type FindVerb = 'search' | 'ask';
+
+/** Where in the browse view one stands — see `place` on the state. */
+export type Place = 'home' | 'today' | 'browse';
+
+export type View = 'map' | 'browse' | 'sources' | 'diary' | 'meetings';
 export type SourceFilter = 'all' | 'text' | 'link' | 'screenshot';
 
 /**
@@ -58,6 +83,9 @@ export const ANSWER_FOLDER_ID = '__answer__';
 interface UiState {
   view: View;
   sourceFilter: SourceFilter;
+  /** Sources view mode: the ledger list, or the desktop-window folder grid. */
+  /** How Browse lays the categories out: the index under the stars, or folders in a window. */
+  browseMode: 'index' | 'folders';
   /**
    * Which folder's memories the reading list is showing. Separate from
    * `selectedId` because clicking a memory in the list must not close the
@@ -81,12 +109,27 @@ interface UiState {
   selectedId: string | null;
   highlightedIds: string[];
   camera: Camera | null;
+  /**
+   * A zoom request from search: fit these nodes and remember where the camera
+   * stood, so ← can walk back. Consumed by the canvas on its next frame.
+   */
+  zoomToIds: string[] | null;
+  /** Cameras to walk back to, newest last. Capped — a trail, not a log. */
+  cameraHistory: Camera[];
+  /** True when ← was pressed; the canvas consumes it and pops the trail. */
+  cameraPopRequested: boolean;
+  /**
+   * The regrouped view (2안): search results pulled out of their scattered
+   * territories and re-laid-out together — a temporary constellation of just
+   * what matched, clustered by category. Null shows the full map.
+   */
+  mapFocus: { ids: string[] } | null;
   captureOpen: boolean;
   askOpen: boolean;
   settingsOpen: boolean;
   captureStage: CaptureStage;
   reorgHistory: ReorgEvent[];
-  answer: (ScriptedAnswer & { question: string }) | null;
+  answer: (ScriptedAnswer & { question: string; found?: boolean }) | null;
   /**
    * The conversation so far — answered questions, oldest first, capped at
    * three. Sent with the next question so a follow-up ("which of those?") has
@@ -116,26 +159,117 @@ interface UiState {
   dropActive: boolean;
   /** Non-null while a bulk drop is being read, organized, or declared. */
   batchReveal: BatchRevealState | null;
+  /**
+   * The first-drop ceremony: the seeded sky steps back and this person's own
+   * categories hold the light for a few seconds. Set once by batchRun, played
+   * by ArcBrowser after the reveal closes, then cleared.
+   */
+  skyCeremony: { categoryIds: string[] } | null;
+  /** The pre-checkout sheet — every wake CTA passes through it. */
+  upgradeSheet: boolean;
+  /** The post-payment moment: every sleeping star brightens, once. */
+  awaken: boolean;
+  /**
+   * The review stepper — one source's original against what Mado made of it,
+   * with the user's verdicts (spec §21). Non-null while reviewing; `index`
+   * walks `sourceIds` so a batch reviews as a sequence, a single source as a
+   * sequence of one.
+   */
+  review: { sourceIds: string[]; index: number } | null;
+  /**
+   * The memory open as a page in the middle of the screen — found, now being
+   * read. Independent of `selectedId`: closing the page keeps the selection,
+   * so the inspector still shows what you were looking at.
+   */
+  memoryPage: string | null;
+  /** The source open as a page in the middle — the original, and what came from it. */
+  sourcePage: string | null;
+  /**
+   * A look-back the diary should open on — set by home's weekly card, read
+   * and cleared by the diary when it mounts. A request, not a state.
+   */
+  retroRange: { from: string; to: string } | null;
+  /**
+   * The browse view is three places. `home` — the logo, and where the app
+   * opens — is the scene and its few doors. `today` is the page one of those
+   * doors opens: the day, the mind, the pile. `browse` is the first lens of
+   * Memory, the categories walked by hand. They share a view because they
+   * share the sky; they are told apart here.
+   */
+  place: Place;
   toasts: Toast[];
 
   setView: (view: View) => void;
+  /**
+   * The Browse door: from elsewhere it opens the browser; from inside a
+   * category it returns to the index. A door that does nothing when you are
+   * already through it reads as broken.
+   */
+  goBrowse: () => void;
   setSourceFilter: (filter: SourceFilter) => void;
+  setBrowseMode: (mode: 'index' | 'folders') => void;
   openCategory: (id: string | null) => void;
   setArcLevel: (id: string | null) => void;
   dismissWelcome: () => void;
+  welcomeAgain: () => void;
+  /** The greeting again, mid-hour: the beat on the map is over and the next one is on the sky. */
+  showGreeting: () => void;
   consumeCenterOn: () => string | null;
   setHovered: (id: string | null) => void;
   select: (id: string | null) => void;
   clearSelection: () => void;
   setHighlight: (ids: string[]) => void;
   setCamera: (c: Camera) => void;
+  requestZoomTo: (ids: string[]) => void;
+  consumeZoomTo: () => string[] | null;
+  pushCameraHistory: (c: Camera) => void;
+  requestCameraPop: () => void;
+  /** Pops the trail if a ← was requested; null otherwise. */
+  consumeCameraPop: () => Camera | null;
+  setMapFocus: (focus: { ids: string[] } | null) => void;
+  /** The logo's promise: back to the start, everything closed, nothing lost. */
+  goHome: () => void;
+  goToday: () => void;
   setCaptureOpen: (open: boolean) => void;
   setAskOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setCaptureStage: (s: CaptureStage) => void;
   pushReorg: (e: ReorgEvent) => void;
   popReorg: () => ReorgEvent | null;
-  setAnswer: (a: (ScriptedAnswer & { question: string }) | null) => void;
+  /** `found` marks a search result shown in the answer's place — it is not a turn of conversation. */
+  setAnswer: (a: (ScriptedAnswer & { question: string; found?: boolean }) | null) => void;
+  /** What the archive's find bar is narrowing the list to. */
+  archiveQuery: string;
+  /**
+   * Thinking with picked memories, on the map. A mode, switched on by hand:
+   * while it is on a press picks a star instead of travelling to it, the
+   * picks are what Mado thinks with, and they can be spread out on their own
+   * or bundled. Off, the map is exactly what it was.
+   */
+  thinking: boolean;
+  /** Memory ids picked so far, in the order they were picked. */
+  picked: string[];
+  /**
+   * Where the thought lives once it has been bundled — the category the picks
+   * were made into. Thinking goes on with it in hand: what the conversation
+   * turns up can be kept straight into it.
+   */
+  bundle: { categoryId: string; name: string } | null;
+  setBundle: (bundle: { categoryId: string; name: string } | null) => void;
+  setThinking: (on: boolean) => void;
+  setPicked: (ids: string[]) => void;
+  /** A picture on its way into the add bar — dropped or picked elsewhere, laid in when the bar opens. */
+  pendingImage: string | null;
+  setPendingImage: (dataUrl: string | null) => void;
+  /** Files read out and waiting to be seen, chosen from, and kept — one card at a time, in order. */
+  pendingReads: PendingRead[];
+  queueReads: (reads: PendingRead[]) => void;
+  shiftRead: () => void;
+  clearReads: () => void;
+  /** Search, or ask Mado — chosen on the bar, remembered per lens. */
+  findMode: Record<Lens, FindVerb>;
+  setFindMode: (lens: Lens, verb: FindVerb) => void;
+  setArchiveQuery: (q: string) => void;
   setAsking: (asking: boolean) => void;
   setAnswerDraft: (draft: { question: string; text: string } | null) => void;
   /** Ends the conversation without touching the answer on screen. */
@@ -143,25 +277,61 @@ interface UiState {
   setLastCapture: (s: CaptureStory | null) => void;
   setDropActive: (active: boolean) => void;
   setBatchReveal: (state: BatchRevealState | null) => void;
+  setSkyCeremony: (state: { categoryIds: string[] } | null) => void;
+  setUpgradeSheet: (open: boolean) => void;
+  setAwaken: (on: boolean) => void;
+  openReview: (sourceIds: string[]) => void;
+  /** Steps to the next source, or closes after the last one. */
+  advanceReview: () => void;
+  closeReview: () => void;
+  openMemoryPage: (id: string) => void;
+  closeMemoryPage: () => void;
+  openSourcePage: (id: string) => void;
+  closeSourcePage: () => void;
+  setRetroRange: (range: { from: string; to: string } | null) => void;
   toast: (text: string) => void;
   dismissToast: (id: number) => void;
   /** Esc order: close modal -> clear highlight -> clear selection (spec 6.1). */
   escape: () => void;
 }
 
+/** What going somewhere fresh puts away — nothing of the corpus, only what was open over it. */
+const CLEARED = {
+  openCategoryId: null,
+  arcLevelId: null,
+  selectedId: null,
+  highlightedIds: [] as string[],
+  answer: null,
+  answerDraft: null,
+  askThread: [] as { question: string; answer: string }[],
+  mapFocus: null,
+  review: null,
+  memoryPage: null,
+  sourcePage: null,
+  cameraHistory: [] as Camera[],
+};
+
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
   view: 'browse',
   sourceFilter: 'all',
+  browseMode:
+    (typeof localStorage !== 'undefined' && localStorage.getItem('mado.browseMode')) === 'folders'
+      ? 'folders'
+      : 'index',
   openCategoryId: null,
   arcLevelId: null,
-  welcomeDismissed: false,
+  welcomeDismissed: hasBeenWelcomed(),
   centerOnId: null,
   hoveredId: null,
   selectedId: null,
   highlightedIds: [],
   camera: null,
+  zoomToIds: null,
+  cameraHistory: [],
+  cameraPopRequested: false,
+  mapFocus: null,
   captureOpen: false,
   askOpen: false,
   settingsOpen: false,
@@ -174,26 +344,102 @@ export const useUiStore = create<UiState>((set, get) => ({
   lastCapture: null,
   dropActive: false,
   batchReveal: null,
+  skyCeremony: null,
+  upgradeSheet: false,
+  awaken: false,
+  review: null,
+  memoryPage: null,
+  sourcePage: null,
+  retroRange: null,
+  archiveQuery: '',
+  thinking: false,
+  picked: [],
+  bundle: null,
+  setBundle: (bundle) => set({ bundle }),
+  setThinking: (thinking) =>
+    // Leaving the mode puts the picks down and the map back as it was.
+    set((s) => (thinking ? { thinking } : { thinking, picked: [], bundle: null, highlightedIds: [], mapFocus: s.mapFocus ? null : s.mapFocus })),
+  setPicked: (picked) => set({ picked, highlightedIds: picked }),
+  pendingImage: null,
+  setPendingImage: (pendingImage) => set({ pendingImage }),
+  pendingReads: [],
+  queueReads: (reads) => set((s) => ({ pendingReads: [...s.pendingReads, ...reads] })),
+  shiftRead: () => set((s) => ({ pendingReads: s.pendingReads.slice(1) })),
+  clearReads: () => set({ pendingReads: [] }),
+  // Browsing and brainstorming are conversations; the archive is for finding.
+  findMode: { browse: 'ask', map: 'ask', sources: 'search' },
+  setFindMode: (lens, verb) => set((s) => ({ findMode: { ...s.findMode, [lens]: verb } })),
+  setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
+  place: 'home',
   toasts: [],
 
   // Switching back to the map carries the selection with it and asks the canvas
   // to centre on it, so the two views never lose each other.
-  setView: (view) =>
+  setView: (view) => {
+    if (view !== 'browse') rememberWelcomed();
     set((s) => ({
       view,
+      // What was found belongs to the lens it was found in; an answer travels.
+      ...(s.answer?.found ? { answer: null, openCategoryId: null, highlightedIds: [] } : {}),
       centerOnId: view === 'map' ? s.selectedId : null,
+      // Arriving at the map mid-conversation: go to what is being talked about.
+      ...(view === 'map' && s.selectedId === null && s.answer && !s.answer.found && s.answer.citations.length > 0
+        ? { zoomToIds: s.answer.citations.map((c) => c.memory_id) }
+        : {}),
       // Leaving for the map or the sources list *is* looking around, so coming
       // back cannot land on a greeting that asks whether you would like to.
       // Worse, the top bar renders over it offering "See the big picture" —
       // which is the picture you just came back from.
       welcomeDismissed: s.welcomeDismissed || view !== 'browse',
-    })),
+    }));
+  },
 
+  goBrowse: () => {
+    rememberWelcomed();
+    set((s) =>
+      s.view === 'browse'
+        ? { place: 'browse', openCategoryId: null, arcLevelId: null, memoryPage: null, sourcePage: null, welcomeDismissed: true }
+        : { place: 'browse', view: 'browse', centerOnId: null, welcomeDismissed: true },
+    );
+  },
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+  setBrowseMode: (browseMode) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('mado.browseMode', browseMode);
+    set({ browseMode });
+  },
   openCategory: (openCategoryId) => set({ openCategoryId }),
 
   setArcLevel: (arcLevelId) => set({ arcLevelId }),
-  dismissWelcome: () => set({ welcomeDismissed: true }),
+  dismissWelcome: () => {
+    rememberWelcomed();
+    set({ welcomeDismissed: true });
+  },
+  // The way back to the first screen, from Settings: forget the welcome and
+  // stand on it again.
+  showGreeting: () =>
+    set({
+      ...CLEARED,
+      view: 'browse',
+      place: 'home',
+      welcomeDismissed: false,
+      thinking: false,
+      picked: [],
+      bundle: null,
+    }),
+  welcomeAgain: () => {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(WELCOMED_KEY);
+    // The first hour starts over with it — from the first thought.
+    forgetStep();
+    set({
+      view: 'browse',
+      welcomeDismissed: false,
+      settingsOpen: false,
+      openCategoryId: null,
+      arcLevelId: null,
+      memoryPage: null,
+      sourcePage: null,
+    });
+  },
 
   consumeCenterOn: () => {
     const id = get().centerOnId;
@@ -206,7 +452,37 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearSelection: () => set({ selectedId: null, highlightedIds: [] }),
   setHighlight: (highlightedIds) => set({ highlightedIds }),
   setCamera: (camera) => set({ camera }),
-  setCaptureOpen: (captureOpen) => set({ captureOpen }),
+  requestZoomTo: (ids) => set(ids.length > 0 ? { zoomToIds: ids } : {}),
+  consumeZoomTo: () => {
+    const ids = get().zoomToIds;
+    if (ids) set({ zoomToIds: null });
+    return ids;
+  },
+  pushCameraHistory: (c) =>
+    set((s) => ({ cameraHistory: [...s.cameraHistory, c].slice(-8) })),
+  requestCameraPop: () => set({ cameraPopRequested: true }),
+  consumeCameraPop: () => {
+    const s = get();
+    if (!s.cameraPopRequested) return null;
+    const prev = s.cameraHistory.at(-1) ?? null;
+    set({ cameraPopRequested: false, cameraHistory: s.cameraHistory.slice(0, -1) });
+    return prev;
+  },
+  setMapFocus: (mapFocus) => set({ mapFocus }),
+  // The logo's promise is the first screen — the greeting, its question and
+  // its doors — not merely the browser's index. "Look around first" from
+  // there is one press away, and the press means what it says.
+  goHome: () =>
+    set({ ...CLEARED, place: 'home', view: 'browse', welcomeDismissed: hasBeenWelcomed() }),
+  // The page home's first door opens: the day on one sheet.
+  goToday: () => {
+    rememberWelcomed();
+    set({ ...CLEARED, place: 'today', view: 'browse', welcomeDismissed: true });
+  },
+  // Closing the box abandons any files still waiting for their card. (Not an
+  // unmount cleanup: StrictMode's rehearsal unmount would empty the queue
+  // before the first card was ever seen.)
+  setCaptureOpen: (captureOpen) => set(captureOpen ? { captureOpen } : { captureOpen, pendingReads: [] }),
   setAskOpen: (askOpen) => set({ askOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCaptureStage: (captureStage) => set({ captureStage }),
@@ -233,7 +509,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       askThread:
         answer === null
           ? []
-          : answer.refused
+          : answer.refused || answer.found
             ? s.askThread
             : [...s.askThread, { question: answer.question, answer: answer.answer }].slice(-3),
       openCategoryId:
@@ -256,16 +532,54 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLastCapture: (lastCapture) => set({ lastCapture }),
   setDropActive: (dropActive) => set({ dropActive }),
   setBatchReveal: (batchReveal) => set({ batchReveal }),
+  setSkyCeremony: (skyCeremony) => set({ skyCeremony }),
+  setUpgradeSheet: (upgradeSheet) => set({ upgradeSheet }),
+  setAwaken: (awaken) => set({ awaken }),
+  // Opening the review dismisses the reveal — they occupy the same attention.
+  openReview: (sourceIds) =>
+    set(sourceIds.length > 0 ? { review: { sourceIds, index: 0 }, batchReveal: null } : {}),
+  advanceReview: () =>
+    set((s) => {
+      if (!s.review) return {};
+      const index = s.review.index + 1;
+      return index >= s.review.sourceIds.length
+        ? { review: null }
+        : { review: { ...s.review, index } };
+    }),
+  closeReview: () => set({ review: null }),
+  // Opening a page is also selecting: the inspector follows, and the map
+  // knows what to centre on when you go there next.
+  openMemoryPage: (id) => set({ memoryPage: id, sourcePage: null, selectedId: id }),
+  closeMemoryPage: () => set({ memoryPage: null }),
+  openSourcePage: (id) => set({ sourcePage: id, memoryPage: null, selectedId: id }),
+  closeSourcePage: () => set({ sourcePage: null }),
+  setRetroRange: (retroRange) => set({ retroRange }),
   toast: (text) => set((s) => ({ toasts: [...s.toasts, { id: ++toastId, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   escape: () => {
     const s = get();
+    if (s.upgradeSheet) {
+      set({ upgradeSheet: false });
+      return;
+    }
     // The declaration is dismissable like any modal; the reading and organizing
     // phases are not — an Escape mid-pipeline would hide work that is still
     // happening, not cancel it.
     if (s.batchReveal?.phase === 'declare') {
       set({ batchReveal: null });
+      return;
+    }
+    // The review is a modal too — Escape leaves it before touching anything
+    // else. Verdicts not yet confirmed are simply not applied.
+    if (s.review !== null) {
+      set({ review: null });
+      return;
+    }
+    // The page closes before anything under it; the selection it came from
+    // stays, so the next Escape has something to clear.
+    if (s.memoryPage !== null || s.sourcePage !== null) {
+      set({ memoryPage: null, sourcePage: null });
       return;
     }
     if (s.captureOpen || s.askOpen || s.settingsOpen) {

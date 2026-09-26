@@ -15,6 +15,7 @@ export interface NormalizeInput {
   type: SourceType;
   /** Raw pasted text, fetched article body, or an image reference. */
   text?: string;
+  /** A kept image — or a kept PDF, told apart by its extension. */
   imagePath?: string;
 }
 
@@ -101,6 +102,17 @@ export interface AnswerResult {
   refused: boolean;
 }
 
+/**
+ * The shape of the fortnight, for a reflective question: which interests
+ * took the most, and when "lately" was. The memories themselves ride in
+ * `retrieved`, sampled across those interests.
+ */
+export interface Reflection {
+  from: string;
+  to: string;
+  interests: { name: string; count: number }[];
+}
+
 export interface RetrievedMemory {
   memory_id: string;
   source_id: string;
@@ -120,9 +132,20 @@ export interface EmbeddingProvider {
 
 export interface AiProvider {
   readonly name: string;
+  /** The model behind this provider takes a PDF as a document. */
+  readonly readsPdf?: boolean;
   /** Screenshots only; text and link sources skip it (spec §10.1). */
   normalize(input: NormalizeInput): Promise<NormalizeResult>;
-  extract(input: { content: string; sceneDescription?: string; type: SourceType }): Promise<ExtractResult>;
+  extract(input: {
+    content: string;
+    sceneDescription?: string;
+    type: SourceType;
+    /**
+     * Extractions this person removed in review — the curation signal (spec
+     * §21). Negative few-shot: the extractor is told to skip anything similar.
+     */
+    rejectedExamples?: string[];
+  }): Promise<ExtractResult>;
   /**
    * Names the result of a structural change. Receives the operation and the
    * clusters, and has **no** say in whether the change happens (spec §10.4).
@@ -138,8 +161,12 @@ export interface AiProvider {
   answer(input: {
     question: string;
     retrieved: RetrievedMemory[];
+    /** Set for a reflective question — the memories are a survey, not a lookup. */
+    reflective?: Reflection;
     /** Recent exchanges, oldest first — absent on a fresh question. */
     history?: AskTurn[];
+    /** The first n of `retrieved` were picked out by the person to think with. */
+    focused?: number;
   }): Promise<AnswerResult>;
   /**
    * Optional: `answer`, with the text arriving as it is generated. `onDelta`
@@ -152,10 +179,23 @@ export interface AiProvider {
     input: {
       question: string;
       retrieved: RetrievedMemory[];
+      reflective?: Reflection;
       history?: AskTurn[];
+      focused?: number;
     },
     onDelta: (text: string) => void,
   ): Promise<AnswerResult>;
+  /**
+   * Optional: looks back over a stretch of diary days and says, in the
+   * memory's own voice, how this person's thinking moved through them.
+   * Providers that cannot do it honestly simply do not have it.
+   */
+  retrospect?(input: {
+    entries: { date: string; text: string }[];
+    /** Non-diary memories from the same days — context, capped by the caller. */
+    memories?: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ reflection: string }>;
   /**
    * Optional: says why these memories overlap and writes the one memory that
    * holds every distinct fact from all of them. The user decides whether the
@@ -164,6 +204,42 @@ export interface AiProvider {
    * answers 501.
    */
   mergeMemories?(input: { texts: string[]; locale?: 'en' | 'ko' }): Promise<MergeDraft>;
+  /**
+   * Optional: condenses one source's memories into a single draft — what the
+   * source comes to, said once. Allowed to drop, never to add. The person
+   * edits the draft before anything is saved. Providers that cannot do this
+   * honestly (the fixture) do not have it, and the route answers 501.
+   */
+  condenseSource?(input: {
+    title: string;
+    texts: string[];
+    locale?: 'en' | 'ko';
+  }): Promise<CondenseDraft>;
+  askBack?(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack>;
+  /**
+   * Optional: a page whole and in parts — one summary of everything and one
+   * per section, exactly as many as there are sections, in order. The person
+   * picks the parts to keep. Providers without it leave the link to its text.
+   */
+  digest?(input: {
+    title: string | null;
+    sections: { heading: string | null; text: string }[];
+    locale?: 'en' | 'ko';
+  }): Promise<{ summary: string; sections: { summary: string }[] }>;
+}
+
+/**
+ * Optional: the first conversation's ask-back. Given the one thing a person
+ * cannot decide, one question in the memory's own voice asking what is in
+ * the way. Providers without it leave the greeting to its fixed line.
+ */
+export interface AskBack {
+  question: string;
+}
+
+export interface CondenseDraft {
+  /** The one memory this source comes to. Source language. */
+  text: string;
 }
 
 export interface MergeDraft {

@@ -37,8 +37,13 @@ test('the navigation says what it is, not which glyph it drew', async ({ page })
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
 
-  for (const name of ['Map (G)', 'Browse (T)', 'Sources (S)', 'Ask (⌘/)', 'Settings (,)', 'Add (⌘K)']) {
+  // Four places and two tools. Memory is one button; its three lenses are
+  // named where the looking happens.
+  for (const name of ['Home', 'Today', 'Memory (T)', 'Settings (,)', 'Add (⌘K)']) {
     await expect(page.getByRole('button', { name })).toBeVisible();
+  }
+  for (const name of ['Browse', 'Brainstorm', 'Archive']) {
+    await expect(page.getByRole('tab', { name: new RegExp(name) })).toBeVisible();
   }
   // The shortcut stays in the name: a keyboard user is exactly who benefits.
   await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible();
@@ -46,17 +51,26 @@ test('the navigation says what it is, not which glyph it drew', async ({ page })
 
 test('the current view is marked for a reader, not only in CSS', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
+  // Home is a place on the rail: the mark says so, and nothing else is lit.
+  await page.getByTestId('rail-home').click();
+  await expect(page.getByTestId('rail-home')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await page.getByTestId('rail-today').click();
+  await expect(page.getByTestId('rail-today')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-home')).not.toHaveAttribute('aria-current', 'page');
+  // Memory stays lit across its three lenses; the lens says which one.
+  await page.keyboard.press('t');
   await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('g');
-  await expect(page.getByTestId('rail-map')).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByTestId('rail-tree')).not.toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('rail-tree')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('lens-map')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('lens-browse')).toHaveAttribute('aria-selected', 'false');
 });
 
 test('the chat box has a name — a placeholder is not one', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
-  await expect(
-    page.getByRole('textbox', { name: 'Ask a question, or paste something to save' }),
-  ).toBeVisible();
+  // The name tracks the composer split: the input asks; saving has its own door.
+  await expect(page.getByRole('textbox', { name: 'Ask your memory a question' })).toBeVisible();
 });
 
 /**
@@ -81,7 +95,9 @@ test('every reading-list row can be reached from the keyboard', async ({ page })
   await page.locator('.arc__node').nth(2).click();
   await expect(page.getByTestId('reading-list')).toBeVisible();
 
-  const seen = await tabWalk(page, 14);
+  // The keyword lens chips sit between the heading and the rows now, and every
+  // one of them is (rightly) focusable — the walk is longer, not broken.
+  const seen = await tabWalk(page, 30);
   expect(seen.filter((s) => s.includes('.item')).length).toBeGreaterThan(0);
 });
 
@@ -100,7 +116,7 @@ test('the command bars and settings are dialogs', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
 
   for (const [open, testid, name] of [
-    ['Meta+k', 'capture-bar', 'Add to Mado'],
+    ['Meta+k', 'capture-bar', 'Set it down here'],
     ['Meta+/', 'ask-bar', 'Ask'],
   ] as const) {
     await page.keyboard.press(open);

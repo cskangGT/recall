@@ -112,3 +112,26 @@ describe('concurrent ingest', () => {
     expect(repo.listSources(WS).filter((s) => s.status === 'failed')).toHaveLength(0);
   });
 });
+
+describe('the origin url survives the import', () => {
+  it('a notion page keeps its address on the stored source', async () => {
+    deps.readNotionPages = async () => ({
+      notes: [
+        {
+          title: '회의 메모',
+          content: '다음 분기 목표를 정리했다.',
+          modified: new Date(),
+          url: 'https://www.notion.so/p1',
+        },
+      ],
+      droppedSecretLines: 0,
+      total: 1,
+    });
+    const res = await post(`${base}/import/notion`, { days: 14, locale: 'ko' });
+    expect(res.status).toBe(200);
+    const source = repo.listSources(WS).find((s) => s.title === '회의 메모');
+    expect(source?.url).toBe('https://www.notion.so/p1');
+    // Still text: the reader already read it — the url is provenance, not a scrape target.
+    expect(source?.type).toBe('text');
+  });
+});

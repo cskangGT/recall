@@ -108,3 +108,21 @@ describe('reads stay free', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('same-origin on a hosted deployment', () => {
+  const hosted = (origin: string | undefined, host: string | undefined) =>
+    handle({ method: 'POST', path: `${base}/reset`, body: null, origin, host }, deps);
+
+  it("lets the deployment's own client through — Origin names the same host", async () => {
+    expect((await hosted('http://43.202.24.252', '43.202.24.252')).status).toBe(200);
+    expect((await hosted('https://mado.io', 'mado.io')).status).toBe(200);
+  });
+
+  it('still refuses a stranger site, whose Origin names their host', async () => {
+    expect((await hosted('https://evil.com', '43.202.24.252')).status).toBe(403);
+  });
+
+  it('an unparseable Origin falls through to refusal, never a crash', async () => {
+    expect((await hosted('null', '43.202.24.252')).status).toBe(403);
+  });
+});

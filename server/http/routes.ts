@@ -1,8 +1,14 @@
+import { randomUUID } from 'node:crypto';
+import { LinkError } from '../link/preview.ts';
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
 import type { AskPipeline } from '../pipeline/ask.ts';
 import type { StripeBilling } from '../billing/stripe.ts';
 import type { NotesReadResult } from '../notes/appleNotes.ts';
+import type { GoogleAuth } from '../google/oauth.ts';
+import { syncMeetings, syncWindow } from '../google/meetings.ts';
+import type { contextForAll } from '../google/meetingContext.ts';
+import type { MeetingMemory, MeetingsResponse } from '../../src/core/meetingTypes.ts';
 
 /**
  * The HTTP surface — Phase 4.
@@ -30,11 +36,26 @@ export interface ApiRequest {
   invite?: string;
   /** The browser's `Origin` header, if the caller was a browser. See `originAllowed`. */
   origin?: string;
+  /** The request's own `Host` header — what `originAllowed` compares against. */
+  host?: string;
+  /**
+   * The query string, first value per key. Optional because almost no route
+   * reads one — the API's inputs are bodies, deliberately (see the capture
+   * route's `includeGraph`) — and the two that do, the OAuth callback that
+   * Google addresses and `?refresh=1`, are GETs with nothing to put a body in.
+   */
+  query?: Record<string, string>;
 }
 
 export interface ApiResponse {
   status: number;
   body: unknown;
+  /**
+   * A redirect. When present the adapter answers 302 with this Location and
+   * no body — the one shape the OAuth callback needs, since what arrives
+   * there is a browser that was sent by Google and must be sent home.
+   */
+  redirect?: string;
   /**
    * Server-sent events. When present the adapter streams these frames instead
    * of writing `body` — the router stays a pure function (a generator is a
@@ -55,8 +76,9 @@ export interface Deps {
   ask: AskPipeline;
   /** Restores a workspace to the seed corpus. */
   reset: (workspaceId: string) => void;
-  /** Mints a fresh workspace seeded from the demo corpus, returning its id. */
-  createWorkspace?: () => string;
+  /** Mints a fresh workspace seeded from the demo corpus, returning its id.
+   *  The locale picks which corpus — a Korean visitor starts in Korean. */
+  createWorkspace?: (locale?: 'en' | 'ko') => string;
   /**
    * The token a request must carry to change anything, or undefined to let
    * every request through — which is what local development and the test suite
@@ -71,9 +93,34 @@ export interface Deps {
    * deployment simply lacks it.
    */
   readNotes?: (days: number) => Promise<NotesReadResult>;
+  /** Where uploaded capture images land; absent means images cannot be kept. */
+  saveImage?: (dataUrl: string) => Promise<string>;
+  /** Fetches a pasted link's title and excerpt, for the keep-or-not question. */
+  previewLink?: (url: string) => Promise<import('../link/preview.ts').LinkPreview>;
   /** Reads Notion pages via the official API — present when a token is configured. */
   readNotionPages?: (days: number) => Promise<NotesReadResult>;
+  /** Google OAuth — absent means no client id and secret, and the door stays undrawn. */
+  google?: GoogleAuth;
+  /**
+   * What Mado remembers that bears on each meeting, keyed by meeting id.
+   * Injected so the route can be tested with a fake and the retrieval can be
+   * written beside it without either knowing the other's insides.
+   */
+  meetingContext?: (
+    workspaceId: string,
+    meetings: Parameters<typeof contextForAll>[3],
+  ) => ReturnType<typeof contextForAll>;
 }
+
+/**
+ * Memory ids the person picked to think with, riding along on an ask. Capped:
+ * past thirty the picks are a category, and a category is a different ask.
+ */
+const FOCUS_LIMIT = 30;
+const focusOf = (body: Record<string, unknown>): string[] =>
+  (Array.isArray(body.focus) ? body.focus : [])
+    .filter((id): id is string => typeof id === 'string')
+    .slice(0, FOCUS_LIMIT);
 
 const asRecord = (body: unknown): Record<string, unknown> =>
   body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
@@ -134,6 +181,21 @@ function originAllowed(req: ApiRequest): boolean {
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.origin)) return true;
 
   /*
+   * Same-origin, by comparison rather than by list. A hosted deployment's own
+   * client sends `Origin: http://<its address>` on every POST — a browser
+   * attaches it to all non-GETs, same-origin or not — and the localhost list
+   * above refused the server's own pages. The page a stranger's site serves
+   * still loses: their Origin names their host, not this one.
+   */
+  if (req.host) {
+    try {
+      if (new URL(req.origin).host === req.host) return true;
+    } catch {
+      // An unparseable Origin ("null", garbage) falls through to refusal.
+    }
+  }
+
+  /*
    * Any extension, not a pinned id. An extension that can reach 127.0.0.1 holds
    * host permissions the user granted it at install time; the boundary that
    * means something here is webpage-versus-extension, not extension-versus-
@@ -168,8 +230,58 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
     return ok({ received: true, ...deps.billing.handleEvent(req.rawBody, deps.repo) });
   }
 
+  /*
+   * GET /api/google/callback — where Google sends the browser back. Beside
+   * the Stripe webhook for the same reason: the caller cannot present an
+   * invite, and does not need to — the signed state *is* the authentication,
+   * naming the workspace that started the round trip. Whatever happens, the
+   * browser goes home; the query string tells the client which way it went.
+   */
+  if (req.method === 'GET' && segments[1] === 'google' && segments[2] === 'callback' && !segments[3]) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    const code = req.query?.code;
+    const state = req.query?.state;
+    const home = (outcome: 'connected' | 'failed'): ApiResponse =>
+      ({ status: 302, body: null, redirect: `/?api=1&google=${outcome}` });
+    if (!code || !state) return home('failed');
+    try {
+      await deps.google.handleCallback(code, state);
+      return home('connected');
+    } catch (err) {
+      // The browser only learns "failed"; the reason goes where the operator
+      // can read it, because a refused refresh token has a fix and a forged
+      // state does not.
+      console.warn(`google callback failed: ${err instanceof Error ? err.message : String(err)}`);
+      return home('failed');
+    }
+  }
+
   if (!writesAllowed(req, deps)) {
     return forbidden('This demo is read-only without an invite.');
+  }
+
+  /*
+   * GET /api/capabilities — which doors this server can actually open.
+   *
+   * The client used to assume every server could do what the local Mac server
+   * does, and drew an Apple Notes chip that a hosted Ubuntu box could only
+   * answer with a 501. A button that produces a refusal is worse than no
+   * button — so the server says what it can reach, and the client draws only
+   * those doors.
+   */
+  if (req.method === 'GET' && segments[1] === 'capabilities' && !segments[2]) {
+    return ok({
+      appleNotes: Boolean(deps.readNotes),
+      notion: Boolean(deps.readNotionPages),
+      condense: deps.ingest.canCondense(),
+      // Configured, not connected: connection is per workspace, and this
+      // endpoint has none — `GET /workspaces/:id/google` says the rest.
+      google: Boolean(deps.google),
+      // A PDF needs somewhere to be kept and a model that reads documents.
+      pdf: Boolean(deps.saveImage) && deps.ingest.canReadPdf(),
+      askBack: deps.ingest.canAskBack(),
+      digest: deps.ingest.canDigest(),
+    });
   }
 
   /*
@@ -183,7 +295,10 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
    */
   if (req.method === 'POST' && segments[1] === 'workspaces' && !segments[2]) {
     if (!deps.createWorkspace) return notFound();
-    return ok({ workspaceId: deps.createWorkspace() });
+    const body = asRecord(req.body);
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    return ok({ workspaceId: deps.createWorkspace(locale) });
   }
 
   // /api/workspaces/:id/...
@@ -214,11 +329,105 @@ async function handleWorkspace(
     return ok(deps.repo.listReorgEvents(workspaceId, 10));
   }
 
+  /*
+   * The Google door, per workspace.
+   *
+   *   GET  /google             — configured? connected? as whom?
+   *   POST /google/connect     — the consent URL; the client sends the browser
+   *   POST /google/disconnect  — revoke at Google, forget here
+   *
+   * A server without a client id answers the status honestly and the two
+   * actions with 503, the same way billing does without a Stripe key.
+   */
+  if (req.method === 'GET' && resource === 'google' && !resourceId) {
+    return ok(
+      deps.google
+        ? deps.google.status(workspaceId)
+        : { configured: false, connected: false, email: null },
+    );
+  }
+
+  if (req.method === 'POST' && resource === 'google' && resourceId === 'connect' && !action) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    return ok({ url: deps.google.authUrl(workspaceId) });
+  }
+
+  if (req.method === 'POST' && resource === 'google' && resourceId === 'disconnect' && !action) {
+    if (!deps.google) return { status: 503, body: { error: 'google is not configured' } };
+    await deps.google.disconnect(workspaceId);
+    return ok({ disconnected: true });
+  }
+
+  /*
+   * GET /api/workspaces/:id/meetings[?refresh=1] — the window, with what Mado
+   * remembers attached to each meeting.
+   *
+   * Sync first (a no-op inside ten minutes unless `refresh`), then read the
+   * stored rows, then ask for context. A sync that fails still answers with
+   * the last good rows and the reason; not connected answers the empty shape
+   * with 200, because "nothing to show" is a state the client draws, not an
+   * error it handles.
+   */
+  if (req.method === 'GET' && resource === 'meetings' && !resourceId) {
+    const { from, to } = syncWindow(new Date());
+    const status = deps.google?.status(workspaceId);
+    if (!deps.google || !status?.connected) {
+      const empty: MeetingsResponse = {
+        connected: false, email: null, syncedAt: null, reason: null, from, to, meetings: [],
+      };
+      return ok(empty);
+    }
+
+    const { syncedAt, reason } = await syncMeetings(
+      { repo: deps.repo, auth: deps.google },
+      workspaceId,
+      { refresh: req.query?.refresh === '1' },
+    );
+    const meetings = deps.repo.listMeetings(workspaceId, from, to);
+    // Context is a nicety on top of the list; a retrieval that fails must
+    // not take the calendar down with it.
+    const context: Record<string, MeetingMemory[]> = deps.meetingContext
+      ? await deps.meetingContext(workspaceId, meetings).catch(() => ({}))
+      : {};
+    const response: MeetingsResponse = {
+      connected: true,
+      email: status.email,
+      syncedAt,
+      reason,
+      from,
+      to,
+      meetings: meetings.map((m) => ({ ...m, context: context[m.id] ?? [] })),
+    };
+    return ok(response);
+  }
+
   if (req.method === 'POST' && resource === 'capture' && !resourceId) {
     const body = asRecord(req.body);
     const type = body.type;
     if (type !== 'text' && type !== 'link' && type !== 'screenshot') {
       return badRequest('type must be one of text, link, screenshot');
+    }
+    // A photo written alongside the words: the client sends the image itself
+    // as a data URL, the server keeps it on disk, and from there the existing
+    // imagePath pipeline (normalize reads the file) carries it.
+    //
+    // A PDF arrives the same way as `fileData`. It is a text source whose
+    // words the model reads out of the document; the pipeline tells it apart
+    // by the kept file's extension.
+    let uploadedPath: string | undefined;
+    const upload =
+      typeof body.fileData === 'string' && body.fileData
+        ? body.fileData
+        : typeof body.imageData === 'string' && body.imageData
+          ? body.imageData
+          : null;
+    if (upload) {
+      if (!deps.saveImage) return badRequest('this server cannot store files');
+      try {
+        uploadedPath = await deps.saveImage(upload);
+      } catch (err) {
+        return badRequest(err instanceof Error ? err.message : 'could not store the image');
+      }
     }
     const result = await deps.ingest.ingest({
       workspaceId,
@@ -226,11 +435,16 @@ async function handleWorkspace(
       content: typeof body.content === 'string' ? body.content : undefined,
       title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
-      imagePath: typeof body.imagePath === 'string' ? body.imagePath : undefined,
+      imagePath: uploadedPath ?? (typeof body.imagePath === 'string' ? body.imagePath : undefined),
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
       locale: body.locale === 'ko' || body.locale === 'en' ? body.locale : undefined,
+      // A diary entry names its day; anything else leaves it unset.
+      diaryDate:
+        typeof body.diaryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.diaryDate)
+          ? body.diaryDate
+          : undefined,
     });
 
     /*
@@ -346,7 +560,7 @@ async function handleWorkspace(
           typeof (t as Record<string, unknown>).answer === 'string',
       )
       .slice(-3);
-    return ok(await deps.ask.ask(workspaceId, body.question, history));
+    return ok(await deps.ask.ask(workspaceId, body.question, history, focusOf(body)));
   }
 
   /*
@@ -370,7 +584,34 @@ async function handleWorkspace(
           typeof (t as Record<string, unknown>).answer === 'string',
       )
       .slice(-3);
-    return { status: 200, body: null, events: deps.ask.askStream(workspaceId, body.question, history) };
+    return {
+      status: 200,
+      body: null,
+      events: deps.ask.askStream(workspaceId, body.question, history, focusOf(body)),
+    };
+  }
+
+  /*
+   * POST /api/workspaces/:id/diary/retro — the look back: diary days in
+   * [from, to] gathered and reflected on in the memory's own voice. 501
+   * where no model can do it honestly; an empty range answers plainly.
+   */
+  if (req.method === 'POST' && resource === 'diary' && resourceId === 'retro' && !action) {
+    if (!deps.ask.canRetrospect()) {
+      return { status: 501, body: { error: 'this server cannot look back' } };
+    }
+    const body = asRecord(req.body);
+    const DAY = /^\d{4}-\d{2}-\d{2}$/;
+    if (typeof body.from !== 'string' || typeof body.to !== 'string' || !DAY.test(body.from) || !DAY.test(body.to)) {
+      return badRequest('from and to must be YYYY-MM-DD');
+    }
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ask.retrospect(workspaceId, body.from, body.to, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'retro failed' } };
+    }
   }
 
   // POST /api/workspaces/:id/reorgs/:reorgId/undo
@@ -391,6 +632,27 @@ async function handleWorkspace(
    * configured — and everything a reader returns takes the exact same batch
    * path a file drop takes, so no two ways in can behave differently.
    */
+  /*
+   * POST /api/workspaces/:id/link/preview — read a link before keeping it.
+   * The client shows what came back and asks; nothing is written here.
+   */
+  if (req.method === 'POST' && resource === 'link' && resourceId === 'preview' && !action) {
+    if (!deps.previewLink) return { status: 501, body: { error: 'this server cannot read links' } };
+    const body = asRecord(req.body);
+    if (typeof body.url !== 'string' || !body.url.trim()) return badRequest('url is required');
+    try {
+      return ok(await deps.previewLink(body.url.trim()));
+    } catch (err) {
+      // The reason rides along, so the client can say why and not just that.
+      const reason = err instanceof LinkError ? err.reason : 'network';
+      const httpStatus = err instanceof LinkError ? err.httpStatus : undefined;
+      return {
+        status: 502,
+        body: { error: err instanceof Error ? err.message : 'could not read the link', reason, ...(httpStatus ? { httpStatus } : {}) },
+      };
+    }
+  }
+
   if (req.method === 'POST' && resource === 'import' && resourceId && !action) {
     const reader =
       resourceId === 'apple-notes' ? deps.readNotes
@@ -419,9 +681,13 @@ async function handleWorkspace(
 
     const items = read.notes.slice(0, 100).map((n) => ({
       workspaceId,
+      // Still 'text': the content was already read by the reader, and a
+      // 'link' type would invite the pipeline to fetch it. The url is the
+      // way back to the original — provenance, not something to scrape.
       type: 'text' as const,
       title: n.title || n.content.slice(0, 60),
       content: n.content,
+      url: n.url,
       locale,
     }));
 
@@ -442,6 +708,7 @@ async function handleWorkspace(
         touchedCategoryIds: r.touchedCategoryIds,
         skipped: r.skipped,
         note: r.note,
+        redacted: r.redacted,
       })),
       reorgs,
       notes: { total: read.total, imported: items.length, droppedSecretLines: read.droppedSecretLines },
@@ -483,6 +750,76 @@ async function handleWorkspace(
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
+  /*
+   * POST /api/workspaces/:id/sources/:sourceId/review — one source's review
+   * verdicts, applied atomically (spec §21). Unlisted memories are keeps.
+   * Discards keep their text in a verdict row; edits re-embed and lock; the
+   * source is stamped reviewed. The signal teaches the next extraction.
+   */
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'review') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+
+    const body = asRecord(req.body);
+    const discard = (Array.isArray(body.discard) ? body.discard : []).filter(
+      (v): v is string => typeof v === 'string',
+    );
+    const edits = (Array.isArray(body.edits) ? body.edits : [])
+      .map((raw) => asRecord(raw))
+      .filter(
+        (e): e is { memoryId: string; text: string } =>
+          typeof e.memoryId === 'string' && typeof e.text === 'string',
+      )
+      .map((e) => ({ memoryId: e.memoryId, text: e.text }));
+
+    try {
+      await deps.ingest.reviewSource(workspaceId, resourceId, { discard, edits });
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'review failed');
+    }
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/sources/:sourceId/condense-preview — one draft
+   * for what this source comes to. Writes nothing; the review card stages it
+   * as a rewrite of the first memory plus drops of the rest, and the person's
+   * confirm goes through the review route above like any other verdict.
+   */
+  if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'condense-preview') {
+    const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
+    if (!source) return notFound(`unknown source ${resourceId}`);
+    if (!deps.ingest.canCondense()) {
+      return { status: 501, body: { error: 'this server cannot condense' } };
+    }
+    const body = asRecord(req.body);
+    const locale: 'en' | 'ko' | undefined =
+      body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.condenseSource(workspaceId, resourceId, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'condense failed';
+      return message === 'nothing to condense'
+        ? badRequest(message)
+        : { status: 502, body: { error: message } };
+    }
+  }
+
+  /*
+   * DELETE /api/workspaces/:id/sources/:sourceId — throw a source away whole.
+   *
+   * Not a review verdict: a drop says "this extraction was wrong" and teaches
+   * the next one; this says "this source was never worth keeping" and teaches
+   * nothing. Its memories go with it. The UI asks twice before calling this.
+   */
+  if (req.method === 'DELETE' && resource === 'sources' && resourceId && !action) {
+    if (!deps.repo.listSources(workspaceId).some((s) => s.id === resourceId)) {
+      return notFound(`unknown source ${resourceId}`);
+    }
+    deps.repo.deleteSource(resourceId);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
   // POST /api/workspaces/:id/sources/:sourceId/retry — re-run a failed capture.
   if (req.method === 'POST' && resource === 'sources' && resourceId && action === 'retry') {
     const source = deps.repo.listSources(workspaceId).find((s) => s.id === resourceId);
@@ -518,6 +855,23 @@ async function handleWorkspace(
       assignedBy: 'user',
     });
     deps.repo.updateMemoryPosition(resourceId, null, null, memory.pinned);
+    return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * PATCH /api/workspaces/:id/memories/:memoryId — put a memory down, or pick
+   * it back up. `{ settled: true }` stamps the time; `false` clears it. The
+   * memory itself is untouched: this is the difference between "I am done
+   * with this" and "forget this", and only the second is a delete.
+   */
+  if (req.method === 'PATCH' && resource === 'memories' && resourceId && !action) {
+    const body = asRecord(req.body);
+    if (typeof body.settled !== 'boolean') return badRequest('settled must be a boolean');
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    if (!payload.memories.some((m) => m.id === resourceId)) {
+      return notFound(`unknown memory ${resourceId}`);
+    }
+    deps.repo.setMemorySettled(resourceId, body.settled ? new Date().toISOString() : null);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
   }
 
@@ -587,6 +941,158 @@ async function handleWorkspace(
     }
     deps.repo.deleteMemory(resourceId);
     return ok({ graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/categories — a category made by hand, around
+   * memories the person picked. It is theirs: named by them, locked against
+   * renaming and merging by any reorganization, and every memory moved into
+   * it is locked there the way a hand move locks. Optional parent, one level
+   * deep at most, like every other category.
+   */
+  if (req.method === 'POST' && resource === 'categories' && !resourceId) {
+    const body = asRecord(req.body);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name) return badRequest('name is required');
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    const payload = deps.repo.getGraphPayload(workspaceId);
+    for (const id of memoryIds) {
+      if (!payload.memories.some((m) => m.id === id)) return notFound(`unknown memory ${id}`);
+    }
+    let parentId: string | null = null;
+    if (typeof body.parentId === 'string') {
+      const parent = payload.categories.find((c) => c.id === body.parentId);
+      if (!parent) return notFound(`unknown category ${body.parentId}`);
+      if (parent.parent_id !== null) return badRequest('Mado keeps categories two levels deep.');
+      parentId = parent.id;
+    }
+    const categoryId = `cat_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    deps.repo.transaction(() => {
+      deps.repo.insertCategory(workspaceId, {
+        id: categoryId,
+        parent_id: parentId,
+        name,
+        rationale: null,
+        name_locked: true,
+        user_created: true,
+        x: null,
+        y: null,
+        pinned: false,
+        created_by: 'user',
+      });
+      for (const id of memoryIds) {
+        const memory = payload.memories.find((m) => m.id === id)!;
+        deps.repo.assign({ memoryId: id, categoryId, confidence: memory.confidence, assignedBy: 'user' });
+        deps.repo.updateMemoryPosition(id, null, null, memory.pinned);
+      }
+    });
+    return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/onboarding/ask-back — the first conversation's
+   * second beat: one question, on the person's own words, asking what is in
+   * the way. Reads nothing and writes nothing.
+   */
+  if (req.method === 'POST' && resource === 'onboarding' && resourceId === 'ask-back' && !action) {
+    if (!deps.ingest.canAskBack()) return { status: 501, body: { error: 'this model cannot ask back' } };
+    const body = asRecord(req.body);
+    const thought = typeof body.thought === 'string' ? body.thought.trim().slice(0, 1000) : '';
+    if (!thought) return badRequest('thought is required');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    const role = typeof body.role === 'string' ? body.role.trim().slice(0, 40) : undefined;
+    try {
+      return ok(await deps.ingest.askBack(thought, locale, role));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'ask-back failed' } };
+    }
+  }
+
+  /*
+   * POST /api/workspaces/:id/files/read — a document read out, nothing kept.
+   * The file is stored (so a keep can point at it without a second upload)
+   * and the model reads it; the text comes back for the person to see and
+   * choose from before any of it becomes a memory.
+   */
+  if (req.method === 'POST' && resource === 'files' && resourceId === 'read' && !action) {
+    if (!deps.saveImage || !deps.ingest.canReadPdf()) return { status: 501, body: { error: 'this server cannot read files' } };
+    const body = asRecord(req.body);
+    if (typeof body.fileData !== 'string' || !body.fileData) return badRequest('fileData is required');
+    let path: string;
+    try {
+      path = await deps.saveImage(body.fileData);
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : 'could not store the file');
+    }
+    try {
+      return ok({ path, ...(await deps.ingest.readFile(path)) });
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'could not read the file' } };
+    }
+  }
+
+  /*
+   * POST /api/workspaces/:id/digest — a page whole and in parts. The text is
+   * what the link look (or a file) read; the answer is one summary of all of
+   * it and one per section, with the sections' own text riding along so the
+   * person can pick parts by their summary and keep their words. Reads
+   * nothing and writes nothing.
+   */
+  if (req.method === 'POST' && resource === 'digest' && !resourceId) {
+    if (!deps.ingest.canDigest()) return { status: 501, body: { error: 'this model cannot digest a page' } };
+    const body = asRecord(req.body);
+    const text = typeof body.text === 'string' ? body.text.trim().slice(0, 20_000) : '';
+    if (!text) return badRequest('text is required');
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 300) || null : null;
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.digest(title, text, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'digest failed' } };
+    }
+  }
+
+  /*
+   * POST /api/workspaces/:id/categories/suggest-name — what Mado would call
+   * a category made of these memories. Reads only; the person decides.
+   */
+  if (req.method === 'POST' && resource === 'categories' && resourceId === 'suggest-name' && !action) {
+    const body = asRecord(req.body);
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    if (memoryIds.length === 0) return badRequest('memoryIds is required');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.suggestCategoryName(workspaceId, memoryIds, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'naming failed';
+      return message.startsWith('unknown memory') ? notFound(message) : { status: 502, body: { error: message } };
+    }
+  }
+
+  /*
+   * POST /api/workspaces/:id/memories/condense-preview — one text for what a
+   * handful of picked memories come to. Writes nothing; the person reads the
+   * draft and decides whether to keep it, and keeping it is an ordinary
+   * capture — it goes through the pipeline like any note.
+   */
+  if (req.method === 'POST' && resource === 'memories' && resourceId === 'condense-preview' && !action) {
+    if (!deps.ingest.canCondense()) return { status: 501, body: { error: 'this server cannot condense' } };
+    const body = asRecord(req.body);
+    const memoryIds = (Array.isArray(body.memoryIds) ? body.memoryIds : []).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    if (memoryIds.length < 2) return badRequest('condense needs at least two memories');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.condenseMemories(workspaceId, memoryIds, locale));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'condense failed';
+      return message.startsWith('unknown memory') ? notFound(message) : { status: 502, body: { error: message } };
+    }
   }
 
   // PATCH /api/workspaces/:id/categories/:categoryId — rename or re-parent.

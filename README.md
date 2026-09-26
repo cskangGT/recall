@@ -99,6 +99,39 @@ Safari launches. Two things also need changing after the conversion:
 `chrome.notifications` is unsupported, and the shortcut has to be assigned by
 hand. That is the honest state of it, not "coming soon".
 
+### Bringing in what you saved on Instagram
+
+There is no API for saved posts, and the export carries captions alone — a
+save whose caption is "👇" tells nobody what it was. So the reading happens in
+your own browser: the `import-instagram` skill (`.claude/skills/import-instagram/`)
+has Claude open each saved post in your logged-in Chrome, look at it, and write
+a few sentences about what it shows. That JSON goes through
+
+```
+npm run import:instagram -- --file=posts.json [--dry-run] [--port=5174]
+```
+
+which lays each post out the way the ZIP importer does — the description, the
+author and date, the caption, the collection, the link last — drops
+credential-shaped lines, remembers what it sent in `~/.recall/instagram-seen.json`
+so the next run only brings the new ones, and ends with a link. Open it and
+the app plays the same declaration a file drop earns: how many memories, into
+which interests, and the review. `npm run import:notes` ends with the same link.
+
+### Meetings from Google Calendar
+
+With a Google OAuth client configured (`GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` in `.env.local` and `~/.recall/env`; the client's
+redirect URI must be `http://127.0.0.1:5170/api/google/callback`, plus the
+5174 one for `npm run dev:api`), the rail gains **Meetings** (M). Connect from
+there or from Settings; the server keeps the refresh token in its own table
+and never in a response. Meetings sync lazily when read — a week back, two
+weeks ahead, no more than every ten minutes — and each one carries what Mado
+remembers about the people in the room and the subject: attendees are matched
+to the people and companies in your graph first, then the title and agenda go
+through the same retrieval Ask uses. Home's briefing shows today's meetings at
+the top. Calendar read access only; mail is a later door.
+
 ### The demo
 
 ```bash
@@ -147,6 +180,33 @@ grey while you are looking something up, amber the moment you press `G`.
 
 **Map** (`G`) is the big-picture mode — the shape of what you know rather than the list,
 and the only surface where a reorganization is animated.
+
+## Four places
+
+The rail has four places, and they are told apart by what you do there, not by how they draw the corpus.
+
+- **Home** — the logo, and where the app opens. The sky, one question, and four doors hung in it as stars: start today, fill your memory, find a memory, write today. Nothing here is a report.
+- **Today** — the page home's first door opens. One sentence about whatever this hour is about (the day's meetings in the morning, the pile in the afternoon, what came in at night), itself a door; then three lines — schedule, mind, pile — that are counts until pressed, one open at a time, the hour opening one (`src/core/dayPart.ts`). The calendar lives inside the schedule line; there is no meetings button on the rail (M still opens the full list).
+- **Memory** — one place, three lenses, switched at the top: **Browse** (T) walks the categories by hand, as an index or as folders; **Brainstorm** (G) spreads everything out as a map; **Archive** (S) is the ledger of what was handed over. All three stand under the same dusk sky, and all three carry the same bar at the bottom: a word finds within the lens you are in, a question (end it with `?`) is asked.
+  **Thinking with picked memories** is a mode on the map — *Pick memories to think with*, top right. While it is on, a press picks a star instead of travelling to it (a category picks everything it holds, an entity every memory that mentions it), and a search's results can be taken in at once. Picks are drawn as a constellation: lit, sparked, threaded in the order picked. They can be *spread out* on their own (the same regrouped view search uses); they lead the context of any question asked while they are held (`focus` on `POST ask` — never refused, the model told how many at the head are the person's own, the evidence panel split into *what you picked* and *what Mado brought in*); and they can be *bundled* — into a new category of one's own (`POST /api/workspaces/:id/categories`, locked, the picks moved in locked; Mado can suggest the name through the same namer, `POST …/categories/suggest-name`), into an existing one, or condensed by Mado into one note (`POST …/memories/condense-preview`, then kept as an ordinary capture). Bundling is not the end but where the thinking starts in earnest: the mode stays on, the picks stay in hand with their home named on the strip, the bar invites a conversation about it, and the first question is a button (*start brainstorming with these n*), and every line Mado says carries *keep this in “…”* — kept through the ordinary pipeline, moved into the bundle, joining the picks, and listed right under the line as the memories it became. Off, the map is exactly what it was.
+  **Brainstorm is a conversation held over the map.** Its bar starts on *Ask Mado*; the talk rises from the bar, newest at the bottom, what was said before stepping back above it. The panel beside holds *what Mado took out* — each cited memory whole, numbered the way the answer and the map number it. Every answer moves the camera to the memories it leaned on (fitted into the sky above the conversation, their categories kept lit), and ← walks the conversation back. Browse stays a place to read: there an answer opens in the reading list.
+- **Diary** — the page that closes the day.
+
+Around them:
+
+- **The first conversation.** A first visit is not a tour. It opens on who they are — one press among planner, founder, C-level executive, researcher, developer, designer, marketer, creator, sales, or none — so the example in the box, the hint under the ask-back and the ask-back itself are theirs; then it asks for the one thing this person cannot decide, and takes it all the way through: Mado asks back what is in the way — a question written by the model on their actual words (`POST …/onboarding/ask-back`; the fixed line stands where no model can) — and they answer in two or three lines, each a memory, the map opens with those stars picked and threaded and Mado's first answer already asked for, a line of it kept (opened in a box to trim first — see, shape, keep) becomes their first category (named by Mado where a namer exists), and only then what just happened is said in three lines — put in, ask, keep — with the four places, the meeting beat (one upcoming meeting in a line, asked about first — a real answer from their own words so far: what Mado would put in front of them before it — and kept only if they say so; the reason to connect a calendar), and the doors. The morning after, today asks after the thing by name. Settings → *The first screen* plays it again.
+- **A hand-over ends somewhere.** After a PDF or a screenshot is read, its original opens as a page — the text, the memories taken from it, the way to check them; several at once land in the archive.
+- **Secrets never leave the process.** `server/secrets/redact.ts` runs on every capture before a row is written or a model reads — pasted text, a link's body, a diary page, a meeting's line, the words read out of a screenshot or a PDF. Keys, tokens, JWTs, Bearer headers, `api_key=` assignments, card numbers (Luhn-checked) and Korean resident numbers are replaced in place with `[redacted]`; a `password:` line goes whole; order ids, phones, dates and prices stay. The count rides every capture response (`redacted`) and the person is told in a toast. The notes, Notion and Instagram readers share the same list.
+- **A link, whole and honestly.** A pasted URL is read before it is kept (`POST …/link/preview`): the server hands back the page's *main* text — the article or main region, navigation, header, footer and asides taken off, block boundaries kept as line breaks — up to 12,000 characters, with the count and whether it was cut, and that text rides into capture so the memories come from what the page says. Where the page could not be read well it says why instead of handing the extractor nothing: a script-drawn shell (`app`), a login wall (`login`), a file such as a PDF (`not-html` — drop the file itself), or simply almost no text (`thin`). A read that fails carries its reason (`invalid`, `scheme`, `private`, `status` with the HTTP code, `timeout`, `network`) and the card says it in words, with the address alone left to keep.
+- **The whole of it, and the parts.** Where a model is wired (`digest` in the capabilities), a link with real text is also read whole: `POST …/digest` cuts the text into sections deterministically (`server/link/digest.ts` — short lines as headings, paragraphs grouped to ~1,400 characters, every line of the text in exactly one section) and has the model write one summary of everything and one per section, exactly as many as there are, in order; a section the model skips gets its own first sentence, so nothing on the page can go unsummarised. The card shows the whole first, then the parts as a list of stars — leave on only what you want — each with its text a press away, and a line of your own on top. What is kept is the gist, the parts left on in the page's own words, and that line; the extractor works from that.
+- **A file, seen before it is kept.** A dropped PDF goes to `POST …/files/read`: the server stores it and has the model read it out, keeps nothing, and hands the words back. They come up on the same card a link gets (`src/components/ReadCard.tsx` — the whole, the parts as stars, a line of one's own), and only the keep makes a source: the chosen words as its text, the stored file as its original (`imagePath`), and no second read — a PDF that arrives with its words in hand is not normalised again. A single dropped text file takes the same card without a server read; several still arrive as a batch. Where the server cannot read a file out, the older read-and-keep-in-one path remains.
+- **The way back.** On a hosted Mado a visitor's workspace is known only to their browser. Until there is an account the link is the account: Settings shows *Your way back* (`/?ws=<workspace>&invite=<token>`), the first conversation ends on it, and a link that names a workspace makes the browser that opens it that workspace's (the address is stripped after). `?api=visitor` is the hosted case in development. The developer's fixed corpus (`?api=1`) draws no link.
+- **Screenshots and PDFs.** A screenshot dropped on the window, picked from *Fill your memory*, or pasted lands in the add bar with room for words beside it; several are kept one after another, scaled to 2400px first. A PDF (up to 10MB) goes to the server whole as `fileData`: it is kept beside the database, the model reads the document out (`normalize`, as a file/document part), and what it read becomes the source's own text — so a PDF is a text source whose original is its words. The door is drawn only where `GET /api/capabilities` says `pdf: true` — a provider that reads documents (OpenAI, Anthropic; not the fixture) and somewhere to keep files.
+- **Put down, not deleted.** A question, decision or task on today's mind line can be put down (`settled_at`, `PATCH /api/workspaces/:id/memories/:memoryId`). The memory stays where it was filed; its page is where it is picked back up.
+- **A meeting keeps a line.** A meeting that has begun takes one line in the meetings list. It is an ordinary note with the meeting and the people written into the original, so the attendee match brings it back the next time they are in the room.
+- **Once a week**, where the server can look back, today offers "the you of last week" — the diary's look-back over the previous Monday to Sunday.
+
+Deliberately absent: to-do checkboxes, streaks, push reminders, colour that changes with the hour.
 
 ## Verify
 
@@ -323,6 +383,7 @@ Three things that will otherwise be rediscovered the hard way:
 |---|---|
 | `seed/` | The entire dataset. Generated — never hand-edit. |
 | `scripts/generate_seed.py` | Authors the 47 memories, generates vectors, verifies every gate |
+| `scripts/import-instagram.mjs`, `scripts/import-notes.mjs` | CLI importers — post to `capture/batch`, end with the reveal link |
 | `src/types/graph.ts` | The contract between every other module |
 | `src/data/dataSource.ts` | **The Phase 4 swap point** |
 | `src/reorg/` | Thresholds, vector math, gates, apply/undo, the 2.4s timeline |

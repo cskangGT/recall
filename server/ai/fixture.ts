@@ -3,6 +3,7 @@ import type {
   AiProvider,
   NameOperation, AnswerResult, EmbeddingProvider, ExtractResult,
   NameCluster, NamedCluster, NormalizeInput, NormalizeResult, RetrievedMemory,
+  Reflection,
 } from './provider.ts';
 import { fallbackName, validateName } from './provider.ts';
 import type { Memory, Source } from '../../src/core/types.ts';
@@ -168,7 +169,26 @@ export class FixtureProvider implements AiProvider {
     question: string;
     retrieved: RetrievedMemory[];
     history?: { question: string; answer: string }[];
+    reflective?: Reflection;
   }): Promise<AnswerResult> {
+    // A reflective question is answered from the survey it was handed —
+    // deterministic, and honest about what the fixture can do: name the
+    // interests by size and cite the first things kept in each.
+    if (input.reflective) {
+      if (input.retrieved.length === 0) {
+        return { answer: "I don't have anything saved about that yet.", citations: [], refused: true };
+      }
+      const cited = input.retrieved.slice(0, 3);
+      const interests = input.reflective.interests.slice(0, 3).map((i) => `${i.name} (${i.count})`);
+      return {
+        answer:
+          `Lately it has mostly been ${interests.join(', ')} ` +
+          cited.map((_, i) => `[${i + 1}]`).join(' ') +
+          '.',
+        citations: cited.map((r, i) => ({ n: i + 1, memory_id: r.memory_id, source_id: r.source_id })),
+        refused: false,
+      };
+    }
     const q = input.question.toLowerCase();
     // A follow-up rarely repeats the keywords its referent carried — "which
     // tool won?" says nothing about evals. Match the question alone first;

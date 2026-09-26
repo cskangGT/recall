@@ -107,3 +107,18 @@ describe('a failed source is not an empty one', () => {
   });
 });
 
+
+/**
+ * The migration story: every complete source's full text lives in the ledger,
+ * and the row says so — clearing the original at its source is not a gamble.
+ */
+describe('safe — held whole in Mado', () => {
+  it('a settled source with its text is safe; failures are not', () => {
+    // The seed's sources carry no status at all — settled is the default.
+    const rows = buildSourceRows(payload);
+    const settled = rows.filter((r) => !r.failed && r.source.raw_content.trim());
+    expect(settled.length).toBeGreaterThan(0);
+    for (const r of settled) expect(r.safe).toBe(true);
+    for (const r of rows.filter((x) => x.failed)) expect(r.safe).toBe(false);
+  });
+});

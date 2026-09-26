@@ -19,9 +19,9 @@ test.beforeEach(async ({ page }) => {
 test('the placeholder recommends a question about the open category', async ({ page }) => {
   const input = page.getByTestId('composer-input');
 
-  // Before anything is open, the invitation is generic — and it only ever
-  // promises asking: saving has its own labeled door beside the input.
-  await expect(input).toHaveAttribute('placeholder', /Ask your memory/);
+  // Before anything is open, the invitation is generic. Browse's bar starts on
+  // asking; saving has its own labeled door beside the input.
+  await expect(input).toHaveAttribute('placeholder', /Ask Mado anything/);
 
   await named(page, 'AI Tooling').click();
   await expect(input).toHaveAttribute('placeholder', /AI Tooling/);
@@ -43,4 +43,45 @@ test('seed mode does not offer a summary it cannot honestly produce', async ({ p
   await named(page, 'AI Tooling').click();
   await expect(page.getByTestId('reading-list')).toBeVisible();
   await expect(page.getByTestId('reading-summarize')).toHaveCount(0);
+});
+
+/**
+ * The recommendation is a question you can actually ask: Enter on an empty
+ * composer asks it, Tab takes it into the box to be edited first. The
+ * generic invitation is not a question, so an empty Enter there still does
+ * nothing.
+ */
+test('Enter asks the recommended question, Tab takes it into the box', async ({ page }) => {
+  const input = page.getByTestId('composer-input');
+  await expect(page.getByTestId('composer-kbd')).toHaveCount(0);
+
+  await named(page, 'AI Tooling').click();
+  await expect(input).toHaveAttribute('placeholder', /AI Tooling/);
+  await expect(page.getByTestId('composer-kbd')).toBeVisible();
+  const suggested = await input.getAttribute('placeholder');
+
+  // Tab: the suggestion becomes text, ready to edit.
+  await input.click();
+  await page.keyboard.press('Tab');
+  await expect(input).toHaveValue(suggested!);
+  await expect(page.getByTestId('composer-kbd')).toHaveCount(0);
+
+  // Enter on the empty box asks the suggestion itself.
+  await input.fill('');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browser-answer')).toBeVisible();
+});
+
+/**
+ * "What have I been into lately?" resembles no memory, so it used to be
+ * refused. Now the memory looks around the last two weeks and says.
+ */
+test('a reflective question is answered by looking around, not refused', async ({ page }) => {
+  const input = page.getByTestId('composer-input');
+  await input.fill('내가 요즘 관심있는게 뭐야?');
+  await page.keyboard.press('Enter');
+  const answer = page.getByTestId('browser-answer');
+  await expect(answer).toBeVisible();
+  await expect(answer).not.toContainText(/anything saved about that|기억해둔 게 없어/);
+  await expect(answer).toContainText(/Lately|요즘/);
 });

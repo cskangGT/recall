@@ -30,8 +30,9 @@ const { DatabaseSync } = nodeRequire('node:sqlite') as {
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge,
 } from '../../src/core/types.ts';
+import type { Attendee, Meeting } from '../../src/core/meetingTypes.ts';
 import type {
-  MemoryAssignment, ReorgEventRow, Repository, SourceRow,
+  GoogleTokenRow, MemoryAssignment, ReorgEventRow, Repository, SourceRow,
 } from './repository.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -58,7 +59,11 @@ export class SqliteRepository implements Repository {
      * appear here, guarded, so an existing corpus catches up on next start.
      */
     this.ensureColumn('workspaces', 'plan', "TEXT NOT NULL DEFAULT 'pro' CHECK (plan IN ('free', 'pro'))");
+    this.ensureColumn('workspaces', 'trial_until', 'TEXT');
     this.ensureColumn('memories', 'times_seen', 'INTEGER NOT NULL DEFAULT 1');
+    this.ensureColumn('sources', 'reviewed_at', 'TEXT');
+    this.ensureColumn('sources', 'diary_date', 'TEXT');
+    this.ensureColumn('memories', 'settled_at', 'TEXT');
   }
 
   /** Idempotent ALTER TABLE … ADD COLUMN, for databases older than the column. */
@@ -97,15 +102,20 @@ export class SqliteRepository implements Repository {
 
   getWorkspace(id: string) {
     const row = this.db
-      .prepare('SELECT id, name, auto_reorganize, plan FROM workspaces WHERE id = ?')
+      .prepare('SELECT id, name, auto_reorganize, plan, trial_until FROM workspaces WHERE id = ?')
       .get(id) as
-      | { id: string; name: string; auto_reorganize: number; plan: 'free' | 'pro' }
+      | { id: string; name: string; auto_reorganize: number; plan: 'free' | 'pro'; trial_until: string | null }
       | undefined;
     return row ? { ...row, auto_reorganize: bool(row.auto_reorganize) } : null;
   }
 
   setPlan(id: string, plan: 'free' | 'pro'): void {
     this.db.prepare('UPDATE workspaces SET plan = ? WHERE id = ?').run(plan, id);
+  }
+
+  /** The Pro trial's last instant. Presentation only — the plan stays 'free'. */
+  setTrialUntil(id: string, until: string): void {
+    this.db.prepare('UPDATE workspaces SET trial_until = ? WHERE id = ?').run(until, id);
   }
 
   // ---------------------------------------------------------------- graph read
@@ -135,7 +145,10 @@ export class SqliteRepository implements Repository {
     }
 
     return {
-      workspace: { id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan },
+      workspace: {
+        id: ws.id, name: ws.name, auto_reorganize: ws.auto_reorganize, plan: ws.plan,
+        trial_until: ws.trial_until ?? null,
+      },
       sources: this.listSources(workspaceId).map(({ workspace_id: _w, ...s }) => ({
         id: s.id, type: s.type, title: s.title, raw_content: s.raw_content,
         scene_description: s.scene_description, url: s.url,
@@ -143,6 +156,9 @@ export class SqliteRepository implements Repository {
         // Surfaced so the Sources screen can offer a retry rather than showing
         // a failed capture as merely empty.
         status: s.status, error_message: s.error_message,
+        // Null means "not yet" — the review door in Sources reads this.
+        reviewed_at: s.reviewed_at ?? null,
+        diary_date: (s as { diary_date?: string | null }).diary_date ?? null,
       })),
       memories: memories.map((m) => ({
         ...m,
@@ -161,8 +177,8 @@ export class SqliteRepository implements Repository {
       .prepare(
         `INSERT INTO sources (id, workspace_id, type, title, raw_content, scene_description,
                               url, image_path, referenced_urls, detected_context, summary,
-                              status, error_message, created_at, processed_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                              status, error_message, created_at, processed_at, diary_date)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id, workspaceId, s.type, s.title, s.raw_content, s.scene_description,
@@ -170,7 +186,21 @@ export class SqliteRepository implements Repository {
         (s as { detected_context?: string | null }).detected_context ?? null,
         (s as { summary?: string | null }).summary ?? null,
         s.status, s.error_message, s.created_at, s.processed_at,
+        (s as { diary_date?: string | null }).diary_date ?? null,
       );
+  }
+
+  updateSourceContent(
+    id: string,
+    fields: { raw_content?: string | null; scene_description?: string | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE sources SET raw_content = COALESCE(?, raw_content),
+           scene_description = COALESCE(?, scene_description)
+         WHERE id = ?`,
+      )
+      .run(fields.raw_content ?? null, fields.scene_description ?? null, id);
   }
 
   updateSourceStatus(
@@ -281,7 +311,12 @@ export class SqliteRepository implements Repository {
       pinned: bool(r.pinned),
       created_at: r.created_at as string,
       times_seen: (r.times_seen as number | undefined) ?? 1,
+      settled_at: (r.settled_at as string | null | undefined) ?? null,
     }));
+  }
+
+  setMemorySettled(id: string, settledAt: string | null): void {
+    this.db.prepare('UPDATE memories SET settled_at = ? WHERE id = ?').run(settledAt, id);
   }
 
   reinforceMemory(id: string): void {
@@ -357,6 +392,13 @@ export class SqliteRepository implements Repository {
     // memory_category, memory_entity and both edge endpoints cascade, and the
     // FTS row goes with the trigger at schema.sql.
     this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+  }
+
+  deleteSource(id: string): void {
+    // memories cascade from sources, and everything else cascades from
+    // memories (see deleteMemory); curation and reorg rows that pointed at
+    // the source keep their row and lose the pointer (ON DELETE SET NULL).
+    this.db.prepare('DELETE FROM sources WHERE id = ?').run(id);
   }
 
   deleteCategory(id: string): void {
@@ -572,6 +614,51 @@ export class SqliteRepository implements Repository {
 
   // ---------------------------------------------------------------- tombstones
 
+  // ---------------------------------------------------------------- curation
+
+  insertCuration(workspaceId: string, row: import('./repository.ts').CurationRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO curation (id, workspace_id, source_id, memory_text, verdict, edited_text, created_at)
+         VALUES (?,?,?,?,?,?,?)`,
+      )
+      .run(row.id, workspaceId, row.source_id, row.memory_text, row.verdict, row.edited_text, row.created_at);
+  }
+
+  listCuration(
+    workspaceId: string,
+    verdict?: 'keep' | 'discard' | 'edit',
+    limit = 50,
+  ): import('./repository.ts').CurationRow[] {
+    const rows = verdict
+      ? this.db
+          .prepare(
+            `SELECT id, source_id, memory_text, verdict, edited_text, created_at FROM curation
+             WHERE workspace_id = ? AND verdict = ? ORDER BY created_at DESC, id LIMIT ?`,
+          )
+          .all(workspaceId, verdict, limit)
+      : this.db
+          .prepare(
+            `SELECT id, source_id, memory_text, verdict, edited_text, created_at FROM curation
+             WHERE workspace_id = ? ORDER BY created_at DESC, id LIMIT ?`,
+          )
+          .all(workspaceId, limit);
+    return rows as import('./repository.ts').CurationRow[];
+  }
+
+  setSourceReviewed(sourceId: string, reviewedAt: string): void {
+    this.db.prepare('UPDATE sources SET reviewed_at = ? WHERE id = ?').run(reviewedAt, sourceId);
+  }
+
+  updateMemoryText(id: string, text: string, vector: number[]): void {
+    // Text and vector move together — an edit moves the meaning, and a stale
+    // embedding would rot retrieval silently. The FTS trigger follows the
+    // UPDATE OF text on its own.
+    this.db
+      .prepare('UPDATE memories SET text = ?, vector = ? WHERE id = ?')
+      .run(text, JSON.stringify(vector), id);
+  }
+
   addTombstone(workspaceId: string, name: string): void {
     this.db
       .prepare(
@@ -602,6 +689,113 @@ export class SqliteRepository implements Repository {
         input.id, workspaceId, input.question, input.answer,
         JSON.stringify(input.citations), int(input.refused), new Date().toISOString(),
       );
+  }
+
+  // ---------------------------------------------------------------- google
+
+  getGoogleToken(workspaceId: string): GoogleTokenRow | null {
+    const row = this.db
+      .prepare(
+        `SELECT email, refresh_token, access_token, expires_at, scopes, connected_at
+         FROM google_tokens WHERE workspace_id = ?`,
+      )
+      .get(workspaceId) as GoogleTokenRow | undefined;
+    return row ?? null;
+  }
+
+  saveGoogleToken(workspaceId: string, row: GoogleTokenRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO google_tokens (workspace_id, email, refresh_token, access_token,
+                                    expires_at, scopes, connected_at)
+         VALUES (?,?,?,?,?,?,?)
+         ON CONFLICT(workspace_id) DO UPDATE SET
+           email         = excluded.email,
+           refresh_token = excluded.refresh_token,
+           access_token  = excluded.access_token,
+           expires_at    = excluded.expires_at,
+           scopes        = excluded.scopes,
+           connected_at  = excluded.connected_at`,
+      )
+      .run(
+        workspaceId, row.email, row.refresh_token, row.access_token,
+        row.expires_at, row.scopes, row.connected_at,
+      );
+  }
+
+  deleteGoogleToken(workspaceId: string): void {
+    this.db.prepare('DELETE FROM google_tokens WHERE workspace_id = ?').run(workspaceId);
+  }
+
+  // ---------------------------------------------------------------- meetings
+
+  replaceMeetings(
+    workspaceId: string,
+    from: string,
+    to: string,
+    rows: Meeting[],
+    syncedAt: string,
+  ): void {
+    // ISO-8601 UTC strings compare correctly as text, which is what makes a
+    // TEXT range scan on starts_at a real window rather than a coincidence.
+    const remove = this.db.prepare(
+      'DELETE FROM meetings WHERE workspace_id = ? AND starts_at >= ? AND starts_at < ?',
+    );
+    // OR REPLACE: Google returns an event that *overlaps* the window even
+    // when it started before `from`, and a row outside the window survives
+    // the delete above — the next sync must overwrite it, not collide.
+    const insert = this.db.prepare(
+      `INSERT OR REPLACE INTO meetings (id, workspace_id, title, starts_at, ends_at, all_day,
+                                        location, description, meet_link, html_link,
+                                        attendees, synced_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    );
+    const stamp = this.db.prepare(
+      `INSERT INTO meeting_sync (workspace_id, synced_at) VALUES (?, ?)
+       ON CONFLICT(workspace_id) DO UPDATE SET synced_at = excluded.synced_at`,
+    );
+    this.transaction(() => {
+      remove.run(workspaceId, from, to);
+      for (const m of rows) {
+        insert.run(
+          m.id, workspaceId, m.title, m.startsAt, m.endsAt, int(m.allDay),
+          m.location, m.description, m.meetLink, m.htmlLink,
+          JSON.stringify(m.attendees), syncedAt,
+        );
+      }
+      stamp.run(workspaceId, syncedAt);
+    });
+  }
+
+  listMeetings(workspaceId: string, from: string, to: string): Meeting[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, title, starts_at, ends_at, all_day, location, description,
+                meet_link, html_link, attendees
+         FROM meetings
+         WHERE workspace_id = ? AND starts_at >= ? AND starts_at < ?
+         ORDER BY starts_at, id`,
+      )
+      .all(workspaceId, from, to) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      startsAt: r.starts_at as string,
+      endsAt: r.ends_at as string,
+      allDay: bool(r.all_day),
+      location: (r.location as string | null) ?? null,
+      description: (r.description as string | null) ?? null,
+      meetLink: (r.meet_link as string | null) ?? null,
+      htmlLink: (r.html_link as string | null) ?? null,
+      attendees: json<Attendee[]>(r.attendees, []),
+    }));
+  }
+
+  meetingsSyncedAt(workspaceId: string): string | null {
+    const row = this.db
+      .prepare('SELECT synced_at FROM meeting_sync WHERE workspace_id = ?')
+      .get(workspaceId) as { synced_at: string } | undefined;
+    return row?.synced_at ?? null;
   }
 
   // ---------------------------------------------------------------- lifecycle
