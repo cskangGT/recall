@@ -6986,3 +6986,26 @@ button.brief__line:hover {
 .bar--reading .bar__photo {
   display: none;
 }
+
+/* The answer, in a box to trim before it is kept. */
+.mapchat__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Under the meeting card: keep it, or not — and the word once it is kept. */
+.meetprev__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.meetprev__kept {
+  margin: 6px 0 0;
+  color: #f6dfae;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

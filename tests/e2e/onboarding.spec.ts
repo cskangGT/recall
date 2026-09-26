@@ -48,8 +48,14 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(page.getByTestId('onboarding-guide')).toContainText('Keep a line of it');
 
   // A line kept makes the first category — theirs, named, their stars inside.
+  // Seen and shaped first: the keep opens the answer in a box to trim.
   await page.getByTestId('map-keep').click();
+  const draft = page.getByTestId('map-keep-draft');
+  await expect(draft).toBeVisible();
+  await draft.fill('Ship without the onboarding rework; move the date only if the demo needs it.');
+  await page.getByTestId('map-keep-confirm').click();
   await expect(page.getByTestId('map-kept')).toContainText('Kept in');
+  await expect(page.getByTestId('map-kept')).toContainText('onboarding rework');
   await expect(page.getByTestId('think-bundle-name')).toBeVisible();
   await expect(page.getByTestId('onboarding-guide')).toContainText('is yours now');
 
@@ -67,6 +73,11 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(card).toContainText('Before that meeting, Mado brings this up');
   expect(await card.locator('.memory-row').count()).toBeGreaterThan(0);
   await expect(card).toContainText('comes back before the next');
+  // Seen first: nothing is a note yet. The keep is the choice, and only then.
+  const memoriesBefore = await page.evaluate(() => document.querySelectorAll('[data-testid^="pick-"]').length);
+  await page.getByTestId('welcome-meeting-keep').click();
+  await expect(page.getByTestId('welcome-meeting-kept')).toContainText('Kept');
+  void memoriesBefore;
   await expect(page.getByTestId('fill-sources')).toBeVisible();
   await page.getByTestId('welcome-finish').click();
   await expect(page.getByTestId('home')).toBeVisible();
@@ -91,6 +102,7 @@ test('the morning after asks after the thing by name', async ({ page }) => {
   await page.getByTestId('welcome-why-skip').click();
   await expect(page.getByTestId('map-conversation').getByTestId('answer')).toBeVisible();
   await page.getByTestId('map-keep').click();
+  await page.getByTestId('map-keep-confirm').click();
   await expect(page.getByTestId('think-bundle-name')).toBeVisible();
   const name = (await page.getByTestId('think-bundle-name').textContent())!.replace('✦', '').trim();
   await page.getByTestId('onboarding-next').click();

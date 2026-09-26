@@ -190,7 +190,10 @@ test('pick, spread, think with, and bundle', async ({ page }) => {
   await page.getByTestId('map-search-input').press('Enter');
   await expect(page.getByTestId('map-keep')).toContainText('Keep this in “Hiring rules”');
   const before = await page.locator('[data-testid^="pick-"]').count();
+  // The keep opens the line in a box first — trimmed here to one sentence — and the box's keep saves it.
   await page.getByTestId('map-keep').click();
+  await expect(page.getByTestId('map-keep-confirm')).toContainText('Keep this in “Hiring rules”');
+  await page.getByTestId('map-keep-confirm').click();
   // The result, where it was asked for: what it became, listed under the line.
   const keptBlock = page.getByTestId('map-kept');
   await expect(keptBlock).toContainText('Kept in “Hiring rules”');

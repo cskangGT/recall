@@ -28,6 +28,12 @@ export function MapConversation() {
   const bundle = useUiStore((s) => s.bundle);
   const thinking = useUiStore((s) => s.thinking);
   const [keeping, setKeeping] = useState<string | null>(null);
+  /**
+   * The line, in hand before it is kept. A press on "keep" opens the answer
+   * in a box to trim to the sentence worth keeping — the same shape as the
+   * condense draft — and only the box's own keep saves it. See, shape, keep.
+   */
+  const [editing, setEditing] = useState<{ key: string; draft: string } | null>(null);
   /** What each kept line became — memory ids, by the turn (question + answer) it was kept from. */
   const [kept, setKept] = useState<Record<string, string[]>>({});
   const turnKey = (q: string, a: string) => `${q}\n${a}`;
@@ -94,6 +100,7 @@ export function MapConversation() {
       // under the line, and the map going to them. A toast alone was a
       // sentence with nothing to look at.
       setKept((k) => ({ ...k, [key]: added }));
+      setEditing(null);
       if (added.length > 0) ui.requestZoomTo(added);
       else ui.toast(t('mapchat.keptNothing'));
     } catch {
@@ -116,6 +123,39 @@ export function MapConversation() {
   }, [prior.length, live?.answer, pending?.text]);
 
   if (!live && !pending && prior.length === 0) return null;
+
+  const editor = (key: string) => {
+    if (!editing || editing.key !== key) return null;
+    const draft = editing.draft;
+    return (
+      <div className="mapchat__edit" data-testid="map-keep-editor">
+        <textarea
+          className="bundle__draft"
+          data-testid="map-keep-draft"
+          rows={3}
+          value={draft}
+          autoFocus
+          onChange={(e) => setEditing({ key, draft: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setEditing(null);
+            }
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && draft.trim()) void keep(key, draft.trim());
+          }}
+        />
+        <div className="bundle__row bundle__row--end">
+          <span className="bundle__hint">{t('mapchat.editHint')}</span>
+          <button className="picks__action picks__action--quiet" data-testid="map-keep-cancel" onClick={() => setEditing(null)}>
+            {t('mapchat.cancel')}
+          </button>
+          <button className="picks__action" data-testid="map-keep-confirm" disabled={keeping !== null || !draft.trim()} onClick={() => void keep(key, draft.trim())}>
+            {keeping ? t('mapchat.keeping') : bundle ? t('mapchat.keepInto', { name: bundle.name }) : t('mapchat.keepNow')}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const keptBlock = (key: string) => {
     const ids = kept[key];
@@ -165,11 +205,12 @@ export function MapConversation() {
           <div key={i} className="mapchat__turn mapchat__turn--past">
             <p className="mapchat__q">{turn.question}</p>
             <p className="mapchat__a">{clean(turn.answer)}</p>
-            {thinking && !kept[turnKey(turn.question, turn.answer)] && (
-              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => void keep(turnKey(turn.question, turn.answer), clean(turn.answer))}>
+            {thinking && !kept[turnKey(turn.question, turn.answer)] && editing?.key !== turnKey(turn.question, turn.answer) && (
+              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => setEditing({ key: turnKey(turn.question, turn.answer), draft: clean(turn.answer) })}>
                 {t('mapchat.keep')}
               </button>
             )}
+            {editor(turnKey(turn.question, turn.answer))}
             {keptBlock(turnKey(turn.question, turn.answer))}
           </div>
         ))}
@@ -196,16 +237,17 @@ export function MapConversation() {
                   );
                 })}
             </p>
-            {thinking && !live.refused && !kept[turnKey(live.question, live.answer)] && (
+            {thinking && !live.refused && !kept[turnKey(live.question, live.answer)] && editing?.key !== turnKey(live.question, live.answer) && (
               <button
                 className="mapchat__keep"
                 data-testid="map-keep"
                 disabled={keeping !== null}
-                onClick={() => void keep(turnKey(live.question, live.answer), clean(live.answer))}
+                onClick={() => setEditing({ key: turnKey(live.question, live.answer), draft: clean(live.answer) })}
               >
                 {keeping ? t('mapchat.keeping') : bundle ? t('mapchat.keepInto', { name: bundle.name }) : t('mapchat.keep')}
               </button>
             )}
+            {!live.refused && editor(turnKey(live.question, live.answer))}
             {!live.refused && keptBlock(turnKey(live.question, live.answer))}
           </div>
         )}

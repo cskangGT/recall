@@ -31,11 +31,39 @@ export function MeetingPreview() {
     card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [prep]);
 
+  /*
+   * See first, keep after. The line is asked about before anything is
+   * saved: Mado answers from what the person has already handed over, with
+   * the meeting line in the question. Only the keep below makes it a note —
+   * someone who only wanted to look has put nothing in.
+   */
   const preview = async () => {
     const content = line.trim();
     if (!content || busy) return;
     setBusy(true);
-    const ui = useUiStore.getState();
+    try {
+      const question = t('welcome.meeting.question', { meeting: content });
+      const picks = readFirstPicks();
+      const store = useWorkspaceStore.getState();
+      const answer = store.source.ask
+        ? await store.source.ask(question, [], picks).catch(() => answerQuestion(question, store.payload!, [], picks))
+        : answerQuestion(question, store.payload!, [], picks);
+      const memories = answer.citations
+        .map((c) => store.payload!.memories.find((m) => m.id === c.memory_id))
+        .filter((m): m is Memory => m !== undefined);
+      setPrep({ text: answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1'), memories });
+    } catch {
+      useUiStore.getState().toast(t('ask.failed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [kept, setKept] = useState<'no' | 'yes' | 'skipped'>('no');
+  const keepMeeting = async () => {
+    const content = line.trim();
+    if (!content || busy) return;
+    setBusy(true);
     try {
       const store = useWorkspaceStore.getState();
       const note = `${t('welcome.meeting.noteLead')} ${content}`;
@@ -49,22 +77,10 @@ export function MeetingPreview() {
         store.applyPayload(result.payload);
         added = result.addedMemoryIds;
       }
-      const picks = [...readFirstPicks(), ...added];
-      writeFirstPicks(picks);
-
-      // What Mado would put in front of them: the same ask the meetings page
-      // makes, with everything they have handed over so far as the picks.
-      const question = t('welcome.meeting.question', { meeting: content });
-      const next = useWorkspaceStore.getState();
-      const answer = next.source.ask
-        ? await next.source.ask(question, [], picks).catch(() => answerQuestion(question, next.payload!, [], picks))
-        : answerQuestion(question, next.payload!, [], picks);
-      const memories = answer.citations
-        .map((c) => next.payload!.memories.find((m) => m.id === c.memory_id))
-        .filter((m): m is Memory => m !== undefined);
-      setPrep({ text: answer.answer.replace(/\[\d+\]/g, '').replace(/\s+([.,])/g, '$1'), memories });
+      writeFirstPicks([...readFirstPicks(), ...added]);
+      setKept('yes');
     } catch {
-      ui.toast(t('toast.captureFailed'));
+      useUiStore.getState().toast(t('toast.captureFailed'));
     } finally {
       setBusy(false);
     }
@@ -107,6 +123,19 @@ export function MeetingPreview() {
               ))}
             </div>
           )}
+          {/* Seen; now the choice. The line becomes a note only here. */}
+          {kept === 'no' ? (
+            <div className="meetprev__actions">
+              <button className="picks__action" data-testid="welcome-meeting-keep" disabled={busy} onClick={() => void keepMeeting()}>
+                {busy ? t('mapchat.keeping') : t('welcome.meeting.keep')}
+              </button>
+              <button className="welcome__quiet" data-testid="welcome-meeting-skip" onClick={() => setKept('skipped')}>
+                {t('welcome.meeting.skip')}
+              </button>
+            </div>
+          ) : kept === 'yes' ? (
+            <p className="meetprev__kept" data-testid="welcome-meeting-kept">{t('welcome.meeting.kept')}</p>
+          ) : null}
           <p className="meetprev__promise">
             {canConnect ? t('welcome.meeting.promiseConnect', { product: PRODUCT }) : t('welcome.meeting.promise', { product: PRODUCT })}
           </p>
