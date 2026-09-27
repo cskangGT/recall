@@ -20,7 +20,7 @@ export default defineConfig({
      * Korean surface is exercised through `?lang=ko` on purpose.
      */
     // The typed prologue stands at once under reduced motion; the suite asserts words, not waits.
-    reducedMotion: 'reduce',
+    contextOptions: { reducedMotion: 'reduce' },
     locale: 'en-US',
     timezoneId: 'America/New_York',
   },
