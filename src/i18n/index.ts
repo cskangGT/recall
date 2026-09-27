@@ -125,10 +125,10 @@ const en = {
 
   // ---------------------------------------------------------------- welcome
   'welcome.brain': '{product} is your second memory.',
-  'welcome.prologue.1': 'There is too much to take in these days.',
-  'welcome.prologue.2': "So much to learn, so much you'd hate to miss — so you save it all…",
-  'welcome.prologue.3': 'and never look at it again.',
-  'welcome.prologue.4': "That's why {product}.",
+  'welcome.prologue.1': "There's just too much to keep up with these days.",
+  'welcome.prologue.2': "So much you want to learn, so much you're afraid to miss — so you save it all…",
+  'welcome.prologue.3': 'and never open it again.',
+  'welcome.prologue.4': "That's why {product} came into the world.",
   'welcome.prologue.next': "Let's begin →",
   'welcome.prologue.skip': 'Skip',
   'welcome.putIn': 'Hand {product} whatever you want kept in order — it reads it, files it, and brings it back when you ask.',
@@ -847,7 +847,7 @@ const ko: Record<StringKey, string> = {
   'welcome.prologue.1': '요즘은 정보가 너무 많죠.',
   'welcome.prologue.2': '배우고 싶은 건 끝이 없고, 놓치면 큰일 날 것 같아서 일단 저장해 두고…',
   'welcome.prologue.3': '다시 보지는 않아요.',
-  'welcome.prologue.4': '그래서 {product}예요.',
+  'welcome.prologue.4': '그래서 {product}가 세상에 나왔어요.',
   'welcome.prologue.next': '시작할게요 →',
   'welcome.prologue.skip': '건너뛰기',
   'welcome.putIn': '정리해 두고 싶은 것을 {product}에게 넣어 두세요 — 읽어서 정리하고, 물어보면 꺼내 줘요.',

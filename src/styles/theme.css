@@ -7091,7 +7091,7 @@ button.brief__line:hover {
   align-items: center;
   gap: 10px;
   min-height: 280px;
-  max-width: 44ch;
+  max-width: 56ch;
   text-align: center;
   cursor: default;
 }

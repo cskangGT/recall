@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Prologue } from './Prologue';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { buildTree, validateDrop, type TreeRow } from '../tree/buildTree';
@@ -16,7 +17,7 @@ import { Welcome } from './Welcome';
 import { Home } from './Home';
 import { FolderView } from './FolderView';
 import { SourceChips } from './SourceChips';
-import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep } from '../core/onboarding';
+import { STEP_KEY, FIRST_DAY_KEY, readStep, writeStep, PROLOGUE_KEY } from '../core/onboarding';
 import { runAsk } from '../ask/runAsk';
 import { morningCardOf, localDay, mondayOf, type MorningCard } from '../core/morning';
 import { attendeeLine, formatTime } from '../core/meetings';
@@ -165,6 +166,15 @@ export function ArcBrowser() {
   const place = useUiStore((s) => s.place);
   const browseMode = useUiStore((s) => s.browseMode);
   const setBrowseMode = useUiStore((s) => s.setBrowseMode);
+  const [prologueDone, setPrologueDone] = useState(
+    () =>
+      sessionStorage.getItem(PROLOGUE_KEY) === '1' ||
+      new URLSearchParams(window.location.search).get('skipWelcome') === '1',
+  );
+  // The greeting again (Settings) clears the visit's mark: the words play again.
+  useEffect(() => {
+    if (!welcomeDismissed && sessionStorage.getItem(PROLOGUE_KEY) !== '1') setPrologueDone(false);
+  }, [welcomeDismissed]);
   const homeScene = welcomeDismissed && place === 'home' && !isOpen;
   const sceneUp = !welcomeDismissed || homeScene;
   const indexOpen =
@@ -882,7 +892,20 @@ export function ArcBrowser() {
         </p>
       )}
 
-      {!isOpen &&
+      {/* The first words, typed — once per visit, before home or the greeting.
+          Any press finishes them; a moment moves on. The rehearsal and the
+          suite skip them with the greeting. */}
+      {!isOpen && !prologueDone && (homeScene || !welcomeDismissed) && (
+        <div className="arc__greeting" data-testid={welcomeDismissed ? 'prologue-gate' : 'welcome'} data-step="prologue">
+          <Prologue
+            onDone={() => {
+              sessionStorage.setItem(PROLOGUE_KEY, '1');
+              setPrologueDone(true);
+            }}
+          />
+        </div>
+      )}
+      {!isOpen && (prologueDone || !(homeScene || !welcomeDismissed)) &&
         (homeScene ? (
           <Home />
         ) : welcomeDismissed ? (

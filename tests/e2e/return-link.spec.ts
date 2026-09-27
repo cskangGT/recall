@@ -29,6 +29,7 @@ test('a fresh visitor is minted a workspace, and Settings shows the way back to 
   const seen = await hosted(page);
   await page.addInitScript(() => localStorage.setItem('mado.ob.welcomed', '1'));
   await page.goto('/?api=visitor');
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('home')).toBeVisible();
   expect(seen[0]).toContain('/workspaces/ws_minted/');
 
@@ -46,6 +47,7 @@ test('a link that names a workspace is followed, remembered, and stripped from t
   await page.addInitScript(() => localStorage.setItem('mado.ob.welcomed', '1'));
   // This browser already has a workspace of its own…
   await page.goto('/?api=visitor');
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('home')).toBeVisible();
   expect(seen.at(-1)).toContain('/workspaces/ws_minted/');
   // …and a link naming another wins: that is what following it means.
