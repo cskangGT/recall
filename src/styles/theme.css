@@ -7079,3 +7079,68 @@ button.brief__line:hover {
 .importpick__foot .spacer {
   flex: 1;
 }
+
+/*
+ * The first words, typed. Three lines in the dim voice, the fourth in full,
+ * a caret that blinks only while a line is being written. The block is as
+ * high as four lines so nothing jumps as they arrive.
+ */
+.prologue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 280px;
+  max-width: 44ch;
+  text-align: center;
+  cursor: default;
+}
+
+.prologue__line {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 19px;
+  font-weight: 300;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 12px rgba(22, 13, 30, 0.7);
+  text-wrap: balance;
+}
+
+.prologue__line--last {
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 26px;
+}
+
+.prologue__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: prologue-blink 0.9s steps(1) infinite;
+}
+
+@keyframes prologue-blink {
+  50% { opacity: 0; }
+}
+
+/* The way on and the way past sit at the foot of the block, not under the
+   line being written — so they hold still while the lines arrive. */
+.prologue__next {
+  margin-top: auto;
+  animation: rise 0.3s ease both;
+}
+
+.prologue__skip {
+  margin-top: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prologue__caret,
+  .prologue__next {
+    animation: none;
+  }
+}

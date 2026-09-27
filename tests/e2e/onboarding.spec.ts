@@ -18,6 +18,7 @@ const WHY = [
 
 test('one thing undecided, taken all the way through', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   const welcome = page.getByTestId('welcome');
   await expect(welcome).toHaveAttribute('data-step', 'thought');
   // Who they are, in one press — then the question, with an example that is theirs.
@@ -96,6 +97,7 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
 
 test('the morning after asks after the thing by name', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   await page.getByTestId('role-skip').click();
   await page.getByTestId('welcome-first-input').fill(THOUGHT);
   await page.getByTestId('welcome-first-input').press('Enter');
@@ -118,6 +120,7 @@ test('the morning after asks after the thing by name', async ({ page }) => {
 
 test('Enter on the greeting goes to the thought box, and the shortcuts still work', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
   await page.getByTestId('role-developer').click();
   await page.keyboard.press('Enter');
@@ -129,6 +132,7 @@ test('Enter on the greeting goes to the thought box, and the shortcuts still wor
 
 test('looking around first skips the hour — home, the logo, and the way back', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   await page.getByTestId('door-browse').click();
   await expect(page.getByTestId('category-index')).toBeVisible();
 
@@ -143,11 +147,15 @@ test('looking around first skips the hour — home, the logo, and the way back',
 
   await page.keyboard.press(',');
   await page.getByTestId('settings-welcome-again').click();
+  // The greeting again plays the first words again.
+  await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'prologue');
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'thought');
 });
 
 test('leaving the greeting through the diary counts as having seen it', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
   await page.keyboard.press('d');
   await expect(page.getByTestId('diary-view')).toBeVisible();
@@ -157,6 +165,7 @@ test('leaving the greeting through the diary counts as having seen it', async ({
 
 test('the role is remembered, can be changed, and skipping keeps the question general', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('prologue-next').click();
   await page.getByTestId('role-researcher').click();
   await expect(page.getByTestId('role-chosen')).toContainText('Researcher');
   await page.reload();

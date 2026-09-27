@@ -125,6 +125,12 @@ const en = {
 
   // ---------------------------------------------------------------- welcome
   'welcome.brain': '{product} is your second memory.',
+  'welcome.prologue.1': 'There is too much to take in these days.',
+  'welcome.prologue.2': "So much to learn, so much you'd hate to miss — so you save it all…",
+  'welcome.prologue.3': 'and never look at it again.',
+  'welcome.prologue.4': "That's why {product}.",
+  'welcome.prologue.next': "Let's begin →",
+  'welcome.prologue.skip': 'Skip',
   'welcome.putIn': 'Hand {product} whatever you want kept in order — it reads it, files it, and brings it back when you ask.',
   'welcome.browseHint': '{memories} memories are already sorted in here',
   'welcome.unfold.dropToo': 'or drop them anywhere on this window',
@@ -838,6 +844,12 @@ const ko: Record<StringKey, string> = {
   'stage.reorganizing': '다시 정리하는 중…',
 
   'welcome.brain': "{product}는 당신의 두 번째 '기억'이에요.",
+  'welcome.prologue.1': '요즘은 정보가 너무 많죠.',
+  'welcome.prologue.2': '배우고 싶은 건 끝이 없고, 놓치면 큰일 날 것 같아서 일단 저장해 두고…',
+  'welcome.prologue.3': '다시 보지는 않아요.',
+  'welcome.prologue.4': '그래서 {product}예요.',
+  'welcome.prologue.next': '시작할게요 →',
+  'welcome.prologue.skip': '건너뛰기',
   'welcome.putIn': '정리해 두고 싶은 것을 {product}에게 넣어 두세요 — 읽어서 정리하고, 물어보면 꺼내 줘요.',
   'welcome.browseHint': '기억 {memories}개가 이미 정리돼 있어요',
   'welcome.unfold.dropToo': '창 아무 곳에나 끌어다 놓아도 돼요',

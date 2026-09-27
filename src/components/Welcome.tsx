@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Prologue } from './Prologue';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
 import { runAsk } from '../ask/runAsk';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
-import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep } from '../core/onboarding';
+import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep, PROLOGUE_KEY } from '../core/onboarding';
 import { SourceChips } from './SourceChips';
 import { ROLES, readRole, writeRole, type Role } from '../core/roles';
 import { ReturnLink } from './ReturnLink';
@@ -78,6 +79,8 @@ export function Welcome() {
   const canConnect = Boolean(useWorkspaceStore((s) => s.source.connectGoogle));
   const dismissWelcome = useUiStore((s) => s.dismissWelcome);
 
+  // The first words, typed — once. The greeting again plays them again.
+  const [prologueDone, setPrologueDone] = useState(() => localStorage.getItem(PROLOGUE_KEY) === 'done');
   const [step, setStep] = useState<OnboardingStep>(() => {
     const stored = readStep();
     // The map beat lives on the map; landing here mid-way means it is over.
@@ -225,6 +228,19 @@ export function Welcome() {
       }}
     />
   );
+
+  if (step === 'thought' && !prologueDone) {
+    return (
+      <div className="arc__greeting" data-testid="welcome" data-step="prologue">
+        <Prologue
+          onDone={() => {
+            localStorage.setItem(PROLOGUE_KEY, 'done');
+            setPrologueDone(true);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="arc__greeting" data-testid="welcome" data-step={step}>

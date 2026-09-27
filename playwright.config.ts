@@ -19,6 +19,8 @@ export default defineConfig({
      * a Korean machine must see the same app as tests anywhere else; the
      * Korean surface is exercised through `?lang=ko` on purpose.
      */
+    // The typed prologue stands at once under reduced motion; the suite asserts words, not waits.
+    reducedMotion: 'reduce',
     locale: 'en-US',
     timezoneId: 'America/New_York',
   },

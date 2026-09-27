@@ -24,6 +24,8 @@ export const FIRST_DAY_KEY = 'mado.ob.firstDay';
 export const FIRST_PICKS_KEY = 'mado.ob.firstPicks';
 /** The name of the first bundle — the next morning asks after it. */
 export const FIRST_BUNDLE_KEY = 'mado.ob.firstBundle';
+/** The first words, typed — played once; the greeting again plays them again. */
+export const PROLOGUE_KEY = 'mado.ob.prologue';
 
 export function readFirstPicks(): string[] {
   if (typeof localStorage === 'undefined') return [];
@@ -56,4 +58,5 @@ export function forgetStep(): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.removeItem(STEP_KEY);
   localStorage.removeItem(FIRST_PICKS_KEY);
+  localStorage.removeItem(PROLOGUE_KEY);
 }
