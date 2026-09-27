@@ -7,14 +7,13 @@ import { t, PRODUCT } from '../i18n';
  * Before the greeting asks who they are, four lines arrive the way a message
  * does — letter by letter, one line settling before the next — saying why
  * this exists: too much to take in, saved and never seen again, so, Mado.
- * A scene to watch, once. Any press finishes the typing; a second one, or a
- * moment's wait, moves on. With reduced motion the lines stand at once and
- * the way on is a button — the same words, none of the waiting.
+ * A scene to watch. Any press finishes the typing; the way on is the button
+ * (or Enter) — nothing moves on by itself, the person does. With reduced
+ * motion the lines stand at once — the same words, none of the waiting.
  */
 const LINES = ['welcome.prologue.1', 'welcome.prologue.2', 'welcome.prologue.3', 'welcome.prologue.4'] as const;
-const CHAR_MS = 34;
-const LINE_PAUSE_MS = 520;
-const DONE_PAUSE_MS = 1400;
+const CHAR_MS = 58;
+const LINE_PAUSE_MS = 850;
 
 export function Prologue({ onDone }: { onDone: () => void }) {
   const lines = LINES.map((k) => t(k, { product: PRODUCT }));
@@ -36,21 +35,18 @@ export function Prologue({ onDone }: { onDone: () => void }) {
     };
   }, [at, finished, lines]);
 
-  // Finished: a beat, then on — unless the person prefers to press.
-  useEffect(() => {
-    if (!finished || reduced) return;
-    const id = window.setTimeout(onDone, DONE_PAUSE_MS);
-    return () => window.clearTimeout(id);
-  }, [finished, reduced, onDone]);
-
+  // A press on the words finishes the typing; it never moves on by itself.
   const press = () => {
-    if (finished) onDone();
-    else setAt({ line: lines.length, chars: 0 });
+    if (!finished) setAt({ line: lines.length, chars: 0 });
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (finished) onDone();
+        else press();
+      } else if (e.key === ' ' || e.key === 'Escape') {
         e.preventDefault();
         press();
       }
