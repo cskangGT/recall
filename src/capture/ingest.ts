@@ -83,6 +83,8 @@ async function ingestViaApi(
   useWorkspaceStore.getState().applyPayload(result.graph);
   useUiStore.getState().setCaptureStage('idle');
   if (result.note) useUiStore.getState().toast(result.note);
+  // Told, not surprised: a key that was in what they pasted is not in what was kept.
+  if (result.redacted) useUiStore.getState().toast(t('toast.redacted', { count: result.redacted }));
 
   // The animation needs a ReorgEvent, and the server's row carries the same
   // fields plus its own snapshots — which the client never needs, because undo

@@ -77,3 +77,15 @@ test('navigation between the three views keeps working', async ({ page }) => {
   await page.keyboard.press('g');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 });
+
+test('the ledger says what it holds — safe badges and the summary line', async ({ page }) => {
+  await page.goto('/?skipWelcome=1');
+  await page.keyboard.press('s');
+  await expect(page.getByTestId('sources-view')).toBeVisible();
+
+  // The migration story, stated as fact: originals are held whole.
+  await expect(page.getByTestId('sources-held-summary')).toBeVisible();
+  const badges = page.locator('.source-row__safe');
+  expect(await badges.count()).toBeGreaterThan(0);
+  await expect(badges.first()).toContainText('Held');
+});

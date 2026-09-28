@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { drawFrame } from '../graph/renderer';
 import {
   fitToBounds,
@@ -12,10 +12,14 @@ import {
   type Viewport,
 } from '../graph/camera';
 import { hitTest } from '../graph/hitTest';
+import { focusTargetsFor } from '../graph/focus';
+import { runLayout } from '../graph/layout';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { readStep } from '../core/onboarding';
 import { useUiStore } from '../store/uiStore';
 import { buildTimeline, phaseAt, MATERIALIZE_STAGGER_MS } from '../core/choreography';
 import type { GraphNode } from '../core/types';
+import { t } from '../i18n';
 import type { ReorgEvent } from '../core/applyReorg';
 
 export interface RunningAnimation {
@@ -86,8 +90,48 @@ export function MapCanvas({
   const bannerFired = useRef(false);
   const [grabbing, setGrabbing] = useState(false);
 
-  const nodes = useWorkspaceStore((s) => s.nodes);
-  const edges = useWorkspaceStore((s) => s.edges);
+  const baseNodes = useWorkspaceStore((s) => s.nodes);
+  const baseEdges = useWorkspaceStore((s) => s.edges);
+  const mapFocus = useUiStore((s) => s.mapFocus);
+
+  /*
+   * The regrouped view (2안): only what matched, pulled out of its scattered
+   * territories and laid out fresh. Matched memories bring their category
+   * along as an anchor; positions are zeroed so `runLayout`'s own ring
+   * placement — the same code that seats a bulk import — re-clusters them by
+   * category, and matched entities settle at the centroid of their mentions.
+   * A temporary constellation; the full map is untouched underneath.
+   */
+  const focusScene = useMemo(() => {
+    if (!mapFocus) return null;
+    const byId = new Map(baseNodes.map((n) => [n.id, n]));
+
+    const keep = new Set<string>();
+    for (const id of mapFocus.ids) if (byId.has(id)) keep.add(id);
+    // Each matched memory's category rides along as the anchor it clusters to.
+    for (const id of [...keep]) {
+      const n = byId.get(id)!;
+      if (n.kind === 'memory' && n.parentId && byId.has(n.parentId)) keep.add(n.parentId);
+    }
+    if (keep.size === 0) return null;
+
+    const nodes = [...keep].map((id) => {
+      const n = byId.get(id)!;
+      // Zeroed positions force a fresh layout; categories become loose roots.
+      return { ...n, x: 0, y: 0, parentId: n.kind === 'memory' ? n.parentId : null };
+    });
+    const edges = baseEdges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    return { nodes: runLayout(nodes, edges, { ticks: 60 }), edges };
+  }, [mapFocus, baseNodes, baseEdges]);
+
+  const nodes = focusScene?.nodes ?? baseNodes;
+  const edges = focusScene?.edges ?? baseEdges;
+
+  // The scene the RAF loop draws — a ref, because the loop lives outside React.
+  const sceneRef = useRef<{ nodes: typeof baseNodes; edges: typeof baseEdges } | null>(null);
+  sceneRef.current = focusScene;
+  /** Detects focus entry inside the loop, to push history and fit the camera. */
+  const focusEnteredRef = useRef(false);
 
   // Reset the banner latch whenever a new animation starts.
   useEffect(() => {
@@ -115,7 +159,20 @@ export function MapCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const ui = useUiStore.getState();
-      const current = useWorkspaceStore.getState();
+      const store = useWorkspaceStore.getState();
+      const current = sceneRef.current ?? { nodes: store.nodes, edges: store.edges };
+
+      // ---- entering the regrouped view: remember where we stood, fit to it
+      if (sceneRef.current && !focusEnteredRef.current) {
+        focusEnteredRef.current = true;
+        if (cameraRef.current) ui.pushCameraHistory(cameraRef.current);
+        const fit = fitToBounds(current.nodes, viewport, 0.3);
+        panFrom.current = cameraRef.current ?? fit;
+        // A touch tighter than the search zoom: this view holds nothing else.
+        panTo.current = { ...fit, zoom: Math.min(fit.zoom, 2.6) };
+        panStart.current = now;
+      }
+      if (!sceneRef.current) focusEnteredRef.current = false;
 
       // ---- camera: entry animation on first paint, then user-controlled
       const target = fitToBounds(current.nodes, viewport, 0.1);
@@ -135,6 +192,42 @@ export function MapCanvas({
       }
 
       let camera = ui.camera ?? cameraRef.current ?? target;
+
+      /*
+       * ---- a zoom request from search (지도 검색 UX): fit the matched
+       * nodes, remember where the camera stood so ← can walk back, and ride
+       * the same pan tween every other camera move uses. The zoom is capped —
+       * a single result should arrive close, not fill the screen with it.
+       */
+      const zoomIds = ui.consumeZoomTo();
+      if (zoomIds && zoomIds.length > 0) {
+        const targets = current.nodes.filter((n) => zoomIds.includes(n.id));
+        if (targets.length > 0) {
+          ui.pushCameraHistory(camera);
+          /*
+           * While a conversation is standing on the map, its panel covers the
+           * lower part of the canvas — so what is being talked about is fitted
+           * into the sky above it, not centred underneath the words.
+           */
+          const talking = ui.findMode.map === 'ask' && ui.answer !== null && !ui.answer.found;
+          // The lens switch sits across the top; the panel takes the lower half.
+          const top = talking ? (readStep() === 'think' ? 110 : 70) : 0;
+          const freeH = talking ? viewport.h * 0.5 - top : viewport.h;
+          const fit = fitToBounds(targets, { w: viewport.w, h: freeH }, 0.35);
+          const zoom = Math.min(fit.zoom, 2.2);
+          panFrom.current = camera;
+          panTo.current = { ...fit, zoom, y: fit.y + (viewport.h / 2 - (top + freeH / 2)) / zoom };
+          panStart.current = now;
+        }
+      }
+
+      // ---- ← pressed: pop the trail and ride back on the same tween.
+      const popped = ui.consumeCameraPop();
+      if (popped) {
+        panFrom.current = camera;
+        panTo.current = popped;
+        panStart.current = now;
+      }
 
       // ---- the tree handed us a selection: centre on it
       const centerId = ui.consumeCenterOn();
@@ -317,6 +410,21 @@ export function MapCanvas({
         ghost,
         bloom,
         dissolving,
+        pickedIds: ui.picked,
+        // What Mado's answer leaned on, numbered the way the panel numbers it.
+        callouts:
+          ui.answer && !ui.answer.found
+            ? ui.answer.citations.map((c) => {
+                const label = renderNodes.find((n) => n.id === c.memory_id)?.label ?? '';
+                return { id: c.memory_id, text: `[${c.n}] ${label.length > 34 ? `${label.slice(0, 33)}…` : label}` };
+              })
+            : // Spread out on their own, the picks have room for their words.
+              ui.mapFocus && ui.picked.length > 0
+              ? ui.picked.map((id) => {
+                  const label = renderNodes.find((n) => n.id === id)?.label ?? '';
+                  return { id, text: label.length > 40 ? `${label.slice(0, 39)}…` : label };
+                })
+              : [],
       });
     };
 
@@ -376,8 +484,27 @@ export function MapCanvas({
         if (start && Math.hypot(p.sx - start.sx, p.sy - start.sy) > 4) return;
         const hit = hitTest(nodes, camera(), viewportOf(), p);
         const ui = useUiStore.getState();
-        if (hit) ui.select(hit.id);
-        else ui.clearSelection();
+        if (hit?.sleeping) {
+          // A sleeping star answers with why it is dim, and the door to wake it.
+          ui.toast(t('toast.sleepingTap'));
+          ui.setUpgradeSheet(true);
+          return;
+        }
+        if (hit && ui.thinking) {
+          // Thinking: a press shows what the star is — in the panel beside —
+          // and the picking is done there, once it has been read. The camera
+          // stays where it is; a pick is a decision, not a journey.
+          ui.select(hit.id);
+          return;
+        }
+        if (hit) {
+          ui.select(hit.id);
+          // Everything on the map is a place. A category pulls the camera in
+          // around itself and what it holds; a memory or an entity brings the
+          // camera to itself, close enough to read. ← walks back either way.
+          const inside = focusTargetsFor(nodes, hit.id);
+          ui.requestZoomTo(inside.length > 0 ? inside : [hit.id]);
+        } else ui.clearSelection();
       }}
       onWheel={(e) => {
         const cam = camera();

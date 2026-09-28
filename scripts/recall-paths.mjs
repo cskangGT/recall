@@ -37,6 +37,14 @@ export const LOG_ERR = path.join(LOG_DIR, 'server.err.log');
 export const PORT = Number(process.env.PORT ?? 5170);
 export const WORKSPACE = process.env.RECALL_WORKSPACE ?? 'ws_demo';
 
+/**
+ * What the Instagram importer has already brought in, by post URL — so a
+ * second run skips what the first one wrote, and the skill walking the saved
+ * grid knows where to stop. Beside the database, for the same reason: it
+ * describes the corpus, not the checkout.
+ */
+export const INSTAGRAM_SEEN = path.join(HOME, 'instagram-seen.json');
+
 export const LABEL = 'com.recall.server';
 export const PLIST = path.join(homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
 
@@ -65,3 +73,21 @@ export async function probe(port = PORT, timeoutMs = 700) {
     return err?.cause?.code === 'ECONNREFUSED' ? 'free' : 'occupied';
   }
 }
+
+/**
+ * The link a CLI import ends with.
+ *
+ * The page never saw the batch go by, so it cannot declare it on its own; the
+ * ids of the sources the batch wrote, and the stretch of time they cover, ride
+ * in the query, and the page (src/capture/revealOnReturn.ts) plays the
+ * declaration on arrival. Encoded with URLSearchParams so the two halves
+ * cannot drift on escaping.
+ */
+export const revealUrl = (sourceIds, period = null, app = 'http://localhost:5173') => {
+  const params = new URLSearchParams({ api: '1', reveal: sourceIds.join(',') });
+  if (period) {
+    params.set('from', period.from);
+    params.set('to', period.to);
+  }
+  return `${app}/?${params.toString()}`;
+};

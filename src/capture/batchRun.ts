@@ -1,9 +1,9 @@
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUiStore } from '../store/uiStore';
 import { t } from '../i18n';
-import type { CaptureBatchResult, CaptureInput, CaptureResult } from '../data/dataSource';
+import type { CaptureBatchResult, CaptureInput, CaptureResult, ImportList } from '../data/dataSource';
 import type { ReorgEvent } from '../core/applyReorg';
-import { runBatchPipeline, type BatchItem, type BatchResult } from './batch';
+import { runBatchPipeline, summarizeCategories, type BatchItem, type BatchResult } from './batch';
 
 /**
  * The driver for a bulk drop: runs the batch pipeline, paces the reveal, and
@@ -64,9 +64,23 @@ export async function ingestBatch(
       await wait(ORGANIZE_MS);
     }
 
+    // Whether this was the first thing this person ever handed Mado, decided
+    // before the payload swap so "the sky that was already there" means the
+    // seed, not their own fresh stars.
+    const firstDrop = !localStorage.getItem('mado.ob.firstDrop');
+    const skyWasSeeded = ws.payload.memories.length > 0;
+
     useWorkspaceStore.getState().applyPayload(result.payload);
     // Putting something in is looking around — same rule as single capture.
     useUiStore.getState().dismissWelcome();
+    if (firstDrop && result.addedMemoryIds.length > 0) {
+      localStorage.setItem('mado.ob.firstDrop', '1');
+      // Only a seeded sky has something to step back — an empty one has no
+      // "someone else's stars" to hand over.
+      if (skyWasSeeded) {
+        useUiStore.getState().setSkyCeremony({ categoryIds: result.categories.map((c) => c.id) });
+      }
+    }
     // Oldest first, so the banner (history[0]) ends on the latest change.
     for (const event of result.events) useUiStore.getState().pushReorg(event);
 
@@ -80,6 +94,7 @@ export async function ingestBatch(
         sources: items.length,
         categories: result.categories,
         period: meta.period ?? null,
+        sourceIds: result.sourceIds,
       },
     });
   } catch (err) {
@@ -100,18 +115,69 @@ export async function ingestBatch(
  * file drop gets. One round trip; the dots pour on the answer because there
  * is no honest per-item progress to show.
  */
+/**
+ * A connected reader is remembered, and the next visit offers *sync* instead
+ * of a fresh full import — only the days since the last one are read.
+ */
+export function lastSyncOf(reader: 'notes' | 'notion'): string | null {
+  return localStorage.getItem(`mado.ob.sync.${reader}`);
+}
+
+/** Days to ask the reader for: since the last sync (plus a day of overlap), or the default window. */
+function syncDays(reader: 'notes' | 'notion'): number | undefined {
+  const last = lastSyncOf(reader);
+  if (!last) return undefined;
+  const days = Math.ceil((Date.now() - Date.parse(last)) / 86400_000) + 1;
+  return Math.max(1, Math.min(days, 3650));
+}
+
 export async function importAppleNotesFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
-  return runReaderImport(source.importAppleNotes?.bind(source));
+  const list = source.listAppleNotes?.bind(source);
+  if (list) return openImportPicker('notes', () => list(syncDays('notes')));
+  const read = source.importAppleNotes?.bind(source);
+  return runReaderImport(read && (() => read(syncDays('notes'))), 'notes');
 }
 
 export async function importNotionFlow(): Promise<void> {
   const source = useWorkspaceStore.getState().source;
-  return runReaderImport(source.importNotionPages?.bind(source));
+  const list = source.listNotionPages?.bind(source);
+  if (list) return openImportPicker('notion', () => list(syncDays('notion')));
+  const read = source.importNotionPages?.bind(source);
+  return runReaderImport(read && (() => read(syncDays('notion'))), 'notion');
+}
+
+/**
+ * The look before keeping, for a reader: read what it holds, keep nothing,
+ * and put the list in front of the person to choose from. What they choose
+ * goes through the ordinary batch — words in hand, so nothing is read twice.
+ */
+async function openImportPicker(reader: 'notes' | 'notion', list: () => Promise<ImportList>): Promise<void> {
+  const ui = useUiStore.getState();
+  if (running || !useWorkspaceStore.getState().payload) return;
+  ui.setImportPick({ reader, loading: true, notes: [], total: 0, droppedSecretLines: 0 });
+  try {
+    const result = await list();
+    const since = lastSyncOf(reader);
+    // The read succeeded — the connection holds, and the next visit lists from here.
+    localStorage.setItem(`mado.ob.sync.${reader}`, new Date().toISOString());
+    if (result.droppedSecretLines > 0) useUiStore.getState().toast(t('toast.notesSecrets', { count: result.droppedSecretLines }));
+    useUiStore.getState().setImportPick({ reader, loading: false, notes: result.notes, total: result.total, droppedSecretLines: result.droppedSecretLines, since });
+  } catch (err) {
+    useUiStore.getState().setImportPick(null);
+    useUiStore.getState().toast(err instanceof Error ? t('import.failedWith', { message: err.message }) : t('import.failed'));
+  }
+}
+
+/** The chosen notes, kept: the same batch a file drop takes, with the way back on each. */
+export async function keepImportPicks(items: BatchItem[]): Promise<void> {
+  useUiStore.getState().setImportPick(null);
+  await ingestBatch(items);
 }
 
 async function runReaderImport(
   read: (() => Promise<import('../data/dataSource').NotesImportResult>) | undefined,
+  reader?: 'notes' | 'notion',
 ): Promise<void> {
   const ws = useWorkspaceStore.getState();
   const ui = useUiStore.getState();
@@ -130,6 +196,9 @@ async function runReaderImport(
     const before = ws.payload;
     const knownCategoryIds = new Set(before.categories.map((c) => c.id));
     const response = await read();
+    // The read succeeded — the connection holds, and the next visit syncs
+    // from here instead of importing the window again.
+    if (reader) localStorage.setItem(`mado.ob.sync.${reader}`, new Date().toISOString());
 
     if (response.notes.droppedSecretLines > 0) {
       useUiStore
@@ -144,12 +213,6 @@ async function runReaderImport(
 
     const addedMemoryIds = response.results.flatMap((r) => r.addedMemoryIds);
     const skippedCount = response.results.reduce((n, r) => n + r.skipped.length, 0);
-    const added = new Set(addedMemoryIds);
-    const byCategory = new Map<string, number>();
-    for (const m of response.graph.memories) {
-      if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-    }
-    const nameOf = new Map(response.graph.categories.map((c) => [c.id, c.name] as const));
 
     if (!reduced) await wait(ORGANIZE_MS);
     useWorkspaceStore.getState().applyPayload(response.graph);
@@ -174,14 +237,8 @@ async function runReaderImport(
         memories: addedMemoryIds.length,
         skipped: skippedCount,
         sources: response.notes.imported,
-        categories: [...byCategory.entries()]
-          .map(([id, count]) => ({
-            id,
-            name: nameOf.get(id) ?? '',
-            added: count,
-            isNew: !knownCategoryIds.has(id),
-          }))
-          .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+        sourceIds: response.results.map((r) => r.sourceId),
+        categories: summarizeCategories(response.graph, addedMemoryIds, knownCategoryIds),
       },
     });
   } catch (err) {
@@ -205,7 +262,7 @@ async function batchViaEndpoint(
   const knownCategoryIds = new Set(before.categories.map((c) => c.id));
 
   const response = await captureBatch(
-    items.map((i) => ({ type: 'text' as const, content: i.content, title: i.title })),
+    items.map((i) => ({ type: 'text' as const, content: i.content, title: i.title, url: i.url })),
   );
 
   const addedMemoryIds = response.results.flatMap((r) => r.addedMemoryIds);
@@ -214,13 +271,8 @@ async function batchViaEndpoint(
   if (failed > 0) {
     useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
   }
-
-  const added = new Set(addedMemoryIds);
-  const byCategory = new Map<string, number>();
-  for (const m of response.graph.memories) {
-    if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-  }
-  const nameOf = new Map(response.graph.categories.map((c) => [c.id, c.name] as const));
+  const redacted = response.results.reduce((n, r) => n + (r.redacted ?? 0), 0);
+  if (redacted > 0) useUiStore.getState().toast(t('toast.redacted', { count: redacted }));
 
   return {
     payload: response.graph,
@@ -228,14 +280,7 @@ async function batchViaEndpoint(
     sourceIds: response.results.map((r) => r.sourceId),
     claimCount: addedMemoryIds.length + skippedCount,
     skippedCount,
-    categories: [...byCategory.entries()]
-      .map(([id, count]) => ({
-        id,
-        name: nameOf.get(id) ?? '',
-        added: count,
-        isNew: !knownCategoryIds.has(id),
-      }))
-      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+    categories: summarizeCategories(response.graph, addedMemoryIds, knownCategoryIds),
     events: response.reorgs.map((reorg) => ({
       id: reorg.id,
       operation: reorg.operation as ReorgEvent['operation'],
@@ -299,27 +344,13 @@ async function batchViaApi(
   if (failed > 0) useUiStore.getState().toast(t('toast.batchPartial', { failed, total: items.length }));
 
   const payload = last.graph;
-  const added = new Set(addedMemoryIds);
-  const byCategory = new Map<string, number>();
-  for (const m of payload.memories) {
-    if (added.has(m.id)) byCategory.set(m.category_id, (byCategory.get(m.category_id) ?? 0) + 1);
-  }
-  const nameOf = new Map(payload.categories.map((c) => [c.id, c.name] as const));
-
   return {
     payload,
     addedMemoryIds,
     sourceIds: [],
     claimCount: addedMemoryIds.length + skippedCount,
     skippedCount,
-    categories: [...byCategory.entries()]
-      .map(([id, count]) => ({
-        id,
-        name: nameOf.get(id) ?? '',
-        added: count,
-        isNew: !knownCategoryIds.has(id),
-      }))
-      .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name)),
+    categories: summarizeCategories(payload, addedMemoryIds, knownCategoryIds),
     events,
   };
 }

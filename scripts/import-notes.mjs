@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+// Lines that look like credentials never leave the machine — the server's own
+// filter, which carries the story of why. One list, one place.
+import { stripSecrets } from '../server/notes/appleNotes.ts';
+import { revealUrl } from './recall-paths.mjs';
 
 /**
  * Apple Notes → Mado.  `npm run import:notes`
@@ -83,40 +87,12 @@ function readNotes() {
     .filter((n) => n.body.length > 0);
 }
 
-/*
- * Lines that look like credentials never leave the machine.
- *
- * Learned the hard way on the very first real import: a note titled
- * "스트라이프" carried a live secret key, which was faithfully extracted into a
- * memory and — worse — travelled to the extraction model as prompt content.
- * People keep secrets in notes apps; an importer that forwards notes wholesale
- * is an exfiltration tool with good intentions. Dropped line by line, so the
- * rest of the note still imports, and counted out loud so nothing is hidden.
- */
-const SECRET_PATTERNS = [
-  /sk_(live|test)_[A-Za-z0-9]{8,}/, // Stripe secrets
-  /whsec_[A-Za-z0-9]{8,}/, // Stripe webhook secrets
-  /sk-[A-Za-z0-9_-]{20,}/, // OpenAI-style keys
-  /AKIA[0-9A-Z]{16}/, // AWS access keys
-  /gh[pousr]_[A-Za-z0-9]{20,}/, // GitHub tokens
-  /xox[baprs]-[A-Za-z0-9-]{10,}/, // Slack tokens
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /(password|passwd|비밀번호)\s*[:=]\s*\S+/i,
-];
-
-function stripSecrets(body) {
-  let dropped = 0;
-  const kept = body
-    .split('\n')
-    .filter((line) => {
-      if (SECRET_PATTERNS.some((p) => p.test(line))) {
-        dropped++;
-        return false;
-      }
-      return true;
-    })
-    .join('\n');
-  return { kept, dropped };
+/** The days the sent notes span — what the declaration calls the stretch it rescued. */
+function periodOf(notes) {
+  const times = notes.map((n) => n.modified.getTime()).filter((t) => Number.isFinite(t));
+  if (times.length === 0) return null;
+  const day = (t) => new Date(t).toISOString().slice(0, 10);
+  return { from: day(Math.min(...times)), to: day(Math.max(...times)) };
 }
 
 async function main() {
@@ -183,7 +159,8 @@ async function main() {
       (skipped > 0 ? ` (${skipped} already held)` : '') +
       (result.reorgs.length > 0 ? ` · ${result.reorgs.length} reorganizations` : ''),
   );
-  console.log('open http://localhost:5173/?api=1 to look around');
+  const period = periodOf(recent);
+  console.log(`open ${revealUrl(result.results.map((r) => r.sourceId), period)} to look around`);
 }
 
 await main();

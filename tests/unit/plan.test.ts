@@ -56,3 +56,42 @@ describe('freeCutoff', () => {
     expect(isArchivedByPlan('2020-01-01T00:00:00Z', null)).toBe(false);
   });
 });
+
+/* ---- the trial and the sleeping count (paywall UX round) ---- */
+import { effectivePlan, trialDaysLeft, sleepingCountOf } from '../../src/core/plan';
+
+describe('trialDaysLeft', () => {
+  const now = new Date('2026-08-21T09:00:00Z');
+  it('counts whole days while the trial lives', () => {
+    expect(trialDaysLeft({ plan: 'free', trial_until: '2026-08-24T09:00:01Z' }, now)).toBe(4);
+  });
+  it('is null once the trial has passed, or absent, or off-plan', () => {
+    expect(trialDaysLeft({ plan: 'free', trial_until: '2026-08-20T09:00:00Z' }, now)).toBeNull();
+    expect(trialDaysLeft({ plan: 'free', trial_until: null }, now)).toBeNull();
+    expect(trialDaysLeft({ plan: 'pro', trial_until: '2026-08-24T09:00:00Z' }, now)).toBeNull();
+    expect(trialDaysLeft(undefined, now)).toBeNull();
+  });
+});
+
+describe('effectivePlan', () => {
+  const now = new Date('2026-08-21T09:00:00Z');
+  it('presents a live trial as pro', () => {
+    expect(effectivePlan('', { plan: 'free', trial_until: '2026-08-24T00:00:00Z' }, now)).toBe('pro');
+  });
+  it('falls back to the plan when the trial is over', () => {
+    expect(effectivePlan('', { plan: 'free', trial_until: '2026-08-01T00:00:00Z' }, now)).toBe('free');
+  });
+  it('lets ?plan= force either way, trial or not', () => {
+    expect(effectivePlan('?plan=free', { plan: 'free', trial_until: '2026-08-24T00:00:00Z' }, now)).toBe('free');
+    expect(effectivePlan('?plan=pro', { plan: 'free', trial_until: null }, now)).toBe('pro');
+  });
+});
+
+describe('sleepingCountOf', () => {
+  const mem = (created: string) => ({ created_at: created }) as never;
+  it('counts memories past the cutoff, and nothing without one', () => {
+    const memories = [mem('2026-08-01'), mem('2026-08-10'), mem('2026-08-20')];
+    expect(sleepingCountOf(memories, '2026-08-15')).toBe(2);
+    expect(sleepingCountOf(memories, null)).toBe(0);
+  });
+});

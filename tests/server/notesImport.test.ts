@@ -112,3 +112,61 @@ describe('concurrent ingest', () => {
     expect(repo.listSources(WS).filter((s) => s.status === 'failed')).toHaveLength(0);
   });
 });
+
+describe('the origin url survives the import', () => {
+  it('a notion page keeps its address on the stored source', async () => {
+    deps.readNotionPages = async () => ({
+      notes: [
+        {
+          title: '회의 메모',
+          content: '다음 분기 목표를 정리했다.',
+          modified: new Date(),
+          url: 'https://www.notion.so/p1',
+        },
+      ],
+      droppedSecretLines: 0,
+      total: 1,
+    });
+    const res = await post(`${base}/import/notion`, { days: 14, locale: 'ko' });
+    expect(res.status).toBe(200);
+    const source = repo.listSources(WS).find((s) => s.title === '회의 메모');
+    expect(source?.url).toBe('https://www.notion.so/p1');
+    // Still text: the reader already read it — the url is provenance, not a scrape target.
+    expect(source?.type).toBe('text');
+  });
+});
+
+/*
+ * The look before keeping: `import/<reader>/list` reads and hands the notes
+ * back — words included, so a keep need not read again — and keeps nothing.
+ */
+describe('POST import/apple-notes/list', () => {
+  it('answers 501 where the capability does not exist', async () => {
+    expect((await post(`${base}/import/apple-notes/list`, {})).status).toBe(501);
+    expect((await post(`${base}/import/notion/list`, {})).status).toBe(501);
+    expect((await post(`${base}/import/other/list`, {})).status).toBe(404);
+  });
+
+  it('lists what the reader holds, with the words, and keeps no source', async () => {
+    const when = new Date('2026-09-20T09:00:00Z');
+    deps.readNotes = async () => ({
+      notes: [
+        { title: '회의 메모', content: '다음 분기 목표를 정리했다.\n두 번째 줄.', modified: when },
+        { title: '', content: '제목 없는 메모의 첫 줄\n본문', modified: when, url: 'notes://x' },
+      ],
+      droppedSecretLines: 1,
+      total: 9,
+    });
+    const before = repo.listSources(WS).length;
+    const res = await post(`${base}/import/apple-notes/list`, { days: 30 });
+    expect(res.status).toBe(200);
+    const body = res.body as { notes: { title: string; firstLine: string; content: string; chars: number; modified: string; url: string | null }[]; total: number; droppedSecretLines: number };
+    expect(body.total).toBe(9);
+    expect(body.droppedSecretLines).toBe(1);
+    expect(body.notes).toHaveLength(2);
+    expect(body.notes[0]).toMatchObject({ title: '회의 메모', firstLine: '다음 분기 목표를 정리했다.', modified: when.toISOString(), url: null });
+    expect(body.notes[0]!.content).toContain('두 번째 줄.');
+    expect(body.notes[1]).toMatchObject({ title: '제목 없는 메모의 첫 줄', url: 'notes://x' });
+    expect(repo.listSources(WS).length).toBe(before);
+  });
+});

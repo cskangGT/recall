@@ -104,7 +104,7 @@ export async function readNotionPages(
 
   // Search is already sorted newest-edited first, so pagination can stop the
   // moment a page falls out of the window.
-  const pages: { id: string; title: string; modified: Date }[] = [];
+  const pages: { id: string; title: string; modified: Date; url?: string }[] = [];
   let cursor: string | undefined;
   let total = 0;
   while (pages.length < MAX_PAGES) {
@@ -124,14 +124,14 @@ export async function readNotionPages(
 
     let sawOlder = false;
     for (const page of batch) {
-      const p = page as { id?: string; last_edited_time?: string; archived?: boolean };
+      const p = page as { id?: string; last_edited_time?: string; archived?: boolean; url?: string };
       if (!p.id || p.archived) continue;
       const modified = new Date(p.last_edited_time ?? 0);
       if (Number.isFinite(days) && modified.getTime() < cutoff) {
         sawOlder = true;
         break;
       }
-      pages.push({ id: p.id, title: pageTitle(page), modified });
+      pages.push({ id: p.id, title: pageTitle(page), modified, url: p.url });
       if (pages.length >= MAX_PAGES) break;
     }
 
@@ -173,6 +173,8 @@ export async function readNotionPages(
       title: page.title || kept.slice(0, 60),
       content: kept.length > 20_000 ? kept.slice(0, 20_000) : kept,
       modified: page.modified,
+      // The way back to the original, for the day the user clears it there.
+      url: page.url,
     });
   }
 

@@ -58,3 +58,46 @@ export function freeCutoff(memories: readonly Memory[], plan: Plan): string | nu
 export function isArchivedByPlan(createdAt: string, cutoff: string | null): boolean {
   return cutoff !== null && createdAt < cutoff;
 }
+
+/**
+ * How the trial presents: as long as the free window, so the sentence "the day
+ * the trial ends is the day your first drop starts to sleep" is literally
+ * true. The server writes trial_until at workspace creation; this module only
+ * reads it.
+ */
+export type Workspace = { plan?: Plan; trial_until?: string | null };
+
+/** Whole trial days left, or null when there is no live trial. */
+export function trialDaysLeft(
+  workspace: Workspace | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (workspace?.plan !== 'free' || !workspace.trial_until) return null;
+  const ms = Date.parse(workspace.trial_until) - now.getTime();
+  if (ms <= 0) return null;
+  return Math.ceil(ms / 86400_000);
+}
+
+/**
+ * The plan the UI should present: a live trial presents as Pro — everything
+ * awake, a countdown instead of a paywall. `?plan=` still wins outright, so
+ * the free tier stays previewable against any corpus.
+ */
+export function effectivePlan(
+  search = typeof window === 'undefined' ? '' : window.location.search,
+  workspace?: Workspace,
+  now: Date = new Date(),
+): Plan {
+  const forced = new URLSearchParams(search).get('plan');
+  if (forced === 'free' || forced === 'pro') return forced;
+  if (trialDaysLeft(workspace, now) !== null) return 'pro';
+  return workspace?.plan ?? 'pro';
+}
+
+/** How many memories the free plan has put to sleep, given `freeCutoff`'s answer. */
+export function sleepingCountOf(memories: readonly Memory[], cutoff: string | null): number {
+  if (cutoff === null) return 0;
+  let n = 0;
+  for (const m of memories) if (isArchivedByPlan(m.created_at, cutoff)) n++;
+  return n;
+}

@@ -303,6 +303,19 @@ describe('hitTest', () => {
     expect(hitTest([big, small], camera, viewport, { sx: 500, sy: 400 })?.id).toBe('mem');
   });
 
+  it('a click inside a category’s painted disc is not stolen by a dot’s forgiving halo', () => {
+    // The dot paints at 3px but accepts clicks within 8px; the click sits 6px
+    // from it — outside the paint, inside the halo — and well inside the
+    // category. What you see is what you click: the category.
+    const dot: GraphNode = {
+      id: 'dot', kind: 'memory', label: 'D', x: 20, y: 0,
+      radius: 3, pinned: false, parentId: 'cat',
+    };
+    expect(hitTest([big, dot], camera, viewport, { sx: 514, sy: 400 })?.id).toBe('cat');
+    // Right on the dot, the dot still wins.
+    expect(hitTest([big, dot], camera, viewport, { sx: 520, sy: 400 })?.id).toBe('dot');
+  });
+
   it('scales the hit radius with the painted (√zoom-damped) radius', () => {
     // Categories paint at radius * √zoom — at zoom 4 this node paints at 60px,
     // so a point 50px out is inside it; at zoom 1 it paints at 30px and misses.

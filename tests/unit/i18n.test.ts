@@ -37,6 +37,16 @@ describe('t', () => {
   });
 });
 
+describe('particles in strings', () => {
+  it('a {은/는} after an interpolated word follows that word, quotes and all', () => {
+    setLocaleForTest('ko');
+    expect(t('bundle.made', { name: '채용 원칙', count: 3 })).toContain("'채용 원칙'은 이제");
+    expect(t('bundle.made', { name: '지도', count: 3 })).toContain("'지도'는 이제");
+    expect(t('bundle.made', { name: 'Mado', count: 3 })).toContain("'Mado'는 이제");
+    expect(t('morning.holding', { name: '인프라 채용' })).toContain("'인프라 채용'을 붙잡고");
+  });
+});
+
 describe('josa', () => {
   it('follows the final consonant', () => {
     expect(josa('지도', '을', '를')).toBe('지도를');

@@ -1,26 +1,54 @@
+import { Fragment } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { t, currentLocale } from '../i18n';
 import { mergeCandidates, relatedMemories } from '../core/related';
+import { briefingOf } from '../core/briefing';
+import { effectivePlan, freeCutoff, sleepingCountOf, trialDaysLeft } from '../core/plan';
+import { memoriesUnder, togglePicked } from '../graph/pick';
 import { useUiStore, ANSWER_FOLDER_ID } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { Category, Memory, Source, GraphPayload } from '../core/types';
 
-const SOURCE_LABEL: Record<Source['type'], string> = {
+export const SOURCE_LABEL: Record<Source['type'], string> = {
   text: t('type.text'),
   link: t('type.link'),
   screenshot: t('type.screenshot'),
 };
 
-const relativeDate = (iso: string): string => {
+export const relativeDate = (iso: string): string => {
   const d = new Date(iso);
   return d.toLocaleDateString(currentLocale() === 'ko' ? 'ko-KR' : 'en-GB', { day: 'numeric', month: 'short' });
 };
 
 function SourceCard({ source }: { source: Source }) {
+  // The full text lives here — a DB fact, said out loud so clearing the
+  // original at its source never feels like a gamble. Only a failure or an
+  // in-flight read withholds the claim (the seed's sources carry no status).
+  const safe =
+    source.status !== 'failed' &&
+    source.status !== 'pending' &&
+    source.status !== 'processing' &&
+    source.raw_content.trim().length > 0;
   return (
     <div className="source-card" data-testid="source-card">
       <div className="source-card__type">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)}
+        {safe && (
+          <span className="source-card__safe" data-testid="source-safe" title={t('sources.safe')}>
+            ✓ {t('sources.held')}
+          </span>
+        )}
+        {source.url && (
+          <a
+            className="source-card__origin"
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('sources.openOrigin')}
+          </a>
+        )}
       </div>
       <div className="source-card__title">{source.title}</div>
       <div className="source-card__body">
@@ -32,7 +60,7 @@ function SourceCard({ source }: { source: Source }) {
   );
 }
 
-function MemoryRow({
+export function MemoryRow({
   memory,
   payload,
   onSelect,
@@ -129,6 +157,44 @@ function CategoryName({ category }: { category: Category }) {
  * worse than two. The Inspector keeps the part the browser does not have —
  * where the category sits, what it is made of, and whether you pinned it.
  */
+/**
+ * Picking, from the panel. While thinking on the map a press shows what a
+ * star is here, and this is where it is picked — after it has been read. A
+ * memory picks itself; a category or a person picks the memories it holds,
+ * and the count says how many before the press.
+ */
+function PickAction({ id }: { id: string }) {
+  const nodes = useWorkspaceStore((s) => s.nodes);
+  const edges = useWorkspaceStore((s) => s.edges);
+  const picked = useUiStore((s) => s.picked);
+  const setPicked = useUiStore((s) => s.setPicked);
+  const ids = memoriesUnder(nodes, edges, id);
+  if (ids.length === 0) return null;
+  const have = new Set(picked);
+  const allIn = ids.every((m) => have.has(m));
+  const some = ids.filter((m) => have.has(m)).length;
+  const single = ids.length === 1 && ids[0] === id;
+  const label = allIn
+    ? single
+      ? t('think.unpick')
+      : t('think.unpickAll', { count: ids.length })
+    : single
+      ? t('think.pick')
+      : some > 0
+        ? t('think.pickRest', { count: ids.length - some })
+        : t('think.pickAll', { count: ids.length });
+  return (
+    <button
+      className={`pickaction${allIn ? ' pickaction--on' : ''}`}
+      data-testid="think-pick-action"
+      aria-pressed={allIn}
+      onClick={() => setPicked(togglePicked(picked, ids))}
+    >
+      <span aria-hidden="true">✦</span> {label}
+    </button>
+  );
+}
+
 function CategoryDetail({
   category,
   payload,
@@ -223,6 +289,10 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
   const [merge, setMerge] = useState<MergeState>(null);
   useEffect(() => setMerge(null), [memory.id]);
   const canMerge = Boolean(useWorkspaceStore.getState().source.mergePreview);
+  // The page in the middle is reading this memory; a second copy here beside
+  // it reads as a glitch. The inspector steps back to what the page does not
+  // do — merging, relating, deleting — and says where the text went.
+  const readingHere = useUiStore((s) => s.memoryPage) === memory.id;
 
   const startMerge = async (otherId: string) => {
     setMerge({ phase: 'loading', withId: otherId });
@@ -244,10 +314,14 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
     setMerge({ phase: 'applying', withId, reason, mergedText });
     try {
       const store = useWorkspaceStore.getState();
+      const other = payload.memories.find((m) => m.id === withId);
+      const originals = new Set([memory.source_id, other?.source_id].filter(Boolean)).size;
       const result = await store.source.mergeMemories!([memory.id, withId], mergedText);
       store.applyPayload(result.graph);
       select(result.mergedMemoryId);
-      useUiStore.getState().toast(t('toast.merged'));
+      // The migration story, told at the moment it matters: the merge changed
+      // Mado's copy only — the originals it drew from are still held whole.
+      useUiStore.getState().toast(t('toast.merged', { n: originals }));
     } catch {
       setMerge({ phase: 'error', withId });
     }
@@ -255,8 +329,27 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.memory')}</div>
-      <p className="memory-text">{memory.text}</p>
+      <div className="inspector__eyebrow inspector__eyebrow--row">
+        <span>{t('inspector.memory')}</span>
+        {/* The quick look offers the long one: the same page the reading list
+            opens on a click, for when you arrived here from the map. */}
+        {!readingHere && (
+          <button
+            className="inspector__expand"
+            data-testid="inspector-expand"
+            onClick={() => useUiStore.getState().openMemoryPage(memory.id)}
+          >
+            {t('page.expand')}
+          </button>
+        )}
+      </div>
+      {readingHere ? (
+        <p className="inspector__meta inspector__reading-here" data-testid="inspector-reading-here">
+          {t('page.readingHere')}
+        </p>
+      ) : (
+        <p className="memory-text">{memory.text}</p>
+      )}
       <div className="chips">
         {category && (
           <button className="chip" onClick={() => select(category.id)}>
@@ -280,7 +373,7 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
           ))}
         </div>
       )}
-      {source && <SourceCard source={source} />}
+      {source && !readingHere && <SourceCard source={source} />}
       {/*
         Alike enough to be the same thought said twice — offer, never act. Its
         own section rather than a decoration on "related": related excludes
@@ -387,12 +480,20 @@ function MemoryDetail({ memory, payload }: { memory: Memory; payload: GraphPaylo
  * about to go, which it can do in place. It disarms on blur, so a stray click
  * does not leave a loaded button sitting on the screen.
  */
-function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+export function DeleteButton({
+  label,
+  onConfirm,
+  testId = 'delete-button',
+}: {
+  label: string;
+  onConfirm: () => void;
+  testId?: string;
+}) {
   const [armed, setArmed] = useState(false);
   return (
     <button
       className={`danger${armed ? ' danger--armed' : ''}`}
-      data-testid="delete-button"
+      data-testid={testId}
       onBlur={() => setArmed(false)}
       onClick={() => {
         if (!armed) return setArmed(true);
@@ -405,7 +506,70 @@ function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => vo
   );
 }
 
-function AnswerDetail() {
+/**
+ * Beside the map: what Mado took out to answer.
+ *
+ * The talk itself rises from the bar; this column is the evidence it stands
+ * on — each memory in full, numbered the way the answer and the map number
+ * it, with where it is filed and what it came from. A row goes to that memory
+ * on the map.
+ */
+function UsedMemories() {
+  const answer = useUiStore((s) => s.answer);
+  const asking = useUiStore((s) => s.asking);
+  const payload = useWorkspaceStore((s) => s.payload)!;
+  const citations = answer && !answer.found ? answer.citations : [];
+  const picked = useUiStore((s) => (s.thinking ? s.picked : []));
+  const mine = new Set(picked);
+  const own = citations.filter((c) => mine.has(c.memory_id));
+  const more = citations.filter((c) => !mine.has(c.memory_id));
+
+  return (
+    <div data-testid="used-memories">
+      <div className="inspector__eyebrow">
+        {t('mapchat.used')}
+        {citations.length > 0 ? ` · ${citations.length}` : ''}
+      </div>
+      {citations.length === 0 && (
+        <p className="stats">{asking ? t('mapchat.looking') : t('mapchat.usedNone')}</p>
+      )}
+      {own.length > 0 && <div className="used__group">{t('mapchat.usedMine', { count: own.length })}</div>}
+      {[...own, ...more].map((c, i) => {
+        const memory = payload.memories.find((m) => m.id === c.memory_id);
+        const divider = own.length > 0 && i === own.length;
+        const source = payload.sources.find((src) => src.id === c.source_id);
+        if (!memory) return null;
+        const category = payload.categories.find((cat) => cat.id === memory.category_id);
+        return (
+          <Fragment key={c.n}>
+          {divider && <div className="used__group">{t('mapchat.usedMore', { count: more.length })}</div>}
+          <button
+            className="used"
+            data-testid={`used-memory-${c.n}`}
+            onClick={() => {
+              const ui = useUiStore.getState();
+              ui.select(memory.id);
+              ui.requestZoomTo([memory.id]);
+            }}
+          >
+            <span className="used__n">[{c.n}]</span>
+            <span className="used__body">
+              <span className="used__text">{memory.text}</span>
+              <span className="used__meta">
+                {[category?.name, source ? `${SOURCE_LABEL[source.type]} · ${source.title}` : null, relativeDate(memory.created_at)]
+                  .filter(Boolean)
+                  .join(' — ')}
+              </span>
+            </span>
+          </button>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function AnswerDetail({ compact = false }: { compact?: boolean }) {
   const answer = useUiStore((s) => s.answer)!;
   const select = useUiStore((s) => s.select);
   const payload = useWorkspaceStore((s) => s.payload)!;
@@ -418,8 +582,14 @@ function AnswerDetail() {
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.answer')}</div>
-      <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }}>{answer.question}</h2>
+      <div className="inspector__eyebrow">{answer.found ? t('find.heading') : t('inspector.answer')}</div>
+      <h2 style={{ fontSize: 15, fontWeight: 400, marginBottom: 16 }} data-testid={compact ? 'inspector-answer' : undefined}>
+        {answer.question}
+      </h2>
+      {/* Beside the browser the middle already holds the answer in full; the
+          side keeps to what it leaned on, so it is not the third column
+          repeating the second. */}
+      {!compact && (
       <p className="answer" data-testid="answer">
         {parts.map((part, i) => {
           const match = /^\[(\d+)\]$/.exec(part);
@@ -438,6 +608,7 @@ function AnswerDetail() {
           );
         })}
       </p>
+      )}
 
       {answer.citations.length > 0 && <div className="inspector__eyebrow">{t('inspector.sources')}</div>}
       {answer.citations.map((c) => {
@@ -484,17 +655,58 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
   const history = useUiStore((s) => s.reorgHistory);
   const welcomeDismissed = useUiStore((s) => s.welcomeDismissed);
   const view = useUiStore((s) => s.view);
+  // Home says its own counts, in its own three lines; a fourth set beside it
+  // was one more thing to read. The panel speaks again once you browse.
+  const atHome = useUiStore((s) => s.view === 'browse' && s.place !== 'browse');
   if (!welcomeDismissed) return null;
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.workspace')}</div>
-      <div className="stats">
-        {t('inspector.stats', {
-          memories: payload.memories.length,
-          sources: payload.sources.length,
-          categories: payload.categories.length,
-        })}
+      {!atHome && <div className="inspector__eyebrow">{t('inspector.workspace')}</div>}
+      {/* Home already says the totals in its own way; beside it the panel says
+          what moved instead — the fortnight's arrivals. Elsewhere, the scale. */}
+      {!atHome && (
+      <div className="stats" data-testid="inspector-stats">
+        {view === 'browse'
+          ? (() => {
+              const b = briefingOf(payload);
+              return t('inspector.recent2w', {
+                memories: b.organizing.arrivedMemories,
+                sources: b.organizing.arrived,
+              });
+            })()
+          : t('inspector.stats', {
+              memories: payload.memories.length,
+              sources: payload.sources.length,
+              categories: payload.categories.length,
+            })}
       </div>
+      )}
+      {/* The plan, where the scale already is: a trial counts down, and on
+          free the sleeping count is the quiet standing door to waking. */}
+      {(() => {
+        const tDays = trialDaysLeft(payload.workspace);
+        if (tDays !== null) {
+          return (
+            <div className="stats stats--trial" data-testid="trial-countdown">
+              {t('inspector.trial', { days: tDays })}
+            </div>
+          );
+        }
+        const sleeping = sleepingCountOf(
+          payload.memories,
+          freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace)),
+        );
+        if (sleeping === 0) return null;
+        return (
+          <button
+            className="stats stats--sleeping"
+            data-testid="sleeping-count"
+            onClick={() => useUiStore.getState().setUpgradeSheet(true)}
+          >
+            {t('inspector.sleeping', { count: sleeping })}
+          </button>
+        );
+      })()}
 
       {/*
         A legend, on the one screen that needs one.
@@ -541,14 +753,26 @@ function EmptyDetail({ payload }: { payload: GraphPayload }) {
 function SourceDetail({ source, payload }: { source: Source; payload: GraphPayload }) {
   const select = useUiStore((s) => s.select);
   const extracted = payload.memories.filter((m) => m.source_id === source.id);
+  const readingHere = useUiStore((s) => s.sourcePage) === source.id;
 
   return (
     <>
-      <div className="inspector__eyebrow">{t('inspector.source')}</div>
+      <div className="inspector__eyebrow inspector__eyebrow--row">
+        <span>{t('inspector.source')}</span>
+        {!readingHere && (
+          <button
+            className="inspector__expand"
+            data-testid="inspector-expand"
+            onClick={() => useUiStore.getState().openSourcePage(source.id)}
+          >
+            {t('page.expand')}
+          </button>
+        )}
+      </div>
       <h2>{source.title}</h2>
       <div className="inspector__meta">
         {SOURCE_LABEL[source.type]} · {relativeDate(source.created_at)} ·{' '}
-        {extracted.length} {extracted.length === 1 ? 'memory' : 'memories'}
+        {t('inspector.memoryCount', { count: extracted.length })}
       </div>
 
       {source.url && (
@@ -559,16 +783,22 @@ function SourceDetail({ source, payload }: { source: Source; payload: GraphPaylo
         </div>
       )}
 
-      <div className="source-card">
-        <div className="source-card__type">
-          {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
+      {readingHere ? (
+        <p className="inspector__meta inspector__reading-here" data-testid="inspector-reading-here">
+          {t('page.readingHere')}
+        </p>
+      ) : (
+        <div className="source-card">
+          <div className="source-card__type">
+            {source.type === 'screenshot' ? t('inspector.sawTitle') : t('inspector.rawTitle')}
+          </div>
+          <div className="source-card__body">
+            {source.type === 'screenshot' && source.scene_description
+              ? source.scene_description
+              : source.raw_content}
+          </div>
         </div>
-        <div className="source-card__body">
-          {source.type === 'screenshot' && source.scene_description
-            ? source.scene_description
-            : source.raw_content}
-        </div>
-      </div>
+      )}
 
       {extracted.length === 0 ? (
         // The state the "It's in your Sources" toast points at. Saying so beats
@@ -603,10 +833,16 @@ export function Inspector() {
   // it here would be the third column saying what the second one just said.
   const answerShownInBrowser = view === 'browse' && openCategoryId === ANSWER_FOLDER_ID;
   const showAnswerHere = answer !== null && !answerShownInBrowser;
+  // On the map the panel is the conversation — even before the first answer lands.
+  const talking = useUiStore((st) => st.asking && st.answerDraft !== null);
+  const thinking = useUiStore((st) => st.thinking && st.view === 'map');
 
   return (
     <aside className="inspector" data-testid="inspector">
-      {showAnswerHere && !selectedId ? (
+      {thinking && selectedId && <PickAction id={selectedId} />}
+      {view === 'map' && !selectedId && (answer !== null || talking) ? (
+        <UsedMemories />
+      ) : showAnswerHere && !selectedId ? (
         <AnswerDetail />
       ) : category ? (
         <CategoryDetail
@@ -620,6 +856,8 @@ export function Inspector() {
         <SourceDetail source={source} payload={payload} />
       ) : showAnswerHere ? (
         <AnswerDetail />
+      ) : answer !== null ? (
+        <AnswerDetail compact />
       ) : (
         <EmptyDetail payload={payload} />
       )}
