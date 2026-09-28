@@ -221,6 +221,10 @@ export interface AiProvider {
    * per section, exactly as many as there are sections, in order. The person
    * picks the parts to keep. Providers without it leave the link to its text.
    */
+  /** Optional: the first conversation's next line — a reflection and one question, or the closing. */
+  talk?(input: { turns: { who: 'you' | 'mado'; text: string }[]; role?: string; locale?: 'en' | 'ko'; closing: boolean }): Promise<{ text: string; closing: boolean }>;
+  /** Optional: what of the talk is worth keeping — three to six lines in the person's words. */
+  keepLines?(input: { turns: { who: 'you' | 'mado'; text: string }[]; locale?: 'en' | 'ko' }): Promise<{ lines: string[] }>;
   digest?(input: {
     title: string | null;
     sections: { heading: string | null; text: string }[];

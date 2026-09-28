@@ -9,13 +9,13 @@ import type {
   Reflection,
 } from './provider.ts';
 import { firstSentence } from '../link/digest.ts';
+import type { TalkTurn } from './prompts.ts';
 import {
   answerSchema, buildDigestPrompt, coerceDigest, digestSchema, answerSoFar, askBackSchema, buildAnswerPrompt, buildAskBackPrompt, buildCondensePrompt, coerceAskBack, buildExtractPrompt,
   buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
   coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
   mergeSchema, nameByFallback, nameSchema,
-  normalizeSchema, resolveAnswer, resolveNames, retroSchema,
-} from './prompts.ts';
+  normalizeSchema, resolveAnswer, resolveNames, retroSchema, buildTalkPrompt, coerceTalk, talkSchema, buildKeepLinesPrompt, coerceLines, linesSchema, fallbackLines } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
 /**
@@ -354,6 +354,14 @@ export class OpenAiProvider implements AiProvider {
 
   async askBack(input: { thought: string; locale?: 'en' | 'ko'; role?: string }): Promise<AskBack> {
     return coerceAskBack(await this.json(buildAskBackPrompt(input), 'ask_back', askBackSchema, 300));
+  }
+
+  async talk(input: { turns: TalkTurn[]; role?: string; locale?: 'en' | 'ko'; closing: boolean }) {
+    return coerceTalk(await this.json(buildTalkPrompt(input), 'talk', talkSchema, 400), input.closing);
+  }
+
+  async keepLines(input: { turns: TalkTurn[]; locale?: 'en' | 'ko' }) {
+    return coerceLines(await this.json(buildKeepLinesPrompt(input), 'keep_lines', linesSchema, 600), fallbackLines(input.turns));
   }
 
   async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {

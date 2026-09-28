@@ -598,3 +598,40 @@ describe('what the capture response carries', () => {
     expect(repo.listSources(WS).find((s) => s.id === sourceId)!.title).toBe('A Page Title');
   });
 });
+
+/*
+ * The first conversation as a conversation: the talk and the lines answer
+ * 501 without a talking model; with one, the talk returns the next line
+ * (and closes when asked to), and the lines come back one per section of
+ * what the person said — never the model's own words, never invented.
+ */
+describe('POST onboarding/talk and onboarding/lines', () => {
+  const turns = [
+    { who: 'you', text: 'I keep wondering whether to move the team to a four-day week. It started after the summer.' },
+    { who: 'mado', text: 'Say more — when did it start?' },
+    { who: 'you', text: 'After the summer push. The team looked tired and I did too.' },
+  ];
+
+  it('answers 501 where the model cannot talk, and the capability says so', async () => {
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/talk`, body: { turns } }, deps)).status).toBe(501);
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/lines`, body: { turns } }, deps)).status).toBe(501);
+    const caps = await handle({ method: 'GET', path: '/api/capabilities', body: null }, deps);
+    expect((caps.body as { talk: boolean }).talk).toBe(false);
+  });
+
+  it('with a talking model: the next line, the closing, and the lines in their words', async () => {
+    const provider = Object.assign(new FixtureProvider(), {
+      talk: async (input: { closing: boolean; turns: unknown[] }) => ({ text: input.closing ? 'Under all of that is rest.' : `And what would it look like? (${input.turns.length})`, closing: input.closing }),
+      keepLines: async () => ({ lines: ['I keep wondering whether to move the team to a four-day week.', 'The team looked tired after the summer push, and so did I.'] }),
+    });
+    deps = { ...deps, ingest: new IngestPipeline(repo, provider, new FixtureEmbeddings()) };
+    const talk = await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/talk`, body: { turns, locale: 'en' } }, deps);
+    expect(talk.status).toBe(200);
+    expect(talk.body).toEqual({ text: 'And what would it look like? (3)', closing: false });
+    const close = await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/talk`, body: { turns, closing: true } }, deps);
+    expect(close.body).toEqual({ text: 'Under all of that is rest.', closing: true });
+    const lines = await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/lines`, body: { turns } }, deps);
+    expect((lines.body as { lines: string[] }).lines).toHaveLength(2);
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/lines`, body: {} }, deps)).status).toBe(400);
+  });
+});

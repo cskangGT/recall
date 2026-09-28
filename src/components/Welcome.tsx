@@ -2,38 +2,35 @@ import { useMemo, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
-import { runAsk } from '../ask/runAsk';
+import { scriptedTalk, scriptedLines, TALK_TURNS } from '../ask/scriptedTalk';
+import { Typed } from './Typed';
+import type { TalkTurn } from '../data/dataSource';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
-import { readStep, writeStep, readFirstPicks, writeFirstPicks, type OnboardingStep} from '../core/onboarding';
+import { readStep, writeStep, writeFirstPicks, FIRST_BUNDLE_KEY, TALK_KEY, type OnboardingStep } from '../core/onboarding';
 import { SourceChips } from './SourceChips';
 import { ROLES, readRole, writeRole, type Role } from '../core/roles';
 import { ReturnLink } from './ReturnLink';
 import { MeetingPreview } from './MeetingPreview';
 import { t, PRODUCT, type StringKey } from '../i18n';
-import type { Memory } from '../core/types';
 
 /**
  * The first conversation.
  *
- * Not a tour and not a form: one thing this person cannot decide, taken all
- * the way through with Mado in a few minutes. The beats are the loop the
- * product runs every day — open, pull, keep — met once, in order, on the
- * person's own words:
+ * Not a tour and not a form: the thing on this person's mind, talked through
+ * with Mado in a few minutes, and what of that talk is worth keeping. The
+ * beats are the two things the product does — talk something through, and
+ * choose what of a thing to keep — met once, in order, on their own words:
  *
- *   thought  the thing they cannot decide (the stakes are theirs)
- *   why      Mado asks back; they say what is in the way — two or three
- *            lines, each a memory, each a star
- *   think    the map: those stars threaded together, and Mado's first
- *            answer tying their words into one thought; a line of it kept
- *            becomes their first category (OnboardingGuide holds that beat)
+ *   thought  what has been on their mind lately (no form to it)
+ *   talk     Mado, as their own memory, reflects and asks — two questions
+ *            and a closing; every answer is theirs
+ *   keep     the lines of it worth keeping, picked by Mado in their words,
+ *            each on or off and editable; what stays becomes their first
+ *            memories and their first category
  *   learn    what just happened, in three lines; the four places; the doors
  *
  * Every beat can be passed, and "look around first" passes them all.
  */
-
-const CONCERN_KINDS = new Set<Memory['kind']>(['question', 'decision', 'task']);
-const QUOTE_CHARS = 72;
-const quote = (text: string) => (text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS - 1)}…` : text);
 
 /** Kept text → memory ids, through the server or the seed's own pipeline. */
 async function keepText(title: string, content: string): Promise<string[]> {
@@ -72,6 +69,29 @@ function exampleTurn(): number {
   }
 }
 
+function readTalk(): TalkTurn[] {
+  try {
+    const raw = localStorage.getItem(TALK_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as TalkTurn[]).filter((tn) => tn && (tn.who === 'you' || tn.who === 'mado') && typeof tn.text === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+function writeTalk(turns: TalkTurn[]): void {
+  localStorage.setItem(TALK_KEY, JSON.stringify(turns));
+}
+/** Without a namer: the first clause of the first line, cut on a word. */
+function nameFrom(line: string): string {
+  const clause = line.split(/[,.—\n?!]/)[0]!.trim();
+  let short = '';
+  for (const w of clause.split(/\s+/)) {
+    if ((short + ' ' + w).trim().length > 22) break;
+    short = (short + ' ' + w).trim();
+  }
+  return short || t('welcome.keep.source');
+}
+
 export function Welcome() {
   const payload = useWorkspaceStore((s) => s.payload);
   const meetings = useWorkspaceStore((s) => s.meetings);
@@ -80,8 +100,8 @@ export function Welcome() {
 
   const [step, setStep] = useState<OnboardingStep>(() => {
     const stored = readStep();
-    // The map beat lives on the map; landing here mid-way means it is over.
-    return stored === 'done' ? 'thought' : stored === 'think' ? 'learn' : stored;
+    // The older second and third beats land on the nearest new one.
+    return stored === 'done' ? 'thought' : stored === 'why' ? 'talk' : stored === 'think' ? 'keep' : stored;
   });
   const [turn] = useState(exampleTurn);
   const [role, setRole] = useState<Role | null>(readRole);
@@ -89,90 +109,124 @@ export function Welcome() {
   const example: StringKey = role
     ? (`welcome.ex.${role}.${turn % 2 === 0 ? 1 : 2}` as StringKey)
     : GENERAL_EXAMPLES[turn % GENERAL_EXAMPLES.length]!;
-  const whyHint = role ? (`welcome.why.${role}` as const) : ('welcome.whyPlaceholder' as const);
-  const [askBackInit] = useState(() => (readStep() === 'why' ? t('welcome.askBack') : null));
   const [draft, setDraft] = useState('');
   const [reading, setReading] = useState(false);
-  const [first, setFirst] = useState<Memory | null>(null);
-  /** Mado's question back — the model's where there is one, the fixed line otherwise (null while it is being written). */
-  const [askBack, setAskBack] = useState<string | null>(askBackInit);
   const [connecting, setConnecting] = useState(false);
+  /** The talk so far — theirs and Mado's, in order; kept across a reload. */
+  const [turns, setTurns] = useState<TalkTurn[]>(readTalk);
+  /** Mado's line on its way (a model takes a moment; the fixed line does not). */
+  const [writing, setWriting] = useState(false);
+  /** Whether Mado's latest line has finished arriving on screen. */
+  const [landed, setLanded] = useState(true);
+  /** The lines worth keeping, as picked — each on or off, each editable. */
+  const [lines, setLines] = useState<{ text: string; on: boolean }[] | null>(null);
+  const [picking, setPicking] = useState(false);
 
-  const steps: OnboardingStep[] = ['thought', 'why', 'think', 'learn'];
+  const steps: OnboardingStep[] = ['thought', 'talk', 'keep', 'learn'];
   const go = (next: OnboardingStep) => {
     writeStep(next);
     setStep(next);
   };
 
-  /* Beat 1: the thing they cannot decide. */
+  /* Mado's next line — the model's where the server has one, the fixed line otherwise. */
+  const nextMadoLine = async (soFar: TalkTurn[]) => {
+    const said = soFar.filter((tn) => tn.who === 'mado').length;
+    const closing = said >= TALK_TURNS - 1;
+    const talk = useWorkspaceStore.getState().source.talk;
+    setWriting(true);
+    setLanded(false);
+    let line: { text: string; closing: boolean };
+    try {
+      line = talk ? await talk(soFar, role ?? undefined, closing) : scriptedTalk(soFar);
+      if (!line.text) line = scriptedTalk(soFar);
+    } catch {
+      line = scriptedTalk(soFar);
+    }
+    const next = [...soFar, { who: 'mado' as const, text: line.text }];
+    writeTalk(next);
+    setTurns(next);
+    setWriting(false);
+  };
+
+  /* Beat 1: the thing on their mind — said, not yet kept. The talk starts on it. */
   const submitThought = async () => {
     const content = draft.trim();
     if (!content || reading) return;
     setReading(true);
     try {
-      const added = await keepText(t('welcome.firstTitle'), content);
-      const next = useWorkspaceStore.getState().payload;
-      const kept = added.map((id) => next?.memories.find((m) => m.id === id)).filter((m): m is Memory => m !== undefined);
-      if (kept.length === 0) {
+      const first: TalkTurn[] = [{ who: 'you', text: content }];
+      writeTalk(first);
+      setTurns(first);
+      setDraft('');
+      go('talk');
+      await nextMadoLine(first);
+    } finally {
+      setReading(false);
+    }
+  };
+
+  /* Beat 2: their answer, and Mado's next line. */
+  const sendTalk = async () => {
+    const content = draft.trim();
+    if (!content || writing) return;
+    const next = [...turns, { who: 'you' as const, text: content }];
+    writeTalk(next);
+    setTurns(next);
+    setDraft('');
+    await nextMadoLine(next);
+  };
+
+  const madoCount = turns.filter((tn) => tn.who === 'mado').length;
+  const closed = madoCount >= TALK_TURNS;
+
+  /* Beat 3 begins: what of the talk is worth keeping, picked in their words. */
+  const toKeep = async () => {
+    if (picking) return;
+    go('keep');
+    setPicking(true);
+    try {
+      const pick = useWorkspaceStore.getState().source.keepLines;
+      let got: string[] = [];
+      try {
+        got = pick ? (await pick(turns)).lines : scriptedLines(turns);
+      } catch {
+        got = scriptedLines(turns);
+      }
+      if (got.length === 0) got = scriptedLines(turns);
+      setLines(got.map((text) => ({ text, on: true })));
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  /* The keep: the lines left on become their first memories and their first category. */
+  const keepChosen = async () => {
+    const chosen = (lines ?? []).filter((l) => l.on).map((l) => l.text.trim()).filter(Boolean);
+    if (chosen.length === 0 || reading) return;
+    setReading(true);
+    try {
+      const added = await keepText(t('welcome.keep.source'), chosen.join('\n'));
+      if (added.length === 0) {
         useUiStore.getState().toast(t('welcome.read.nothing'));
         return;
       }
       writeFirstPicks(added);
-      setFirst(kept.find((m) => CONCERN_KINDS.has(m.kind)) ?? kept[0]!);
-      setDraft('');
-      go('why');
-      /*
-       * The ask-back, written on their words where the server has a model
-       * for it. It arrives a beat after the screen does; until then, and
-       * without one, the fixed line asks.
-       */
-      const ask = useWorkspaceStore.getState().source.askBack;
-      if (ask) {
-        setAskBack(null);
-        ask(content, role ?? undefined)
-          .then((r) => setAskBack(r.question || t('welcome.askBack')))
-          .catch(() => setAskBack(t('welcome.askBack')));
-      } else {
-        setAskBack(t('welcome.askBack'));
+      const store = useWorkspaceStore.getState();
+      let name = '';
+      try {
+        name = (await store.source.suggestCategoryName?.(added))?.name ?? '';
+      } catch {
+        name = '';
       }
+      if (!name) name = nameFrom(chosen[0]!);
+      await store.createCategory(name, added);
+      localStorage.setItem(FIRST_BUNDLE_KEY, name);
+      go('learn');
     } catch {
       useUiStore.getState().toast(t('toast.captureFailed'));
     } finally {
       setReading(false);
     }
-  };
-
-  /* Beat 2: what is in the way — then straight onto the map with all of it in hand. */
-  const submitWhy = async () => {
-    const content = draft.trim();
-    if (!content || reading) return;
-    setReading(true);
-    try {
-      const added = await keepText(t('welcome.whyTitle'), content);
-      const picks = [...readFirstPicks(), ...added];
-      writeFirstPicks(picks);
-      setDraft('');
-      startThinking(picks);
-    } catch {
-      useUiStore.getState().toast(t('toast.captureFailed'));
-    } finally {
-      setReading(false);
-    }
-  };
-
-  /*
-   * Beat 3 begins: the map, with their stars picked and threaded, and Mado
-   * asked the one question people do not know they can ask. The guide on
-   * the map carries the beat from there (OnboardingGuide).
-   */
-  const startThinking = (picks: string[]) => {
-    const ui = useUiStore.getState();
-    writeStep('think');
-    ui.setThinking(true);
-    ui.setPicked(picks);
-    ui.setFindMode('map', 'ask');
-    ui.setView('map');
-    setTimeout(() => void runAsk(t('welcome.openingQ')), 350);
   };
 
   const connect = async () => {
@@ -200,7 +254,6 @@ export function Welcome() {
   }, [meetings]);
 
   if (!payload) return null;
-  const firstText = first?.text ?? payload.memories.find((m) => m.id === readFirstPicks()[0])?.text ?? '';
   const bundleName = typeof localStorage !== 'undefined' ? localStorage.getItem('mado.ob.firstBundle') : null;
 
   const textarea = (testId: string, placeholder: string, onSubmit: () => void) => (
@@ -301,33 +354,98 @@ export function Welcome() {
         </>
       )}
 
-      {step === 'why' && (
+      {step === 'talk' && (
         <>
-          {/* Mado, in its own voice, asking back — the loop opens here. */}
-          <p className="welcome__quote" data-testid="welcome-quote">
-            {quote(firstText)}
-          </p>
-          <p className={`arc__greeting-line welcome__ask${askBack === null ? ' welcome__ask--writing' : ''}`} data-testid="welcome-ask">
-            {askBack ?? t('welcome.askBackWriting')}
-          </p>
-          <p className="arc__greeting-aside">{t('welcome.askBackHint')}</p>
-          {textarea('welcome-why-input', t(whyHint), () => void submitWhy())}
+          <p className="arc__greeting-aside">{t('welcome.talk.hint')}</p>
+          <div className="welcome__talk" data-testid="welcome-talk">
+            {turns.map((tn, i) =>
+              tn.who === 'you' ? (
+                <p key={i} className="welcome__you" data-testid={`welcome-turn-you-${i}`}>
+                  {tn.text}
+                </p>
+              ) : i === turns.length - 1 ? (
+                <Typed key={i} className="welcome__mado" testId="welcome-mado" text={tn.text} onDone={() => setLanded(true)} />
+              ) : (
+                <p key={i} className="welcome__mado welcome__mado--past">
+                  {tn.text}
+                </p>
+              ),
+            )}
+            {writing && (
+              <p className="welcome__mado welcome__mado--writing" data-testid="welcome-mado-writing">
+                {t('welcome.talk.writing')}
+              </p>
+            )}
+            {!closed && !writing && landed && textarea('welcome-talk-input', '', () => void sendTalk())}
+          </div>
+          <div className="welcome__actions">
+            {closed ? (
+              <button className="arc__source" data-testid="welcome-talk-keep" disabled={!landed} onClick={() => void toKeep()}>
+                {t('welcome.talk.toKeep')}
+              </button>
+            ) : (
+              <>
+                <button className="arc__source" data-testid="welcome-talk-send" disabled={writing || !landed || draft.trim().length === 0} onClick={() => void sendTalk()}>
+                  {t('welcome.talk.send')}
+                </button>
+                {madoCount >= 1 && (
+                  <button className="welcome__quiet" data-testid="welcome-talk-enough" disabled={writing} onClick={() => void toKeep()}>
+                    {t('welcome.talk.enough')}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {step === 'keep' && (
+        <>
+          <p className="arc__greeting-line">{t('welcome.keep.title')}</p>
+          <p className="arc__greeting-aside">{t('welcome.keep.aside', { product: PRODUCT })}</p>
+          {lines === null ? (
+            <p className="bar__preview-reading" data-testid="welcome-keep-picking">{t('welcome.keep.picking')}</p>
+          ) : lines.length === 0 ? (
+            <p className="arc__greeting-aside" data-testid="welcome-keep-none">{t('welcome.keep.none')}</p>
+          ) : (
+            <ul className="bar__sections welcome__lines" data-testid="welcome-lines">
+              {lines.map((l, i) => (
+                <li key={i} className={`bar__section${l.on ? '' : ' bar__section--off'}`} data-testid={`welcome-line-${i}`}>
+                  <button
+                    className="bar__section-star"
+                    data-testid={`welcome-line-toggle-${i}`}
+                    aria-pressed={l.on}
+                    onClick={() => setLines(lines.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}
+                  >
+                    {l.on ? '★' : '☆'}
+                  </button>
+                  <input
+                    className="welcome__line-input"
+                    data-testid={`welcome-line-input-${i}`}
+                    value={l.text}
+                    onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) void keepChosen();
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="welcome__actions">
             <button
               className="arc__source"
-              data-testid="welcome-why-send"
-              disabled={reading || draft.trim().length === 0}
-              onClick={() => void submitWhy()}
+              data-testid="welcome-keep"
+              disabled={reading || picking || !lines || !lines.some((l) => l.on && l.text.trim())}
+              onClick={() => void keepChosen()}
             >
-              {reading ? t('stage.reading') : t('welcome.whySend')}
+              {reading ? t('stage.reading') : t('welcome.keep.send', { n: (lines ?? []).filter((l) => l.on && l.text.trim()).length })}
             </button>
-            <button
-              className="welcome__quiet"
-              data-testid="welcome-why-skip"
-              onClick={() => startThinking(readFirstPicks())}
-            >
-              {t('welcome.whySkip')}
-            </button>
+            {lines !== null && (
+              <button className="welcome__quiet" data-testid="welcome-keep-skip" onClick={() => go('learn')}>
+                {t('welcome.whySkip')}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -338,6 +456,7 @@ export function Welcome() {
           <p className="arc__greeting-aside">
             {bundleName ? t('welcome.learn.asideBundle', { name: bundleName, product: PRODUCT }) : t('welcome.learn.aside', { product: PRODUCT })}
           </p>
+          <p className="arc__greeting-aside" data-testid="welcome-learn-past">{t('welcome.learn.past')}</p>
           <dl className="welcome__places" data-testid="welcome-places">
             <div>
               <dt>{t('welcome.place.home')}</dt>

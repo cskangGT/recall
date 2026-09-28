@@ -7144,3 +7144,83 @@ button.brief__line:hover {
     animation: none;
   }
 }
+
+/*
+ * The first conversation, as a conversation: the person's lines as bubbles
+ * on the right, Mado's as speech on the left arriving letter by letter, and
+ * a box to answer in. Then the lines worth keeping, as the same star rows a
+ * page's parts get — each editable, each on or off.
+ */
+.welcome__talk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(560px, 100% - 48px);
+  margin-top: 14px;
+  text-align: left;
+}
+
+.welcome__you {
+  align-self: flex-end;
+  max-width: 82%;
+  margin: 0;
+  padding: 8px 13px;
+  border-radius: var(--radius-md);
+  background: rgba(240, 232, 250, 0.12);
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.welcome__mado {
+  max-width: 92%;
+  margin: 0;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 300;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 12px rgba(22, 13, 30, 0.7);
+}
+
+.welcome__mado--past {
+  color: var(--text-dim);
+  font-size: var(--text-md);
+}
+
+.welcome__talk .welcome__input {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.welcome__lines {
+  width: min(560px, 100% - 48px);
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.welcome__line-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.welcome__line-input:hover,
+.welcome__line-input:focus {
+  border-color: var(--edge);
+  background: rgba(24, 17, 36, 0.42);
+}
+
+.bar__section--off .welcome__line-input {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}

@@ -694,6 +694,116 @@ export function coerceAskBack(raw: unknown): { question: string } {
   return { question: typeof o.question === 'string' ? o.question.trim() : '' };
 }
 
+// ------------------------------------------------------------------ talk
+
+export const talkSchema = {
+  type: 'object',
+  properties: { text: { type: 'string' }, closing: { type: 'boolean' } },
+  required: ['text', 'closing'],
+  additionalProperties: false,
+} as const;
+
+export interface TalkTurn {
+  who: 'you' | 'mado';
+  text: string;
+}
+
+/**
+ * The first conversation, as a conversation. The person has said what has
+ * been on their mind; Mado — their own memory speaking — reflects a phrase
+ * of it back and asks one thing that opens it further. On the last turn it
+ * closes instead: names what seems to be at the heart of it and says it
+ * will pick out what is worth keeping. Never advice, never a list.
+ */
+export function buildTalkPrompt(input: { turns: TalkTurn[]; role?: string; locale?: 'en' | 'ko'; closing: boolean }): string {
+  const who = input.role && ROLE_WORDS[input.role] ? `They are ${ROLE_WORDS[input.role]}.` : '';
+  const transcript = input.turns.map((tn) => `${tn.who === 'you' ? 'THEM' : 'YOU'}: ${tn.text}`).join('\n');
+  return [
+    'A person is talking through something that has been on their mind lately.',
+    who,
+    'You are this person\'s own memory, speaking back to them.',
+    '',
+    'The conversation so far:',
+    transcript,
+    '',
+    input.closing
+      ? [
+          'This is the last turn. Do NOT ask a question. In two sentences: name, in',
+          'their own words, what seems to be at the heart of it — the thing under',
+          'the thing — and say that you will now pick out from this talk what is',
+          'worth keeping. Set "closing": true.',
+        ].join('\n')
+      : [
+          'Write your next line. Reflect one specific phrase of what they just said',
+          '(their words, their names and numbers), then ask ONE question that opens',
+          'it further — what is under it, who it touches, what it would look like if',
+          'it went well, what they already know. Never advise, never praise, never',
+          'list options, never summarise. Two or three sentences. Set "closing": false.',
+        ].join('\n'),
+    '',
+    'Voice: warm, direct, familiar (반말 in Korean: "~야", "~줘"). No "I" as an',
+    'assistant, no preamble. Return only the line.',
+    input.locale === 'ko' ? 'Write it in Korean.' : 'Write it in English — unless they wrote in another language, then in that one.',
+  ]
+    .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+    .join('\n');
+}
+
+export function coerceTalk(raw: unknown, closing: boolean): { text: string; closing: boolean } {
+  const o = (raw ?? {}) as { text?: unknown; closing?: unknown };
+  return { text: typeof o.text === 'string' ? o.text.trim() : '', closing: closing || o.closing === true };
+}
+
+export const linesSchema = {
+  type: 'object',
+  properties: { lines: { type: 'array', items: { type: 'string' } } },
+  required: ['lines'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * What of the talk is worth keeping: three to six lines, each a memory on its
+ * own — in the person's words, their facts, names, numbers and feelings as
+ * they said them — readable a year from now. Their words, tightened at most;
+ * never invented. Mado's own lines do not count, except a reflection they
+ * plainly agreed with.
+ */
+export function buildKeepLinesPrompt(input: { turns: TalkTurn[]; locale?: 'en' | 'ko' }): string {
+  const transcript = input.turns.map((tn) => `${tn.who === 'you' ? 'THEM' : 'MADO'}: ${tn.text}`).join('\n');
+  return [
+    'A person just talked through something on their mind with their own memory.',
+    'Pick out the lines worth keeping as memories — three to six.',
+    '',
+    'Each line is one self-contained sentence in the person\'s own words: first',
+    'person, their specific facts, names, numbers, and feelings as they stated',
+    'them, readable a year from now with no other context. Tighten at most;',
+    'never invent, never generalise, never add advice. Their opening line is',
+    'almost always worth keeping. MADO\'s lines are not theirs — leave them out',
+    'unless the person plainly agreed with one, and then say it as theirs.',
+    'Keep the order they came in.',
+    '',
+    transcript,
+    '',
+    input.locale === 'ko' ? 'Write the lines in Korean.' : 'Write the lines in the language they wrote in.',
+  ].join('\n');
+}
+
+export function coerceLines(raw: unknown, fallback: string[]): { lines: string[] } {
+  const o = (raw ?? {}) as { lines?: unknown };
+  const lines = Array.isArray(o.lines) ? o.lines.filter((l): l is string => typeof l === 'string' && l.trim().length > 0).map((l) => l.trim()).slice(0, 6) : [];
+  return { lines: lines.length > 0 ? lines : fallback };
+}
+
+/** Without a model, or when it says nothing: the person's own turns, cut into sentences. */
+export function fallbackLines(turns: TalkTurn[]): string[] {
+  return turns
+    .filter((tn) => tn.who === 'you')
+    .flatMap((tn) => tn.text.split(/(?<=[.!?。])\s+|\n+/))
+    .map((l) => l.trim())
+    .filter((l) => l.length >= 8)
+    .slice(0, 6);
+}
+
 // ------------------------------------------------------------------ digest
 
 export const digestSchema = {

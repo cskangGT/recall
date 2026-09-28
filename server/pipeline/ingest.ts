@@ -1,4 +1,5 @@
 import { isPdfPath } from '../link/saveImage.ts';
+import { fallbackLines, type TalkTurn } from '../ai/prompts.ts';
 import { splitSections, firstSentence, type Digest, type Section } from '../link/digest.ts';
 import { redact } from '../secrets/redact.ts';
 import { randomUUID } from 'node:crypto';
@@ -924,6 +925,21 @@ export class IngestPipeline {
   async askBack(thought: string, locale?: 'en' | 'ko', role?: string): Promise<{ question: string }> {
     if (!this.ai.askBack) throw new Error('this model cannot ask back');
     return this.ai.askBack({ thought, locale, role });
+  }
+
+  /** The first conversation as a conversation, where the model can hold one. */
+  canTalk(): boolean {
+    return typeof this.ai.talk === 'function' && typeof this.ai.keepLines === 'function';
+  }
+
+  async talk(turns: TalkTurn[], role: string | undefined, locale: 'en' | 'ko' | undefined, closing: boolean): Promise<{ text: string; closing: boolean }> {
+    if (!this.ai.talk) throw new Error('this model cannot talk');
+    return this.ai.talk({ turns, role, locale, closing });
+  }
+
+  async keepLines(turns: TalkTurn[], locale?: 'en' | 'ko'): Promise<{ lines: string[] }> {
+    if (!this.ai.keepLines) return { lines: fallbackLines(turns) };
+    return this.ai.keepLines({ turns, locale });
   }
 
   /** A page whole and in parts, where the model can write it. */

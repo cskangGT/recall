@@ -3,20 +3,20 @@ import { test, expect } from '@playwright/test';
 /**
  * The first conversation, and every visit after it.
  *
- * Not a tour: one thing this person cannot decide, taken all the way through
- * with Mado — what it is, what is in the way, those words threaded on the
- * map and tied into one thought, a line of it kept as their first category,
- * and only then what just happened said in three lines with the four
- * places. However the greeting is left, the next visit opens on home, and
- * the morning after asks after the thing by name.
+ * Not a tour: the thing on this person's mind, talked through with Mado —
+ * two questions and a closing, every answer theirs — then the lines of it
+ * worth keeping, picked in their words, each on or off, and what stays
+ * becomes their first memories and their first category; only then what
+ * just happened, said in three lines with the four places. However the
+ * greeting is left, the next visit opens on home, and the morning after
+ * asks after the thing by name.
  */
-const THOUGHT = 'I still cannot decide whether to hire a second infrastructure engineer before the round closes.';
-const WHY = [
-  'The runway should cover eighteen months and it covers fourteen right now.',
-  'I have not asked the first five engineers whether they would refer someone.',
-].join('\n');
+// Not a thing the demo corpus already holds: the seed pipeline folds a repeat into the memory it met.
+const THOUGHT = 'I keep wondering whether to move the whole team to a four-day week before the winter push.';
+const ANSWER_1 = 'It started after the last board call. The runway covers fourteen months and I want eighteen.';
+const ANSWER_2 = 'If it went well we would ship the platform work by spring. I already know the first five engineers would refer someone.';
 
-test('one thing undecided, taken all the way through', async ({ page }) => {
+test('the thing on their mind, talked through, and what of it kept', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('prologue-next').click();
   const welcome = page.getByTestId('welcome');
@@ -26,45 +26,47 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(page.getByTestId('welcome-roles')).toBeVisible();
   await expect(page.getByTestId('welcome-first-input')).toHaveCount(0);
   await page.getByTestId('role-ceo').click();
-  await expect(welcome).toContainText('keep not deciding');
-  await expect(page.getByTestId('welcome-first-input')).toHaveAttribute('placeholder', /round closes|raise now/);
+  await expect(welcome).toContainText('on your mind');
+  await expect(page.getByTestId('welcome-first-input')).toHaveAttribute('placeholder', /runway|growing/);
   await expect(page.getByTestId('welcome-first-send')).toBeDisabled();
 
-  // Beat 1 → 2: their words quoted back, and Mado asking after them.
+  // Beat 1 → 2: said, not kept — the talk opens on it, Mado asking after it.
   await page.getByTestId('welcome-first-input').fill(THOUGHT);
   await page.getByTestId('welcome-first-input').press('Enter');
-  await expect(welcome).toHaveAttribute('data-step', 'why');
-  await expect(page.getByTestId('welcome-quote')).toContainText('second infrastructure engineer');
-  await expect(page.getByTestId('welcome-ask')).toContainText('keeping you from deciding');
+  await expect(welcome).toHaveAttribute('data-step', 'talk');
+  await expect(page.getByTestId('welcome-turn-you-0')).toContainText('four-day week');
+  await expect(page.getByTestId('welcome-mado')).toContainText('Say a bit more');
 
-  // Beat 2 → 3: what is in the way goes in, and the map opens on all of it,
-  // picked and threaded, with Mado's first answer already asked for.
-  await page.getByTestId('welcome-why-input').fill(WHY);
-  await page.getByTestId('welcome-why-send').click();
-  await expect(page.getByTestId('map-canvas')).toBeVisible();
-  await expect(page.getByTestId('onboarding-guide')).toBeVisible();
-  await expect(page.getByTestId('think-switch')).toHaveAttribute('aria-pressed', 'true');
-  expect(await page.locator('[data-testid^="pick-"]').count()).toBeGreaterThanOrEqual(2);
-  await expect(page.getByTestId('map-conversation').getByTestId('answer')).toContainText('side by side');
-  await expect(page.getByTestId('onboarding-guide')).toContainText('Keep a line of it');
+  // Two answers, two questions, then the closing — and the way to what is worth keeping.
+  await page.getByTestId('welcome-talk-input').fill(ANSWER_1);
+  await page.getByTestId('welcome-talk-send').click();
+  await expect(page.getByTestId('welcome-mado')).toContainText('went the way');
+  await page.getByTestId('welcome-talk-input').fill(ANSWER_2);
+  await page.getByTestId('welcome-talk-input').press('Enter');
+  await expect(page.getByTestId('welcome-mado')).toContainText('worth keeping');
+  await expect(page.getByTestId('welcome-talk-input')).toHaveCount(0);
+  await page.getByTestId('welcome-talk-keep').click();
 
-  // A line kept makes the first category — theirs, named, their stars inside.
-  // Seen and shaped first: the keep opens the answer in a box to trim.
-  await page.getByTestId('map-keep').click();
-  const draft = page.getByTestId('map-keep-draft');
-  await expect(draft).toBeVisible();
-  await draft.fill('Ship without the onboarding rework; move the date only if the demo needs it.');
-  await page.getByTestId('map-keep-confirm').click();
-  await expect(page.getByTestId('map-kept')).toContainText('Kept in');
-  await expect(page.getByTestId('map-kept')).toContainText('onboarding rework');
-  await expect(page.getByTestId('think-bundle-name')).toBeVisible();
-  await expect(page.getByTestId('onboarding-guide')).toContainText('is yours now');
+  // Beat 3: the lines, in their words — each on or off, each editable.
+  await expect(welcome).toHaveAttribute('data-step', 'keep');
+  const rows = page.locator('[data-testid^="welcome-line-toggle-"]');
+  await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(3);
+  await expect(page.getByTestId('welcome-line-input-0')).toHaveValue(/four-day week/);
+  await page.getByTestId('welcome-line-toggle-1').click();
+  await expect(page.getByTestId('welcome-line-1')).toHaveClass(/bar__section--off/);
+  await page.getByTestId('welcome-line-input-0').fill('Whether to move the team to a four-day week before the winter push.');
+  const total = await rows.count();
+  await expect(page.getByTestId('welcome-keep')).toContainText(`Keep ${total - 1} lines`);
+  await page.getByTestId('welcome-keep').click();
 
   // Beat 4: what just happened, the four places, the doors — then begin.
-  await page.getByTestId('onboarding-next').click();
   await expect(welcome).toHaveAttribute('data-step', 'learn');
   await expect(welcome).toContainText('put something in, asked, and kept');
+  await expect(page.getByTestId('welcome-learn-past')).toContainText('past self');
   await expect(page.getByTestId('welcome-places')).toContainText('Diary');
+  const bundle = await page.evaluate(() => localStorage.getItem('mado.ob.firstBundle'));
+  expect(bundle).toBeTruthy();
+  await expect(welcome).toContainText(bundle!);
 
   // The meeting beat: one upcoming meeting in a line, and — from their own
   // words so far — what Mado would put in front of them before it.
@@ -74,11 +76,8 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(card).toContainText('Before that meeting, Mado brings this up');
   expect(await card.locator('.memory-row').count()).toBeGreaterThan(0);
   await expect(card).toContainText('comes back before the next');
-  // Seen first: nothing is a note yet. The keep is the choice, and only then.
-  const memoriesBefore = await page.evaluate(() => document.querySelectorAll('[data-testid^="pick-"]').length);
   await page.getByTestId('welcome-meeting-keep').click();
   await expect(page.getByTestId('welcome-meeting-kept')).toContainText('Kept');
-  void memoriesBefore;
   await expect(page.getByTestId('fill-sources')).toBeVisible();
   await page.getByTestId('welcome-finish').click();
   await expect(page.getByTestId('home')).toBeVisible();
@@ -95,19 +94,20 @@ test('one thing undecided, taken all the way through', async ({ page }) => {
   await expect(page.getByTestId('welcome')).toHaveCount(0);
 });
 
-test('the morning after asks after the thing by name', async ({ page }) => {
+test('the talk can be cut short, and the morning after asks after the thing by name', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('prologue-next').click();
   await page.getByTestId('role-skip').click();
   await page.getByTestId('welcome-first-input').fill(THOUGHT);
   await page.getByTestId('welcome-first-input').press('Enter');
-  await page.getByTestId('welcome-why-skip').click();
-  await expect(page.getByTestId('map-conversation').getByTestId('answer')).toBeVisible();
-  await page.getByTestId('map-keep').click();
-  await page.getByTestId('map-keep-confirm').click();
-  await expect(page.getByTestId('think-bundle-name')).toBeVisible();
-  const name = (await page.getByTestId('think-bundle-name').textContent())!.replace('✦', '').trim();
-  await page.getByTestId('onboarding-next').click();
+  await expect(page.getByTestId('welcome-mado')).toContainText('Say a bit more');
+  // Enough — straight to the lines, which are their own sentences.
+  await page.getByTestId('welcome-talk-enough').click();
+  await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'keep');
+  await expect.poll(() => page.locator('[data-testid^="welcome-line-toggle-"]').count()).toBeGreaterThanOrEqual(1);
+  await page.getByTestId('welcome-keep').click();
+  await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'learn');
+  const name = (await page.evaluate(() => localStorage.getItem('mado.ob.firstBundle')))!;
   await page.getByTestId('welcome-finish').click();
   await expect(page.getByTestId('home')).toBeVisible();
 

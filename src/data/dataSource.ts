@@ -73,6 +73,11 @@ export interface FileRead {
   redacted: number;
 }
 
+export interface TalkTurn {
+  who: 'you' | 'mado';
+  text: string;
+}
+
 export interface PageDigest {
   summary: string;
   sections: { heading: string | null; text: string; summary: string }[];
@@ -195,6 +200,10 @@ export interface DataSource {
   returnLink?(): Promise<string | null>;
   /** The first conversation's ask-back: one question on the person's own words. Absent: the greeting's fixed line stands. */
   askBack?(thought: string, role?: string): Promise<{ question: string }>;
+  /** The first conversation's next line: a reflection and one question, or the closing. */
+  talk?(turns: TalkTurn[], role: string | undefined, closing: boolean): Promise<{ text: string; closing: boolean }>;
+  /** What of that talk is worth keeping — three to six lines in the person's words. */
+  keepLines?(turns: TalkTurn[]): Promise<{ lines: string[] }>;
   /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
   digest?(title: string | null, text: string): Promise<PageDigest>;
   /** Reads a PDF out (stored, nothing kept) so the person can see and choose before keeping. */
@@ -426,6 +435,7 @@ export class ApiDataSource implements DataSource {
         pdf?: boolean;
         askBack?: boolean;
         digest?: boolean;
+        talk?: boolean;
       };
       if (!caps.appleNotes) {
         this.importAppleNotes = undefined;
@@ -443,6 +453,10 @@ export class ApiDataSource implements DataSource {
       if (caps.pdf !== true) this.readFile = undefined;
       if (!caps.askBack) this.askBack = undefined;
       if (!caps.digest) this.digest = undefined;
+      if (!caps.talk) {
+        this.talk = undefined;
+        this.keepLines = undefined;
+      }
       if (!caps.google) {
         this.listMeetings = undefined;
         this.googleStatus = undefined;
@@ -642,6 +656,12 @@ export class ApiDataSource implements DataSource {
 
   digest?: (title: string | null, text: string) => Promise<PageDigest> = (title, text) =>
     this.post<PageDigest>('/digest', { title, text, locale: currentLocale() });
+
+  talk?: (turns: TalkTurn[], role: string | undefined, closing: boolean) => Promise<{ text: string; closing: boolean }> = (turns, role, closing) =>
+    this.post<{ text: string; closing: boolean }>('/onboarding/talk', { turns, role, closing, locale: currentLocale() });
+
+  keepLines?: (turns: TalkTurn[]) => Promise<{ lines: string[] }> = (turns) =>
+    this.post<{ lines: string[] }>('/onboarding/lines', { turns, locale: currentLocale() });
 
   suggestCategoryName?: (memoryIds: string[]) => Promise<{ name: string }> = (memoryIds) =>
     this.post<{ name: string }>('/categories/suggest-name', { memoryIds, locale: currentLocale() });

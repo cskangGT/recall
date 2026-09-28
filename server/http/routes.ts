@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { TalkTurn } from '../ai/prompts.ts';
 import { LinkError } from '../link/preview.ts';
 import type { Repository } from '../db/repository.ts';
 import type { IngestPipeline, IngestInput } from '../pipeline/ingest.ts';
@@ -281,6 +282,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       pdf: Boolean(deps.saveImage) && deps.ingest.canReadPdf(),
       askBack: deps.ingest.canAskBack(),
       digest: deps.ingest.canDigest(),
+      talk: deps.ingest.canTalk(),
     });
   }
 
@@ -1030,6 +1032,36 @@ async function handleWorkspace(
       }
     });
     return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/onboarding/talk — the first conversation's next
+   * line: Mado reflecting and asking one thing, or, when `closing`, naming
+   * the heart of it. Reads nothing and writes nothing.
+   * POST /api/workspaces/:id/onboarding/lines — what of that talk is worth
+   * keeping, three to six lines in the person's words. Writes nothing; the
+   * person chooses, and the keep goes through capture as usual.
+   */
+  if (req.method === 'POST' && resource === 'onboarding' && (resourceId === 'talk' || resourceId === 'lines') && !action) {
+    if (!deps.ingest.canTalk()) return { status: 501, body: { error: 'this model cannot talk' } };
+    const body = asRecord(req.body);
+    const raw = Array.isArray(body.turns) ? body.turns : [];
+    const turns: TalkTurn[] = raw
+      .filter((tn): tn is { who: unknown; text: unknown } => typeof tn === 'object' && tn !== null)
+      .map((tn) => ({ who: tn.who === 'mado' ? ('mado' as const) : ('you' as const), text: typeof tn.text === 'string' ? tn.text.trim().slice(0, 2000) : '' }))
+      .filter((tn) => tn.text)
+      .slice(-12);
+    if (turns.length === 0) return badRequest('turns are required');
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      if (resourceId === 'talk') {
+        const role = typeof body.role === 'string' ? body.role.trim().slice(0, 40) : undefined;
+        return ok(await deps.ingest.talk(turns, role, locale, body.closing === true));
+      }
+      return ok(await deps.ingest.keepLines(turns, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : `${resourceId} failed` } };
+    }
   }
 
   /*

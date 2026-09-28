@@ -82,11 +82,12 @@ test('the first conversation ends on the way back', async ({ page }) => {
   await page.goto('/?api=visitor');
   await page.getByTestId('prologue-next').click();
   await page.getByTestId('role-skip').click();
-  await page.getByTestId('welcome-first-input').fill('Whether to take the offer or stay.');
+  await page.getByTestId('welcome-first-input').fill('I keep wondering whether to take the offer or stay.');
   await page.getByTestId('welcome-first-input').press('Enter');
-  await page.getByTestId('welcome-why-skip').click();
-  await expect(page.getByTestId('onboarding-guide')).toBeVisible();
-  await page.getByTestId('onboarding-next').click();
+  await expect(page.getByTestId('welcome-mado')).toContainText('Say a bit more');
+  await page.getByTestId('welcome-talk-enough').click();
+  await expect.poll(() => page.locator('[data-testid^="welcome-line-toggle-"]').count()).toBeGreaterThanOrEqual(1);
+  await page.getByTestId('welcome-keep').click();
   await expect(page.getByTestId('welcome')).toHaveAttribute('data-step', 'learn');
   await expect(page.getByTestId('return-link')).toContainText('Keep this link');
   await expect(page.getByTestId('return-link-url')).toHaveValue(/\?ws=ws_minted$/);

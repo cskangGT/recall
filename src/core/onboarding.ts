@@ -15,7 +15,14 @@
  * those together on the map and the first line kept (think), what just
  * happened said in three lines with the four places and the doors (learn).
  */
-export type OnboardingStep = 'thought' | 'why' | 'think' | 'learn' | 'done';
+/**
+ * The beats: the thing on their mind, the talk about it, what of it to keep,
+ * and what just happened. ('why' and 'think' were the older second and third
+ * beats; a stored one of those lands on the nearest new beat.)
+ */
+export type OnboardingStep = 'thought' | 'talk' | 'keep' | 'why' | 'think' | 'learn' | 'done';
+/** The talk so far, kept across a reload (JSON of {who, text}[]). */
+export const TALK_KEY = 'mado.ob.talk';
 
 export const STEP_KEY = 'mado.ob.step';
 /** The day the first hour ended — the morning card's "first day" reads it. */
@@ -58,5 +65,6 @@ export function forgetStep(): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.removeItem(STEP_KEY);
   localStorage.removeItem(FIRST_PICKS_KEY);
+  localStorage.removeItem(TALK_KEY);
   if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(PROLOGUE_KEY);
 }
