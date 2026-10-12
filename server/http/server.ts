@@ -9,7 +9,9 @@ import { serveStatic } from './static.ts';
  * body, call `handle`, and write JSON back.
  */
 
-const MAX_BODY_BYTES = 5 * 1024 * 1024;
+// The largest thing a body carries is a 10MB PDF (saveImage's own limit),
+// which is about 13.4MB once it is base64 in JSON.
+const MAX_BODY_BYTES = 15 * 1024 * 1024;
 
 async function readBody(
   req: import('node:http').IncomingMessage,
@@ -97,7 +99,14 @@ export function createApiServer(
       if (staticRoot && serveStatic(staticRoot, req, res)) return;
 
       try {
-        const path = (req.url ?? '/').split('?')[0] ?? '/';
+        const url = new URL(req.url ?? '/', 'http://x');
+        const path = url.pathname;
+        // First value per key: the two routes that read a query string
+        // (the OAuth callback, `?refresh=1`) have no use for repeats.
+        const query: Record<string, string> = {};
+        for (const [key, value] of url.searchParams) {
+          if (!(key in query)) query[key] = value;
+        }
         let body: unknown = null;
         let rawBody: string | undefined;
         if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -126,9 +135,24 @@ export function createApiServer(
             // A browser attaches this to every non-GET and a page cannot forge
             // it; `originAllowed` is what it is for.
             origin: typeof req.headers.origin === 'string' ? req.headers.origin : undefined,
+            // What same-origin means here: an Origin naming this same host is
+            // the deployment's own client, wherever it is hosted.
+            host: typeof req.headers.host === 'string' ? req.headers.host : undefined,
+            query,
           },
           deps,
         );
+        if (result.redirect !== undefined) {
+          // A redirect is a header, not a body — and `no-store`, because a
+          // cached 302 on the OAuth callback would replay a spent code.
+          res.writeHead(result.status, {
+            location: result.redirect,
+            'cache-control': 'no-store',
+            'content-length': 0,
+          });
+          res.end();
+          return;
+        }
         if (result.events) {
           /*
            * Server-sent events. Headers first, then one frame per event; an

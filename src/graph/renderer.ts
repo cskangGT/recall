@@ -26,6 +26,13 @@ export interface FrameState {
   scaleOverrides?: Map<string, number>;
   /** Nodes rendered desaturated during the reorganization sequence. */
   desaturatedIds?: string[];
+  /**
+   * Memories the conversation is about, named on the map: a memory dot has no
+   * label of its own, and "look at these while we talk" needs to say which.
+   */
+  callouts?: { id: string; text: string }[];
+  /** Memories picked to think with — ringed, so a pick reads as a pick and not a hover. */
+  pickedIds?: string[];
   /** Ghost node position while an item is processing. */
   ghost?: { x: number; y: number; pulse: number } | null;
   /**
@@ -68,8 +75,9 @@ const desaturate = (hex: string): string => {
 export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
   const { camera, viewport } = s;
 
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, viewport.w, viewport.h);
+  // The map stands under the same dusk sky as every other page now, so the
+  // frame is cleared, not painted: the ground is the shell's, not the canvas's.
+  ctx.clearRect(0, 0, viewport.w, viewport.h);
 
   const byId = new Map(s.nodes.map((n) => [n.id, n]));
   const highlighting = s.highlightedIds.length > 0;
@@ -155,11 +163,13 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     if (!visible(n)) continue;
     const { sx, sy } = worldToScreen(n, camera, viewport);
     const hovered = s.hoveredId === n.id;
-    const scale = (s.scaleOverrides?.get(n.id) ?? 1) * (hovered ? 1.15 : 1);
+    const scale = (s.scaleOverrides?.get(n.id) ?? 1) * (hovered ? 1.15 : 1) * (n.sleeping ? 0.75 : 1);
     const r = screenRadius(n.kind, n.radius, camera.zoom) * scale;
     if (r <= 0) continue;
 
-    const nodeAlpha = alphaFor(n.id) * (n.kind === 'entity' && !hovered ? entityFade : 1);
+    // A sleeping memory is present but dim — visibly kept, visibly not shining.
+    const sleepFade = n.sleeping ? 0.3 : 1;
+    const nodeAlpha = alphaFor(n.id) * (n.kind === 'entity' && !hovered ? entityFade : 1) * sleepFade;
     const base = colorFor(n.kind);
     if (desaturated.has(n.id)) {
       ctx.fillStyle = desaturate(base);
@@ -250,7 +260,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     viewport.w / 2, viewport.h / 2, Math.max(viewport.w, viewport.h) * 0.78,
   );
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+  vignette.addColorStop(1, 'rgba(14,9,22,0.4)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, viewport.w, viewport.h);
 
@@ -304,4 +314,86 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: FrameState): void {
     );
     ctx.fillText(text, sx, y);
   }
+
+  /*
+   * The picks, drawn as a constellation.
+   *
+   * A picked memory is a star that has been lit: an amber glow around a
+   * bright core, and a four-point sparkle over it — the same star the arc
+   * draws for a category, so "chosen" reads in the product's own alphabet
+   * rather than a form control's. A faint thread joins them in the order
+   * they were picked: picking is drawing a constellation, and the line is
+   * what makes a handful of stars into one thought.
+   */
+  if (s.pickedIds && s.pickedIds.length > 0) {
+    const picked = s.pickedIds.map((id) => byId.get(id)).filter((n): n is GraphNode => n !== undefined);
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = withAlpha(COLORS.edgeActive, 0.5);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    picked.forEach((n, i) => {
+      const { sx, sy } = worldToScreen(n, camera, viewport);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const n of picked) {
+      const { sx, sy } = worldToScreen(n, camera, viewport);
+      const r = screenRadius(n.kind, n.radius, camera.zoom) * (s.scaleOverrides?.get(n.id) ?? 1);
+      const reach = r + 14;
+      const glow = ctx.createRadialGradient(sx, sy, r * 0.4, sx, sy, reach);
+      glow.addColorStop(0, withAlpha(COLORS.edgeActive, 0.55));
+      glow.addColorStop(1, withAlpha(COLORS.edgeActive, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(sx, sy, reach, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = lighten(COLORS.edgeActive, 0.55);
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(2.5, r * 0.8), 0, Math.PI * 2);
+      ctx.fill();
+      // The sparkle: two thin diamonds, one long and one short, crossed.
+      const long = r + 9;
+      const short = r + 4;
+      ctx.fillStyle = withAlpha('#fff3d6', 0.95);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - long);
+      ctx.lineTo(sx + 1.6, sy);
+      ctx.lineTo(sx, sy + long);
+      ctx.lineTo(sx - 1.6, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sx - short, sy);
+      ctx.lineTo(sx, sy + 1.6);
+      ctx.lineTo(sx + short, sy);
+      ctx.lineTo(sx, sy - 1.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // The conversation's memories, said by number and first words — above the
+  // category names, because right now they are what the map is for.
+  (s.callouts ?? []).forEach((callout, i) => {
+    const n = byId.get(callout.id);
+    if (!n) return;
+    const { sx, sy } = worldToScreen(n, camera, viewport);
+    // Cited memories are often neighbours; alternating sides keeps two
+    // names from being written over each other.
+    const gap = screenRadius(n.kind, n.radius, camera.zoom) + 14;
+    const y = i % 2 === 0 ? sy + gap : sy - gap;
+    ctx.font = '500 12px Inter, system-ui, -apple-system, sans-serif';
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = withAlpha('#07070a', 0.9);
+    ctx.strokeText(callout.text, sx, y);
+    ctx.restore();
+    ctx.fillStyle = COLORS.label;
+    ctx.fillText(callout.text, sx, y);
+  });
 }

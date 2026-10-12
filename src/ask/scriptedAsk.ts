@@ -1,5 +1,8 @@
 import type { GraphPayload } from '../core/types';
 import answers from '../../seed/answers.json';
+import { isReflectiveQuestion, recentSample } from '../core/reflect';
+import { t, currentLocale } from '../i18n';
+import { KO_ANSWERS } from './answersKo';
 
 /**
  * Verbatim and exact. Recall's credibility rests entirely on every answer being
@@ -32,7 +35,38 @@ export function answerQuestion(
   question: string,
   payload: GraphPayload,
   history: { question: string; answer: string }[] = [],
+  focus: string[] = [],
 ): ScriptedAnswer {
+  // Picked memories are thought with, never refused: the seed's stand-in
+  // strings them together in one sentence, citing each, so the surface —
+  // the numbers, the map, the evidence beside it — behaves as it will live.
+  const picked = focus
+    .map((id) => payload.memories.find((m) => m.id === id))
+    .filter((m): m is NonNullable<typeof m> => m !== undefined)
+    .slice(0, 6);
+  if (picked.length > 0) {
+    const cites = picked.map((m, i) => ({ n: i + 1, memory_id: m.id, source_id: m.source_id }));
+    // Each pick its own sentence, so the local extractor reads them as such.
+    const line = picked.map((m, i) => `${m.text.replace(/[.。]$/, '')} [${i + 1}].`).join(' ');
+    const ko = currentLocale() === 'ko';
+    // A closing line of its own, so keeping the answer keeps something new
+    // rather than a second copy of the picks.
+    const close = ko
+      ? '이것들을 한데 놓고 보면 같은 방향을 가리키고 있어서, 하나의 생각으로 남겨 둘 만해.'
+      : 'Taken together these point the same way, and are worth keeping as one thought.';
+    return {
+      answer: ko ? `고른 것들을 나란히 두고 보면 — ${line} ${close}` : `Held side by side, these say — ${line} ${close}`,
+      citations: cites,
+      highlighted_node_ids: [...new Set([...picked.map((m) => m.id), ...picked.map((m) => m.category_id)])],
+      refused: false,
+    };
+  }
+
+  // "What have I been into lately?" is answered by looking around, not by a
+  // script: the last two weeks by interest, phrased from the counts — the
+  // seed's honest stand-in for what a model does with the same sample.
+  if (isReflectiveQuestion(question)) return reflect(payload);
+
   const q = question.toLowerCase();
   // A follow-up rarely repeats its referent's keywords — "which tool won?"
   // says nothing about evals. The question alone is matched first; failing
@@ -57,8 +91,11 @@ export function answerQuestion(
     if (memory) highlighted.add(memory.category_id);
   }
 
+  // The viewer's language, in the memory's register — the English seed reads
+  // as a briefing, and the demo is the first answer a tester ever hears.
+  const ko = currentLocale() === 'ko' ? KO_ANSWERS[entry.match.join('+')] : undefined;
   return {
-    answer: entry.answer,
+    answer: ko ?? entry.answer,
     citations: entry.citations,
     highlighted_node_ids: [...highlighted],
     refused: false,
@@ -72,3 +109,34 @@ export const SUGGESTED_QUESTIONS = [
   'What works for hiring?',
   'What did we decide about pricing?',
 ];
+
+function reflect(payload: GraphPayload): ScriptedAnswer {
+  const sample = recentSample(payload, { cap: 3, perInterest: 1 });
+  const [top, ...others] = sample.interests;
+  if (!top) return { answer: REFUSAL, citations: [], highlighted_node_ids: [], refused: true };
+
+  const citations: Citation[] = sample.picks.map((m, i) => ({
+    n: i + 1,
+    memory_id: m.id,
+    source_id: m.source_id,
+  }));
+  const marks = (from: number, to: number) =>
+    citations.slice(from, to).map((c) => `[${c.n}]`).join(' ');
+  const rest = others
+    .slice(0, 3)
+    .map((i) => t('ask.reflect.item', { name: i.name, count: i.count }))
+    .join(', ');
+  const you = t('ask.reflect.you', { top: top.name });
+  const answer =
+    others.length === 0
+      ? `${you} ${t('ask.reflect.one', { top: top.name, count: top.count })} ${marks(0, 1)}`
+      : `${you} ${t('ask.reflect.lead', { top: top.name, count: top.count })} ${marks(0, 1)} ` +
+        `${t('ask.reflect.rest', { rest })} ${marks(1, citations.length)}`;
+
+  const highlighted = new Set<string>();
+  for (const m of sample.picks) {
+    highlighted.add(m.id);
+    highlighted.add(m.category_id);
+  }
+  return { answer: answer.trim(), citations, highlighted_node_ids: [...highlighted], refused: false };
+}

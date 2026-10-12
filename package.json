@@ -14,6 +14,7 @@
     "agent:restart": "node scripts/install-agent.mjs --restart",
     "agent:plist": "node scripts/install-agent.mjs --dry-run",
     "import:notes": "node scripts/import-notes.mjs",
+    "import:instagram": "node scripts/import-instagram.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

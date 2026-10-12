@@ -1,6 +1,7 @@
 import type {
   Category, Entity, GraphPayload, Memory, RelatesToEdge, Source,
 } from '../../src/core/types.ts';
+import type { Meeting } from '../../src/core/meetingTypes.ts';
 
 /**
  * The storage seam.
@@ -16,6 +17,39 @@ export interface SourceRow extends Source {
   status: 'pending' | 'processing' | 'complete' | 'failed' | 'no_memories';
   error_message: string | null;
   processed_at: string | null;
+  /** When the user reviewed this source's extractions — null means not yet. */
+  reviewed_at?: string | null;
+  /** The day a diary entry belongs to (YYYY-MM-DD); null for everything else. */
+  diary_date?: string | null;
+}
+
+/** One review verdict, recorded verbatim — the curation signal (spec §21). */
+export interface CurationRow {
+  id: string;
+  source_id: string | null;
+  /** The memory's text at the moment of the verdict — a discard keeps it. */
+  memory_text: string;
+  verdict: 'keep' | 'discard' | 'edit';
+  edited_text: string | null;
+  created_at: string;
+}
+
+/**
+ * The Google credential for one workspace. `refresh_token` is the durable
+ * half; `access_token`/`expires_at` are the cache in front of it. Rows of
+ * this shape never leave the server — not in the graph payload, not in any
+ * response; `GoogleAuth.status` is the only reader that talks outward, and
+ * it reports the email alone.
+ */
+export interface GoogleTokenRow {
+  email: string | null;
+  refresh_token: string;
+  access_token: string | null;
+  /** ISO. Null means "unknown — refresh before use". */
+  expires_at: string | null;
+  /** The scopes granted, space-separated, as Google reported them. */
+  scopes: string;
+  connected_at: string;
 }
 
 export interface MemoryAssignment {
@@ -51,6 +85,7 @@ export interface Repository {
   ): { id: string; name: string; auto_reorganize: boolean; plan: 'free' | 'pro' } | null;
   /** Billing writes this; nothing else does. */
   setPlan(id: string, plan: 'free' | 'pro'): void;
+  setTrialUntil(id: string, until: string): void;
   setAutoReorganize(id: string, enabled: boolean): void;
 
   /**
@@ -60,6 +95,8 @@ export interface Repository {
   getGraphPayload(workspaceId: string): GraphPayload;
 
   insertSource(workspaceId: string, source: SourceRow): void;
+  /** What normalize read out of a kept file: the words, and what the thing is. Null leaves a field alone. */
+  updateSourceContent(id: string, fields: { raw_content?: string | null; scene_description?: string | null }): void;
   updateSourceStatus(
     id: string,
     status: SourceRow['status'],
@@ -75,6 +112,8 @@ export interface Repository {
   insertMemories(workspaceId: string, memories: Memory[]): void;
   /** A duplicate arrival strengthens what is already held — never rewrites it. */
   reinforceMemory(id: string): void;
+  /** Mark a question, decision or task as put down (ISO time), or pick it back up (null). */
+  setMemorySettled(id: string, settledAt: string | null): void;
   listMemories(workspaceId: string): Memory[];
   updateMemoryPosition(id: string, x: number | null, y: number | null, pinned: boolean): void;
   /**
@@ -97,6 +136,8 @@ export interface Repository {
    * offering an undo it could not honour.
    */
   deleteMemory(id: string): void;
+  /** Throws a source away whole — its memories and their edges go with it, by schema. */
+  deleteSource(id: string): void;
 
   insertCategory(workspaceId: string, category: Category): void;
   updateCategory(id: string, fields: Partial<Pick<Category,
@@ -131,10 +172,43 @@ export interface Repository {
   addTombstone(workspaceId: string, name: string): void;
   listTombstones(workspaceId: string): string[];
 
+  // ------------------------------------------------------------- curation
+  /** Records one review verdict. The signal that teaches the next extraction. */
+  insertCuration(workspaceId: string, row: CurationRow): void;
+  /** Most recent first. `verdict` filters; absent returns all. */
+  listCuration(workspaceId: string, verdict?: CurationRow['verdict'], limit?: number): CurationRow[];
+  /** Stamps the source as reviewed. */
+  setSourceReviewed(sourceId: string, reviewedAt: string): void;
+  /**
+   * Rewrites a memory's text and vector together — an edit moves the meaning,
+   * so the embedding must move with it or retrieval quietly rots. The FTS
+   * trigger keeps the keyword index in step on its own.
+   */
+  updateMemoryText(id: string, text: string, vector: number[]): void;
+
   recordAsk(workspaceId: string, input: {
     id: string; question: string; answer: string | null;
     citations: unknown; refused: boolean;
   }): void;
+
+  // ------------------------------------------------------------- google
+  getGoogleToken(workspaceId: string): GoogleTokenRow | null;
+  /** Upsert: a reconnect replaces the row rather than sitting beside it. */
+  saveGoogleToken(workspaceId: string, row: GoogleTokenRow): void;
+  deleteGoogleToken(workspaceId: string): void;
+
+  // ------------------------------------------------------------- meetings
+  /**
+   * One transaction: every row of this workspace starting in [from, to) goes,
+   * the given rows come in, and the sync clock is stamped. Replacing the
+   * window rather than merging is what makes a meeting deleted at Google
+   * disappear here too.
+   */
+  replaceMeetings(workspaceId: string, from: string, to: string, rows: Meeting[], syncedAt: string): void;
+  /** Rows starting in [from, to), earliest first. */
+  listMeetings(workspaceId: string, from: string, to: string): Meeting[];
+  /** When the window was last read successfully, or null before the first time. */
+  meetingsSyncedAt(workspaceId: string): string | null;
 
   /** All-or-nothing. An ingest that half-applies is worse than one that fails. */
   transaction<T>(fn: () => T): T;
