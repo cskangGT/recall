@@ -804,6 +804,43 @@ export function fallbackLines(turns: TalkTurn[]): string[] {
     .slice(0, 6);
 }
 
+// ------------------------------------------------------------------ polish
+
+export const polishSchema = {
+  type: 'object',
+  properties: { text: { type: 'string' } },
+  required: ['text'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * One line, made a memory: self-contained, readable a year from now with
+ * nothing else in view, in the person's own voice, their names and numbers
+ * kept exactly. Tightened, never added to. Where the line was two things,
+ * the first; the person can split by hand.
+ */
+export function buildPolishPrompt(input: { text: string; context?: string[]; locale?: 'en' | 'ko' }): string {
+  return [
+    'Rewrite this line as one memory the person will understand a year from now',
+    'with nothing else in view: one self-contained sentence, first person where',
+    'it was first person, their names, numbers and dates kept exactly, nothing',
+    'added, nothing advised. Tighten; do not generalise. If the line holds two',
+    'things, keep the one it is mostly about.',
+    '',
+    `  "${input.text}"`,
+    ...(input.context && input.context.length > 0 ? ['', 'Said around it (for what a pronoun or a "that" refers to — never to add facts):', ...input.context.map((c) => `  - ${c}`)] : []),
+    '',
+    'Return only the sentence.',
+    input.locale === 'ko' ? 'Write it in Korean.' : 'Write it in the language the line is in.',
+  ].join('\n');
+}
+
+export function coercePolish(raw: unknown, fallback: string): { text: string } {
+  const o = (raw ?? {}) as { text?: unknown };
+  const text = typeof o.text === 'string' ? o.text.trim() : '';
+  return { text: text || fallback };
+}
+
 // ------------------------------------------------------------------ digest
 
 export const digestSchema = {

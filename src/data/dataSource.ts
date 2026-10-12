@@ -204,6 +204,8 @@ export interface DataSource {
   talk?(turns: TalkTurn[], role: string | undefined, closing: boolean): Promise<{ text: string; closing: boolean }>;
   /** What of that talk is worth keeping — three to six lines in the person's words. */
   keepLines?(turns: TalkTurn[]): Promise<{ lines: string[] }>;
+  /** One line made a memory — self-contained, their words, nothing added. */
+  polish?(text: string, context?: string[]): Promise<{ text: string }>;
   /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
   digest?(title: string | null, text: string): Promise<PageDigest>;
   /** Reads a PDF out (stored, nothing kept) so the person can see and choose before keeping. */
@@ -436,6 +438,7 @@ export class ApiDataSource implements DataSource {
         askBack?: boolean;
         digest?: boolean;
         talk?: boolean;
+        polish?: boolean;
       };
       if (!caps.appleNotes) {
         this.importAppleNotes = undefined;
@@ -453,6 +456,7 @@ export class ApiDataSource implements DataSource {
       if (caps.pdf !== true) this.readFile = undefined;
       if (!caps.askBack) this.askBack = undefined;
       if (!caps.digest) this.digest = undefined;
+      if (!caps.polish) this.polish = undefined;
       if (!caps.talk) {
         this.talk = undefined;
         this.keepLines = undefined;
@@ -659,6 +663,9 @@ export class ApiDataSource implements DataSource {
 
   talk?: (turns: TalkTurn[], role: string | undefined, closing: boolean) => Promise<{ text: string; closing: boolean }> = (turns, role, closing) =>
     this.post<{ text: string; closing: boolean }>('/onboarding/talk', { turns, role, closing, locale: currentLocale() });
+
+  polish?: (text: string, context?: string[]) => Promise<{ text: string }> = (text, context) =>
+    this.post<{ text: string }>('/memories/polish', { text, context, locale: currentLocale() });
 
   keepLines?: (turns: TalkTurn[]) => Promise<{ lines: string[] }> = (turns) =>
     this.post<{ lines: string[] }>('/onboarding/lines', { turns, locale: currentLocale() });

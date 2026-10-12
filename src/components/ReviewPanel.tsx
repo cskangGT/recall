@@ -45,6 +45,22 @@ function ReviewCard({ payload, sourceId }: { payload: GraphPayload; sourceId: st
     [payload, sourceId],
   );
 
+  /* Mado's help on a line being fixed: made a memory in their words, nothing added. */
+  const canPolish = Boolean(useWorkspaceStore((s) => s.source.polish));
+  const [polishing, setPolishing] = useState<string | null>(null);
+  const polishOne = async (id: string, text: string) => {
+    const source = useWorkspaceStore.getState().source.polish;
+    if (!source || polishing || !text.trim()) return;
+    setPolishing(id);
+    try {
+      const out = await source(text.trim());
+      if (out.text) setVerdict(id, { kind: 'edit', text: out.text });
+    } catch {
+      useUiStore.getState().toast(t('line.polishFailed'));
+    } finally {
+      setPolishing(null);
+    }
+  };
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>({});
   const [saving, setSaving] = useState(false);
   /*
@@ -269,13 +285,25 @@ function ReviewCard({ payload, sourceId }: { payload: GraphPayload; sourceId: st
               data-testid={`review-item-${m.id}`}
             >
               {v.kind === 'edit' ? (
-                <textarea
-                  className="reviewitem__editor"
-                  data-testid={`review-editor-${m.id}`}
-                  value={v.text}
-                  autoFocus
-                  onChange={(e) => setVerdict(m.id, { kind: 'edit', text: e.target.value })}
-                />
+                <>
+                  <textarea
+                    className="reviewitem__editor"
+                    data-testid={`review-editor-${m.id}`}
+                    value={v.text}
+                    autoFocus
+                    onChange={(e) => setVerdict(m.id, { kind: 'edit', text: e.target.value })}
+                  />
+                  {canPolish && (
+                    <button
+                      className="reviewitem__btn"
+                      data-testid={`review-polish-${m.id}`}
+                      disabled={polishing === m.id}
+                      onClick={() => void polishOne(m.id, v.text)}
+                    >
+                      {polishing === m.id ? t('line.polishing') : t('line.polish')}
+                    </button>
+                  )}
+                </>
               ) : (
                 <span className="reviewitem__text">{m.text}</span>
               )}

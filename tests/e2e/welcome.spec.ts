@@ -12,6 +12,8 @@ import { test, expect } from '@playwright/test';
 
 test('greets you on the app itself, with nothing on the arc yet', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
   await expect(page.getByText('is your second memory')).toBeVisible();
   // The scene is already the app — no separate frame to leave.
@@ -22,6 +24,8 @@ test('greets you on the app itself, with nothing on the arc yet', async ({ page 
 
 test('the first thing you type is answered, not discarded', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   await page.getByTestId('welcome-input').fill('What did we decide about our eval stack?');
   await page.getByTestId('welcome-input').press('Enter');
 
@@ -34,6 +38,8 @@ test('the first thing you type is answered, not discarded', async ({ page }) => 
 
 test('looking around fans the categories in without changing screen', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   const browser = page.getByTestId('arc-browser');
   await expect(browser).toBeVisible();
 
@@ -56,6 +62,8 @@ test('looking around fans the categories in without changing screen', async ({ p
  */
 test('the workspace counts stay out of the first frame', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   // The claim is in the sentence you are reading, not in the corner.
   await expect(page.getByTestId('welcome')).toContainText('47 memories');
   await expect(page.getByTestId('inspector')).not.toContainText('47 memories');
@@ -69,6 +77,8 @@ test('the workspace counts stay out of the first frame', async ({ page }) => {
 
 test('the single-key shortcuts still work on the greeting', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
 
   await page.keyboard.press('g');
@@ -83,6 +93,8 @@ test('the single-key shortcuts still work on the greeting', async ({ page }) => 
  */
 test('arrow keys on the greeting cannot open a category behind it', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
 
   await page.keyboard.press('ArrowRight');
@@ -100,6 +112,8 @@ test('arrow keys on the greeting cannot open a category behind it', async ({ pag
  */
 test('coming back from the map does not re-ask the first question', async ({ page }) => {
   await page.goto('/');
+  // The first words come first, every visit; the greeting is behind them.
+  await page.getByTestId('prologue-next').click();
   await expect(page.getByTestId('welcome')).toBeVisible();
 
   await page.keyboard.press('g');

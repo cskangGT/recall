@@ -942,6 +942,18 @@ export class IngestPipeline {
     return this.ai.keepLines({ turns, locale });
   }
 
+  /** One line made a memory, where the model can. */
+  canPolish(): boolean {
+    return typeof this.ai.polish === 'function';
+  }
+
+  async polish(text: string, context?: string[], locale?: 'en' | 'ko'): Promise<{ text: string }> {
+    if (!this.ai.polish) throw new Error('this model cannot polish');
+    // A model that says nothing must not cost the person their line.
+    const out = await this.ai.polish({ text, context, locale });
+    return { text: out.text?.trim() || text };
+  }
+
   /** A page whole and in parts, where the model can write it. */
   canDigest(): boolean {
     return typeof this.ai.digest === 'function';

@@ -15,7 +15,7 @@ import {
   buildMergePrompt, buildNamePrompt, buildNormalizePrompt, buildPdfNormalizePrompt, buildRetroPrompt, coerceCondense,
   coerceExtract, coerceMerge, coerceNormalize, coerceRetro, condenseSchema, extractSchema,
   mergeSchema, nameByFallback, nameSchema,
-  normalizeSchema, resolveAnswer, resolveNames, retroSchema, buildTalkPrompt, coerceTalk, talkSchema, buildKeepLinesPrompt, coerceLines, linesSchema, fallbackLines } from './prompts.ts';
+  normalizeSchema, resolveAnswer, resolveNames, retroSchema, buildTalkPrompt, coerceTalk, talkSchema, buildKeepLinesPrompt, coerceLines, linesSchema, fallbackLines, buildPolishPrompt, coercePolish, polishSchema } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 
 /**
@@ -362,6 +362,10 @@ export class OpenAiProvider implements AiProvider {
 
   async keepLines(input: { turns: TalkTurn[]; locale?: 'en' | 'ko' }) {
     return coerceLines(await this.json(buildKeepLinesPrompt(input), 'keep_lines', linesSchema, 600), fallbackLines(input.turns));
+  }
+
+  async polish(input: { text: string; context?: string[]; locale?: 'en' | 'ko' }) {
+    return coercePolish(await this.json(buildPolishPrompt(input), 'polish', polishSchema, 300), input.text);
   }
 
   async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {

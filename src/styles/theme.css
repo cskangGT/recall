@@ -7224,3 +7224,22 @@ button.brief__line:hover {
   color: var(--text-faint);
   text-decoration: line-through;
 }
+
+/* A line on its way to being a memory: the words, and Mado's help beside them. */
+.keepline {
+  grid-template-columns: 16px 1fr auto;
+}
+
+.keepline__text {
+  display: block;
+  resize: none;
+  field-sizing: content;
+  min-height: 1.5em;
+}
+
+.keepline__tools {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding-top: 6px;
+}

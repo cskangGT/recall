@@ -11,7 +11,7 @@ import type {
 import {
   MODEL, answerSchema, buildAnswerPrompt, buildDigestPrompt, buildExtractPrompt, buildNamePrompt, coerceDigest, digestSchema,
   buildNormalizePrompt, buildPdfNormalizePrompt, coerceExtract, askBackSchema, buildAskBackPrompt, coerceAskBack, coerceNormalize, extractSchema, nameByFallback,
-  nameSchema, normalizeSchema, resolveAnswer, resolveNames, buildTalkPrompt, coerceTalk, talkSchema, buildKeepLinesPrompt, coerceLines, linesSchema, fallbackLines } from './prompts.ts';
+  nameSchema, normalizeSchema, resolveAnswer, resolveNames, buildTalkPrompt, coerceTalk, talkSchema, buildKeepLinesPrompt, coerceLines, linesSchema, fallbackLines, buildPolishPrompt, coercePolish, polishSchema } from './prompts.ts';
 import type { SourceType } from '../../src/core/types.ts';
 import { firstSentence } from '../link/digest.ts';
 import type { TalkTurn } from './prompts.ts';
@@ -102,6 +102,10 @@ export class AnthropicProvider implements AiProvider {
 
   async keepLines(input: { turns: TalkTurn[]; locale?: 'en' | 'ko' }) {
     return coerceLines(await this.json(buildKeepLinesPrompt(input), linesSchema, 600), fallbackLines(input.turns));
+  }
+
+  async polish(input: { text: string; context?: string[]; locale?: 'en' | 'ko' }) {
+    return coercePolish(await this.json(buildPolishPrompt(input), polishSchema, 300), input.text);
   }
 
   async digest(input: { title: string | null; sections: { heading: string | null; text: string }[]; locale?: 'en' | 'ko' }) {

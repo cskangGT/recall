@@ -283,6 +283,7 @@ export async function handle(req: ApiRequest, deps: Deps): Promise<ApiResponse> 
       askBack: deps.ingest.canAskBack(),
       digest: deps.ingest.canDigest(),
       talk: deps.ingest.canTalk(),
+      polish: deps.ingest.canPolish(),
     });
   }
 
@@ -1032,6 +1033,25 @@ async function handleWorkspace(
       }
     });
     return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/memories/polish — one line made a memory: a
+   * self-contained sentence in the person's words, nothing added. Writes
+   * nothing; the person sees it and decides, wherever a line is being kept.
+   */
+  if (req.method === 'POST' && resource === 'memories' && resourceId === 'polish' && !action) {
+    if (!deps.ingest.canPolish()) return { status: 501, body: { error: 'this model cannot polish' } };
+    const body = asRecord(req.body);
+    const text = typeof body.text === 'string' ? body.text.trim().slice(0, 2000) : '';
+    if (!text) return badRequest('text is required');
+    const context = Array.isArray(body.context) ? body.context.filter((c): c is string => typeof c === 'string').map((c) => c.slice(0, 500)).slice(0, 8) : undefined;
+    const locale: 'en' | 'ko' | undefined = body.locale === 'ko' ? 'ko' : body.locale === 'en' ? 'en' : undefined;
+    try {
+      return ok(await deps.ingest.polish(text, context, locale));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'polish failed' } };
+    }
   }
 
   /*

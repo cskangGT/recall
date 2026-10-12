@@ -635,3 +635,25 @@ describe('POST onboarding/talk and onboarding/lines', () => {
     expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/onboarding/lines`, body: {} }, deps)).status).toBe(400);
   });
 });
+
+/* One line made a memory: 501 without a model, the tidied line with one, the line itself when the model says nothing. */
+describe('POST memories/polish', () => {
+  it('answers 501 where the model cannot polish, and the capability says so', async () => {
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/polish`, body: { text: 'x' } }, deps)).status).toBe(501);
+    const caps = await handle({ method: 'GET', path: '/api/capabilities', body: null }, deps);
+    expect((caps.body as { polish: boolean }).polish).toBe(false);
+  });
+
+  it('hands back the tidied line, and the line itself when the model gives nothing', async () => {
+    let answer = 'The team looked tired after the summer push, and so did I.';
+    const provider = Object.assign(new FixtureProvider(), { polish: async () => ({ text: answer }) });
+    deps = { ...deps, ingest: new IngestPipeline(repo, provider, new FixtureEmbeddings()) };
+    const res = await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/polish`, body: { text: 'team tired after summer, me too', context: ['It started after the summer.'] } }, deps);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ text: answer });
+    answer = '';
+    const kept = await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/polish`, body: { text: 'team tired after summer' } }, deps);
+    expect((kept.body as { text: string }).text).toBe('team tired after summer');
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/polish`, body: {} }, deps)).status).toBe(400);
+  });
+});

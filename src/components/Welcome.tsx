@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { runBatchPipeline } from '../capture/batch';
 import { scriptedTalk, scriptedLines, TALK_TURNS } from '../ask/scriptedTalk';
 import { Typed } from './Typed';
+import { KeepLine } from './KeepLine';
 import type { TalkTurn } from '../data/dataSource';
 import { groupMeetings, attendeeLine, isOver } from '../core/meetings';
 import { readStep, writeStep, writeFirstPicks, FIRST_BUNDLE_KEY, TALK_KEY, type OnboardingStep } from '../core/onboarding';
@@ -410,25 +411,17 @@ export function Welcome() {
           ) : (
             <ul className="bar__sections welcome__lines" data-testid="welcome-lines">
               {lines.map((l, i) => (
-                <li key={i} className={`bar__section${l.on ? '' : ' bar__section--off'}`} data-testid={`welcome-line-${i}`}>
-                  <button
-                    className="bar__section-star"
-                    data-testid={`welcome-line-toggle-${i}`}
-                    aria-pressed={l.on}
-                    onClick={() => setLines(lines.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}
-                  >
-                    {l.on ? '★' : '☆'}
-                  </button>
-                  <input
-                    className="welcome__line-input"
-                    data-testid={`welcome-line-input-${i}`}
-                    value={l.text}
-                    onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) void keepChosen();
-                    }}
-                  />
-                </li>
+                <KeepLine
+                  key={i}
+                  prefix="welcome"
+                  index={i}
+                  text={l.text}
+                  on={l.on}
+                  context={turns.filter((tn) => tn.who === 'you').map((tn) => tn.text)}
+                  onText={(text) => setLines(lines.map((x, j) => (j === i ? { ...x, text } : x)))}
+                  onToggle={() => setLines(lines.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}
+                  onEnter={() => void keepChosen()}
+                />
               ))}
             </ul>
           )}

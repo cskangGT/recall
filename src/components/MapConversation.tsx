@@ -34,6 +34,25 @@ export function MapConversation() {
    * condense draft — and only the box's own keep saves it. See, shape, keep.
    */
   const [editing, setEditing] = useState<{ key: string; draft: string } | null>(null);
+  const canPolish = Boolean(useWorkspaceStore((s) => s.source.polish));
+  const [polishing, setPolishing] = useState(false);
+  const [beforePolish, setBeforePolish] = useState<string | null>(null);
+  const polishDraft = async () => {
+    const source = useWorkspaceStore.getState().source.polish;
+    if (!source || !editing || polishing || !editing.draft.trim()) return;
+    setPolishing(true);
+    try {
+      const { text } = await source(editing.draft.trim(), [editing.key.split('\n')[0] ?? '']);
+      if (text && text !== editing.draft) {
+        setBeforePolish(editing.draft);
+        setEditing({ key: editing.key, draft: text });
+      }
+    } catch {
+      useUiStore.getState().toast(t('line.polishFailed'));
+    } finally {
+      setPolishing(false);
+    }
+  };
   /** What each kept line became — memory ids, by the turn (question + answer) it was kept from. */
   const [kept, setKept] = useState<Record<string, string[]>>({});
   const turnKey = (q: string, a: string) => `${q}\n${a}`;
@@ -146,6 +165,23 @@ export function MapConversation() {
         />
         <div className="bundle__row bundle__row--end">
           <span className="bundle__hint">{t('mapchat.editHint')}</span>
+          {canPolish && beforePolish === null && (
+            <button className="picks__action picks__action--quiet" data-testid="map-keep-polish" disabled={polishing} onClick={() => void polishDraft()}>
+              {polishing ? t('line.polishing') : t('line.polish')}
+            </button>
+          )}
+          {beforePolish !== null && (
+            <button
+              className="picks__action picks__action--quiet"
+              data-testid="map-keep-undo"
+              onClick={() => {
+                setEditing({ key, draft: beforePolish });
+                setBeforePolish(null);
+              }}
+            >
+              {t('line.undo')}
+            </button>
+          )}
           <button className="picks__action picks__action--quiet" data-testid="map-keep-cancel" onClick={() => setEditing(null)}>
             {t('mapchat.cancel')}
           </button>
@@ -206,7 +242,7 @@ export function MapConversation() {
             <p className="mapchat__q">{turn.question}</p>
             <p className="mapchat__a">{clean(turn.answer)}</p>
             {thinking && !kept[turnKey(turn.question, turn.answer)] && editing?.key !== turnKey(turn.question, turn.answer) && (
-              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => setEditing({ key: turnKey(turn.question, turn.answer), draft: clean(turn.answer) })}>
+              <button className="mapchat__keep" data-testid="map-keep-past" disabled={keeping !== null} onClick={() => { setBeforePolish(null); setEditing({ key: turnKey(turn.question, turn.answer), draft: clean(turn.answer) }); }}>
                 {t('mapchat.keep')}
               </button>
             )}
@@ -242,7 +278,7 @@ export function MapConversation() {
                 className="mapchat__keep"
                 data-testid="map-keep"
                 disabled={keeping !== null}
-                onClick={() => setEditing({ key: turnKey(live.question, live.answer), draft: clean(live.answer) })}
+                onClick={() => { setBeforePolish(null); setEditing({ key: turnKey(live.question, live.answer), draft: clean(live.answer) }); }}
               >
                 {keeping ? t('mapchat.keeping') : bundle ? t('mapchat.keepInto', { name: bundle.name }) : t('mapchat.keep')}
               </button>

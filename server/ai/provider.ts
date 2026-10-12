@@ -225,6 +225,8 @@ export interface AiProvider {
   talk?(input: { turns: { who: 'you' | 'mado'; text: string }[]; role?: string; locale?: 'en' | 'ko'; closing: boolean }): Promise<{ text: string; closing: boolean }>;
   /** Optional: what of the talk is worth keeping — three to six lines in the person's words. */
   keepLines?(input: { turns: { who: 'you' | 'mado'; text: string }[]; locale?: 'en' | 'ko' }): Promise<{ lines: string[] }>;
+  /** Optional: one line made a memory — self-contained, their words, nothing added. */
+  polish?(input: { text: string; context?: string[]; locale?: 'en' | 'ko' }): Promise<{ text: string }>;
   digest?(input: {
     title: string | null;
     sections: { heading: string | null; text: string }[];

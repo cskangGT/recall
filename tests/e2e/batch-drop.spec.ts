@@ -59,9 +59,9 @@ test('a multi-file drop runs the batch reveal and lands in the corpus', async ({
 
   await dropFiles(page, FILES);
 
-  // The reveal opens immediately and reads the batch out loud.
+  // The reveal opens immediately. (The suite runs with reduced motion, so the
+  // read-out pour is skipped and the declaration follows at once.)
   await expect(page.getByTestId('batch-reveal')).toBeVisible();
-  await expect(page.getByTestId('batch-reveal-status')).toBeVisible();
 
   // The declaration: N memories from 3 saves into M interests.
   await expect(page.getByTestId('batch-reveal-declare')).toBeVisible({ timeout: 15_000 });
