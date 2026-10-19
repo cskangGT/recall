@@ -123,6 +123,13 @@ const focusOf = (body: Record<string, unknown>): string[] =>
     .filter((id): id is string => typeof id === 'string')
     .slice(0, FOCUS_LIMIT);
 
+/** Chosen memory lines on a capture: strings only, trimmed, a sane number. */
+function presetOf(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const lines = raw.filter((l): l is string => typeof l === 'string').map((l) => l.trim().slice(0, 600)).filter(Boolean).slice(0, 40);
+  return lines.length > 0 ? lines : undefined;
+}
+
 const asRecord = (body: unknown): Record<string, unknown> =>
   body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
 
@@ -438,6 +445,7 @@ async function handleWorkspace(
       content: typeof body.content === 'string' ? body.content : undefined,
       title: typeof body.title === 'string' ? body.title : undefined,
       url: typeof body.url === 'string' ? body.url : undefined,
+      presetMemories: presetOf(body.presetMemories),
       imagePath: uploadedPath ?? (typeof body.imagePath === 'string' ? body.imagePath : undefined),
       referencedUrls: Array.isArray(body.referencedUrls)
         ? body.referencedUrls.filter((u): u is string => typeof u === 'string')
@@ -1033,6 +1041,24 @@ async function handleWorkspace(
       }
     });
     return ok({ categoryId, graph: deps.repo.getGraphPayload(workspaceId) });
+  }
+
+  /*
+   * POST /api/workspaces/:id/memories/preview — what a text would become:
+   * the memories the extractor would take out of it, as lines, nothing
+   * stored. The person picks and tidies; the keep brings them back as
+   * `presetMemories` on capture, stored as they left them.
+   */
+  if (req.method === 'POST' && resource === 'memories' && resourceId === 'preview' && !action) {
+    const body = asRecord(req.body);
+    const content = typeof body.content === 'string' ? body.content.trim().slice(0, 30_000) : '';
+    if (!content) return badRequest('content is required');
+    const type = body.type === 'link' ? 'link' : 'text';
+    try {
+      return ok(await deps.ingest.previewMemories(content, type));
+    } catch (err) {
+      return { status: 502, body: { error: err instanceof Error ? err.message : 'preview failed' } };
+    }
   }
 
   /*

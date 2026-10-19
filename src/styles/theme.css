@@ -7243,3 +7243,25 @@ button.brief__line:hover {
   align-items: flex-start;
   padding-top: 6px;
 }
+
+/* Inside the capture box the big words-box rule reaches every textarea;
+   a line on its way to being a memory is a line, not a page. */
+.bar .keepline__text {
+  height: auto;
+  min-height: 1.5em;
+  max-height: none;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  box-shadow: none;
+}
+
+.bar .keepline__text:hover,
+.bar .keepline__text:focus {
+  border-color: var(--edge);
+  background: rgba(24, 17, 36, 0.42);
+}

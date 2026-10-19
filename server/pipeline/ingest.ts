@@ -4,7 +4,7 @@ import { splitSections, firstSentence, type Digest, type Section } from '../link
 import { redact } from '../secrets/redact.ts';
 import { randomUUID } from 'node:crypto';
 import type { Repository, ReorgEventRow, SourceRow } from '../db/repository.ts';
-import type { AiProvider, EmbeddingProvider } from '../ai/provider.ts';
+import type { AiProvider, EmbeddingProvider, ExtractResult } from '../ai/provider.ts';
 import { fallbackName } from '../ai/provider.ts';
 import type { Category, GraphPayload, Memory, SourceType } from '../../src/core/types.ts';
 import { assignMemory, categoryProfiles } from '../../src/core/assign.ts';
@@ -42,6 +42,12 @@ export interface IngestInput {
   title?: string;
   url?: string;
   imagePath?: string;
+  /**
+   * The memories, already chosen: the person saw what the text would become
+   * and picked and tidied the lines. These are stored as they are — embedded
+   * and filed, never re-extracted. A retry has no preset and extracts.
+   */
+  presetMemories?: string[];
   referencedUrls?: string[];
   /** The viewer's language — category names are UI, not content. */
   locale?: 'en' | 'ko';
@@ -287,7 +293,7 @@ export class IngestPipeline {
       processed_at: null,
     };
     this.repo.transaction(() => this.repo.insertSource(input.workspaceId, source));
-    const result = await this.process(input.workspaceId, source, { ...options, locale: input.locale });
+    const result = await this.process(input.workspaceId, source, { ...options, locale: input.locale, presetMemories: input.presetMemories });
     return { ...result, redacted: result.redacted + redacted };
   }
 
@@ -385,7 +391,7 @@ export class IngestPipeline {
   private async process(
     workspaceId: string,
     source: SourceRow,
-    options: { reorganize?: boolean; locale?: 'en' | 'ko' } = {},
+    options: { reorganize?: boolean; locale?: 'en' | 'ko'; presetMemories?: string[] } = {},
   ): Promise<IngestResult> {
     const sourceId = source.id;
     const input = {
@@ -437,12 +443,21 @@ export class IngestPipeline {
       const rejectedExamples = this.repo
         .listCuration(input.workspaceId, 'discard', 5)
         .map((c) => c.memory_text);
-      const extracted = await this.ai.extract({
-        content,
-        sceneDescription,
-        type: input.type,
-        rejectedExamples,
-      });
+      const preset = (options.presetMemories ?? []).map((l) => l.trim()).filter(Boolean);
+      const extracted: ExtractResult =
+        preset.length > 0
+          ? // The person already chose: their lines, as they left them.
+            {
+              memories: preset.map((text) => ({ text, kind: 'fact' as const, confidence: 1, entities: [] })),
+              summary: preset.slice(0, 3).join(' '),
+              suggested_title: '',
+            }
+          : await this.ai.extract({
+              content,
+              sceneDescription,
+              type: input.type,
+              rejectedExamples,
+            });
 
       if (extracted.memories.length === 0) {
         this.repo.updateSourceStatus(sourceId, 'no_memories', { processed_at: now() });
@@ -940,6 +955,16 @@ export class IngestPipeline {
   async keepLines(turns: TalkTurn[], locale?: 'en' | 'ko'): Promise<{ lines: string[] }> {
     if (!this.ai.keepLines) return { lines: fallbackLines(turns) };
     return this.ai.keepLines({ turns, locale });
+  }
+
+  /**
+   * What a text would become, before it does: the memories the extractor
+   * would take out of it, as lines — nothing stored. The person picks and
+   * tidies, and the keep brings the lines back as `presetMemories`.
+   */
+  async previewMemories(content: string, type: SourceType = 'text'): Promise<{ lines: string[] }> {
+    const extracted = await this.ai.extract({ content, type, rejectedExamples: [] });
+    return { lines: extracted.memories.map((m) => m.text.trim()).filter(Boolean) };
   }
 
   /** One line made a memory, where the model can. */

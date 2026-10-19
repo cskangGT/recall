@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { t, PRODUCT } from '../i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { PageDigest } from '../data/dataSource';
+import { KeepLine } from './KeepLine';
+import { extractClaims } from '../capture/extractLocal';
 
 /**
  * Something read, before it is kept — a link's page or a file's text.
@@ -30,7 +32,8 @@ export interface ReadCardProps {
   askLine: string;
   keepLabel: string;
   skipLabel: string;
-  onKeep: (content: string) => void;
+  /** `memories`: the lines the person chose and tidied — stored as they are. Absent: the text goes in and is read as usual. */
+  onKeep: (content: string, memories?: string[]) => void;
   onSkip: () => void;
 }
 
@@ -74,7 +77,43 @@ export function ReadCard(p: ReadCardProps) {
   const parts = ready && ready.sections.length > 1 ? ready : null;
   const picked = parts ? parts.on.filter(Boolean).length : 0;
 
-  const keep = () => {
+  /*
+   * The second step: what this would become. Mado reads what is left on and
+   * says the memories it would keep, as lines — the person turns off, edits,
+   * tidies, and what stays goes in exactly so. The text itself can still go
+   * in as it is, read the usual way.
+   */
+  const [memories, setMemories] = useState<{ text: string; on: boolean }[] | null>(null);
+  const [pickingMemories, setPickingMemories] = useState(false);
+  const [memoriesFailed, setMemoriesFailed] = useState(false);
+
+  const pickMemories = async () => {
+    if (pickingMemories) return;
+    setPickingMemories(true);
+    setMemoriesFailed(false);
+    try {
+      const content = assembled();
+      const source = useWorkspaceStore.getState().source.previewMemories;
+      let lines: string[] = [];
+      try {
+        lines = source ? (await source(content, p.prefix === 'link' ? 'link' : 'text')).lines : extractClaims(content);
+      } catch {
+        lines = extractClaims(content);
+      }
+      if (lines.length === 0) setMemoriesFailed(true);
+      setMemories(lines.map((text) => ({ text, on: true })));
+    } finally {
+      setPickingMemories(false);
+    }
+  };
+
+  const keepMemories = () => {
+    const chosen = (memories ?? []).filter((m) => m.on).map((m) => m.text.trim()).filter(Boolean);
+    if (chosen.length === 0) return;
+    p.onKeep(assembled(), chosen);
+  };
+
+  const assembled = () => {
     const out: (string | null | undefined)[] = [];
     const mine = myLine.trim();
     if (mine) out.push(`${t('capture.myLineLead')}${mine}`);
@@ -88,11 +127,62 @@ export function ReadCard(p: ReadCardProps) {
     } else {
       out.push(p.description, p.text ?? p.excerpt);
     }
-    p.onKeep(out.filter(Boolean).join('\n\n'));
+    return out.filter(Boolean).join('\n\n');
   };
 
+  /** The text as it is, read the usual way. */
+  const keep = () => p.onKeep(assembled());
+
+  const chosenCount = (memories ?? []).filter((m) => m.on && m.text.trim()).length;
+  if (memories !== null || pickingMemories) {
+    return (
+      <div className="bar__preview" data-testid={`${p.prefix}-preview`} data-stage="memories">
+        <span className="bar__preview-title">{p.title ?? ''}</span>
+        <span className="bar__digest-head">{t('capture.memoriesHead')}</span>
+        <span className="bar__preview-note">{t('capture.memoriesAside', { product: PRODUCT })}</span>
+        {pickingMemories ? (
+          <span className="bar__preview-reading" data-testid={`${p.prefix}-memories-picking`}>{t('capture.pickingMemories')}</span>
+        ) : memoriesFailed || (memories && memories.length === 0) ? (
+          <span className="bar__preview-note" data-testid={`${p.prefix}-memories-none`}>{t('capture.noMemories')}</span>
+        ) : (
+          <ul className="bar__sections" data-testid={`${p.prefix}-memories`}>
+            {(memories ?? []).map((m, i) => (
+              <KeepLine
+                key={i}
+                prefix={`${p.prefix}-mem`}
+                index={i}
+                text={m.text}
+                on={m.on}
+                onText={(text) => setMemories((memories ?? []).map((x, j) => (j === i ? { ...x, text } : x)))}
+                onToggle={() => setMemories((memories ?? []).map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}
+                onEnter={keepMemories}
+              />
+            ))}
+          </ul>
+        )}
+        <span className="bar__preview-actions">
+          <button
+            className="bar__preview-keep"
+            data-testid={`${p.prefix}-preview-keep`}
+            disabled={pickingMemories || chosenCount === 0}
+            autoFocus
+            onClick={keepMemories}
+          >
+            {t('capture.keepMemories', { n: chosenCount })}
+          </button>
+          <button className="bar__preview-skip" data-testid={`${p.prefix}-preview-raw`} onClick={keep}>
+            {t('capture.keepRaw')}
+          </button>
+          <button className="bar__section-more" data-testid={`${p.prefix}-memories-back`} onClick={() => setMemories(null)}>
+            {t('capture.memoriesBack')}
+          </button>
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className="bar__preview" data-testid={`${p.prefix}-preview`}>
+    <div className="bar__preview" data-testid={`${p.prefix}-preview`} data-stage="parts">
       <span className="bar__preview-title">{p.title ?? ''}</span>
       {/* The page's own description, then the opening of what was actually
           read — so the eye can tell an article from a menu before anything is
@@ -169,15 +259,26 @@ export function ReadCard(p: ReadCardProps) {
       </span>
       <span className="bar__preview-ask">{p.askLine}</span>
       <span className="bar__preview-actions">
-        <button
-          className="bar__preview-keep"
-          data-testid={`${p.prefix}-preview-keep`}
-          disabled={Boolean(parts && picked === 0)}
-          autoFocus
-          onClick={keep}
-        >
-          {parts ? t('capture.linkKeepParts', { n: picked }) : p.keepLabel}
-        </button>
+        {p.text ? (
+          <>
+            <button
+              className="bar__preview-keep"
+              data-testid={`${p.prefix}-preview-lines`}
+              disabled={Boolean(parts && picked === 0) || Boolean(digest && digest.loading)}
+              autoFocus
+              onClick={() => void pickMemories()}
+            >
+              {t('capture.pickMemories')}
+            </button>
+            <button className="bar__preview-skip" data-testid={`${p.prefix}-preview-keep`} disabled={Boolean(parts && picked === 0)} onClick={keep}>
+              {parts ? t('capture.linkKeepParts', { n: picked }) : t('capture.keepRaw')}
+            </button>
+          </>
+        ) : (
+          <button className="bar__preview-keep" data-testid={`${p.prefix}-preview-keep`} autoFocus onClick={keep}>
+            {p.keepLabel}
+          </button>
+        )}
         <button className="bar__preview-skip" data-testid={`${p.prefix}-preview-skip`} onClick={p.onSkip}>
           {p.skipLabel}
         </button>

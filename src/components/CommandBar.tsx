@@ -50,17 +50,17 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
     ui.shiftRead();
     if (ui.pendingReads.length === 0) ui.setCaptureOpen(false);
   };
-  const keepFile = async (read: PendingRead, content: string) => {
+  const keepFile = async (read: PendingRead, content: string, memories?: string[]) => {
     const store = useWorkspaceStore.getState();
     nextRead();
     if (!store.source.capture) {
-      onSubmit({ type: 'text', content, title: read.title });
+      onSubmit({ type: 'text', content, title: read.title, presetMemories: memories });
       return;
     }
     const ui = useUiStore.getState();
     ui.setCaptureStage('reading');
     try {
-      const result = await store.source.capture({ type: 'text', title: read.title, content, imagePath: read.path ?? undefined });
+      const result = await store.source.capture({ type: 'text', title: read.title, content, imagePath: read.path ?? undefined, presetMemories: memories });
       useWorkspaceStore.getState().applyPayload(result.graph);
       ui.dismissWelcome();
       ui.toast(t('toast.fileKept', { name: read.title, memories: result.addedMemoryIds?.length ?? 0 }));
@@ -91,7 +91,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
   const detected = detectCaptureType({ text, hasImage });
 
   // The card hands over what to keep, assembled; a failed read keeps the address alone.
-  const keepLink = (content = '') => {
+  const keepLink = (content = '', memories?: string[]) => {
     if (!preview || preview.loading) return;
     const enriched = content;
     setCaptureOpen(false);
@@ -100,6 +100,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
       content: enriched || preview.url,
       url: preview.url,
       referencedUrls: detected.referencedUrls,
+      presetMemories: memories,
     });
   };
 
@@ -250,7 +251,7 @@ export function CaptureBar({ onSubmit }: { onSubmit: (input?: CaptureInput) => v
             askLine={t('capture.fileAsk')}
             keepLabel={t('capture.linkKeep')}
             skipLabel={t('capture.linkSkip')}
-            onKeep={(content) => void keepFile(pending, content)}
+            onKeep={(content, memories) => void keepFile(pending, content, memories)}
             onSkip={() => nextRead()}
           />
         )}

@@ -657,3 +657,27 @@ describe('POST memories/polish', () => {
     expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/polish`, body: {} }, deps)).status).toBe(400);
   });
 });
+
+/*
+ * What a text would become, before it does — and a keep that brings the
+ * chosen lines back stores exactly those, never re-extracting.
+ */
+describe('POST memories/preview, and a capture with preset memories', () => {
+  it('previews the lines and stores nothing', async () => {
+    const before = repo.listSources(WS).length;
+    const res = await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/preview`, body: { content: 'Cold retard overnight gives the crust its blisters. Oven at 250 for 45 minutes.' } }, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as { lines: string[] }).lines.length).toBeGreaterThan(0);
+    expect(repo.listSources(WS).length).toBe(before);
+    expect((await handle({ method: 'POST', path: `/api/workspaces/${WS}/memories/preview`, body: {} }, deps)).status).toBe(400);
+  });
+
+  it('a capture with preset memories stores those lines as they are', async () => {
+    const lines = ['Cold retard overnight gives the crust its blisters.', 'The oven needs 45 minutes at 250 before the loaf goes in.'];
+    const res = await handle({ method: 'POST', path: `/api/workspaces/${WS}/capture`, body: { type: 'text', title: 'Bread', content: 'A long page about bread that would extract to something else entirely.', presetMemories: [...lines, '   ', 42] } }, deps);
+    expect(res.status).toBe(200);
+    const body = res.body as { addedMemoryIds: string[]; graph: { memories: { id: string; text: string }[] } };
+    const added = body.addedMemoryIds.map((id) => body.graph.memories.find((m) => m.id === id)!.text);
+    expect(added).toEqual(lines);
+  });
+});

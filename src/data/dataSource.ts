@@ -27,6 +27,8 @@ export interface CaptureInput {
   fileData?: string;
   /** The day a diary entry belongs to (YYYY-MM-DD). Diary captures only. */
   diaryDate?: string;
+  /** The memories, already chosen and tidied by the person — stored as they are, never re-extracted. */
+  presetMemories?: string[];
 }
 
 export interface CaptureResult {
@@ -206,6 +208,8 @@ export interface DataSource {
   keepLines?(turns: TalkTurn[]): Promise<{ lines: string[] }>;
   /** One line made a memory — self-contained, their words, nothing added. */
   polish?(text: string, context?: string[]): Promise<{ text: string }>;
+  /** What a text would become — the memories as lines, nothing stored. */
+  previewMemories?(content: string, type?: 'text' | 'link'): Promise<{ lines: string[] }>;
   /** A page whole and in parts: one summary of all of it, one per section, the sections' text riding along. */
   digest?(title: string | null, text: string): Promise<PageDigest>;
   /** Reads a PDF out (stored, nothing kept) so the person can see and choose before keeping. */
@@ -663,6 +667,9 @@ export class ApiDataSource implements DataSource {
 
   talk?: (turns: TalkTurn[], role: string | undefined, closing: boolean) => Promise<{ text: string; closing: boolean }> = (turns, role, closing) =>
     this.post<{ text: string; closing: boolean }>('/onboarding/talk', { turns, role, closing, locale: currentLocale() });
+
+  previewMemories?: (content: string, type?: 'text' | 'link') => Promise<{ lines: string[] }> = (content, type = 'text') =>
+    this.post<{ lines: string[] }>('/memories/preview', { content, type });
 
   polish?: (text: string, context?: string[]) => Promise<{ text: string }> = (text, context) =>
     this.post<{ text: string }>('/memories/polish', { text, context, locale: currentLocale() });
