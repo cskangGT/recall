@@ -51,13 +51,17 @@ test('a multi-file drop runs the batch reveal and lands in the corpus', async ({
 
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible({ timeout: 5000 });
+  // The totals live on the map's panel; home's panel says what moved lately.
+  await page.keyboard.press('g');
   await expect(page.getByTestId('inspector')).toContainText('47 memories');
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
 
   await dropFiles(page, FILES);
 
-  // The reveal opens immediately and reads the batch out loud.
+  // The reveal opens immediately. (The suite runs with reduced motion, so the
+  // read-out pour is skipped and the declaration follows at once.)
   await expect(page.getByTestId('batch-reveal')).toBeVisible();
-  await expect(page.getByTestId('batch-reveal-status')).toBeVisible();
 
   // The declaration: N memories from 3 saves into M interests.
   await expect(page.getByTestId('batch-reveal-declare')).toBeVisible({ timeout: 15_000 });
@@ -67,6 +71,8 @@ test('a multi-file drop runs the batch reveal and lands in the corpus', async ({
   await expect(page.getByTestId('batch-reveal')).toHaveCount(0);
 
   // The corpus grew — 6 claims across 3 files, minus any the corpus held.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('g');
   await expect(page.getByTestId('inspector')).not.toContainText('47 memories');
   await expect(page.getByTestId('inspector')).toContainText('25 sources');
 

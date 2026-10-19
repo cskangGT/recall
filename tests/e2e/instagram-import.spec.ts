@@ -45,7 +45,11 @@ const savedPosts = JSON.stringify([
 test('an Instagram export ZIP dropped on the window imports the recent window', async ({ page }) => {
   await page.goto('/?skipWelcome=1');
   await expect(page.getByTestId('arc-browser')).toBeVisible();
+  // The totals live on the map's panel; home's panel says what moved lately.
+  await page.keyboard.press('g');
   await expect(page.getByTestId('inspector')).toContainText('22 sources');
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('arc-browser')).toBeVisible();
 
   const zipBase64 = Buffer.from(
     makeZip([['your_instagram_activity/saved/saved_posts.json', savedPosts, true]]),
@@ -67,6 +71,7 @@ test('an Instagram export ZIP dropped on the window imports the recent window', 
 
   await page.getByTestId('batch-reveal-dismiss').click();
   await expect(page.getByTestId('toast')).toContainText('1 older post stayed in the export');
+  await page.keyboard.press('g');
   await expect(page.getByTestId('inspector')).toContainText('24 sources');
 });
 

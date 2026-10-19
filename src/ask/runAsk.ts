@@ -29,6 +29,9 @@ export async function runAsk(question: string): Promise<boolean> {
     // as it was when the question was asked.
     const history = useUiStore.getState().askThread;
     const source = useWorkspaceStore.getState().source;
+    // Thinking with picked memories: they lead the context, on every surface.
+    const ui0 = useUiStore.getState();
+    const focus = ui0.thinking && ui0.picked.length > 0 ? ui0.picked : [];
 
     /*
      * Streamed when the source can: the words appear as they are generated,
@@ -50,17 +53,18 @@ export async function runAsk(question: string): Promise<boolean> {
               .setAnswerDraft({ question: q, text: (draft?.text ?? '') + delta });
           },
           history,
+          focus,
         )
         .catch(async () => {
           useUiStore.getState().setAnswerDraft(null);
           return source.ask
-            ? source.ask(q, history).catch(() => answerQuestion(q, payload, history))
-            : answerQuestion(q, payload, history);
+            ? source.ask(q, history, focus).catch(() => answerQuestion(q, payload, history, focus))
+            : answerQuestion(q, payload, history, focus);
         });
     } else {
       result = source.ask
-        ? await source.ask(q, history).catch(() => answerQuestion(q, payload, history))
-        : answerQuestion(q, payload, history);
+        ? await source.ask(q, history, focus).catch(() => answerQuestion(q, payload, history, focus))
+        : answerQuestion(q, payload, history, focus);
     }
 
     useUiStore.getState().setAnswer({ ...result, question: q });
@@ -69,6 +73,27 @@ export async function runAsk(question: string): Promise<boolean> {
     }
     useUiStore.getState().setHighlight(result.highlighted_node_ids);
     useUiStore.getState().select(null);
+    /*
+     * Brainstorming is a conversation held over the map: what is being talked
+     * about is what should be in front of you. So an answer moves the camera
+     * to the memories it leaned on, and the next question moves it again —
+     * each step remembered, so ← walks the conversation back.
+     */
+    const cited = result.citations.map((c) => c.memory_id);
+    if (useUiStore.getState().view === 'map' && cited.length > 0) {
+      // The categories those memories live in stay lit too: a bright dot in a
+      // dimmed field says "here", its category's name says "about this".
+      const homes = new Set<string>();
+      for (const id of cited) {
+        const home = payload.memories.find((m) => m.id === id)?.category_id;
+        if (!home) continue;
+        homes.add(home);
+        const parent = payload.categories.find((c) => c.id === home)?.parent_id;
+        if (parent) homes.add(parent);
+      }
+      useUiStore.getState().setHighlight([...new Set([...result.highlighted_node_ids, ...cited, ...homes, ...focus])]);
+      useUiStore.getState().requestZoomTo(cited);
+    }
     return true;
   } finally {
     useUiStore.getState().setAsking(false);

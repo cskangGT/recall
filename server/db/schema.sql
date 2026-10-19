@@ -44,7 +44,14 @@ CREATE TABLE IF NOT EXISTS sources (
                        CHECK (status IN ('pending','processing','complete','failed','no_memories')),
   error_message      TEXT,
   created_at         TEXT NOT NULL,
-  processed_at       TEXT
+  processed_at       TEXT,
+  -- When the user reviewed this source's extractions (spec §21). NULL means
+  -- unreviewed. Also added by ensureColumn for databases created before it.
+  reviewed_at        TEXT,
+  -- The day a diary entry belongs to (YYYY-MM-DD) — set only for diary
+  -- captures, so yesterday's entry written today still lands on yesterday.
+  -- Also added by ensureColumn for databases created before it.
+  diary_date         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS sources_workspace_created
@@ -67,6 +74,7 @@ CREATE TABLE IF NOT EXISTS memories (
   -- How many times this thought has arrived; duplicates reinforce, not repeat.
   -- Also added by ensureColumn for databases created before it.
   times_seen    INTEGER NOT NULL DEFAULT 1,
+  settled_at    TEXT,
   created_at    TEXT NOT NULL
 );
 
@@ -225,6 +233,23 @@ CREATE TABLE IF NOT EXISTS category_tombstones (
   UNIQUE (workspace_id, name)
 );
 
+-- The curation signal (spec §21). Every review verdict, recorded verbatim:
+-- a discard keeps the text it removed (charter: nothing is lost), and the
+-- rows teach the next extraction what this person keeps and what they cut.
+CREATE TABLE IF NOT EXISTS curation (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  -- SET NULL, not CASCADE: the taste signal outlives the source it came from.
+  source_id     TEXT REFERENCES sources(id) ON DELETE SET NULL,
+  memory_text   TEXT NOT NULL,
+  verdict       TEXT NOT NULL CHECK (verdict IN ('keep', 'discard', 'edit')),
+  edited_text   TEXT,
+  created_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS curation_workspace_verdict
+  ON curation(workspace_id, verdict, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS ask_history (
   id            TEXT PRIMARY KEY,
   workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -233,4 +258,44 @@ CREATE TABLE IF NOT EXISTS ask_history (
   citations     TEXT NOT NULL DEFAULT '[]',
   refused       INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL
+);
+
+-- Google Calendar. One connected account per workspace; the refresh token is
+-- the durable credential and must never leave this table — not in the graph
+-- payload, not in any response. Revoked at Google on disconnect, then dropped.
+CREATE TABLE IF NOT EXISTS google_tokens (
+  workspace_id   TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  email          TEXT,
+  refresh_token  TEXT NOT NULL,
+  access_token   TEXT,
+  expires_at     TEXT,
+  scopes         TEXT NOT NULL,
+  connected_at   TEXT NOT NULL
+);
+
+-- A synced copy of the calendar window (a week back, two weeks ahead — see
+-- src/core/meetingTypes.ts). Google's event id is the key, so a re-sync
+-- replaces rather than duplicates. Attendees are a JSON array.
+CREATE TABLE IF NOT EXISTS meetings (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,
+  starts_at     TEXT NOT NULL,
+  ends_at       TEXT NOT NULL,
+  all_day       INTEGER NOT NULL DEFAULT 0,
+  location      TEXT,
+  description   TEXT,
+  meet_link     TEXT,
+  html_link     TEXT,
+  attendees     TEXT NOT NULL DEFAULT '[]',
+  synced_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS meetings_workspace_starts ON meetings(workspace_id, starts_at);
+
+-- When the window was last read successfully — the staleness clock the sync
+-- consults before asking Google again.
+CREATE TABLE IF NOT EXISTS meeting_sync (
+  workspace_id  TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  synced_at     TEXT NOT NULL
 );

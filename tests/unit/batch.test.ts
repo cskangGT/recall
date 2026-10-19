@@ -3,7 +3,13 @@ import { validateSeed } from '../../src/data/validateSeed';
 import workspaceJson from '../../seed/workspace.json';
 import { extractClaims } from '../../src/capture/extractLocal';
 import { localVector, lexicalSimilarity } from '../../src/capture/embedLocal';
-import { runBatchPipeline, resetBatchIds, type BatchItem } from '../../src/capture/batch';
+import {
+  runBatchPipeline,
+  resetBatchIds,
+  summarizeCategories,
+  summarizeSources,
+  type BatchItem,
+} from '../../src/capture/batch';
 import { DUPLICATE_SIMILARITY } from '../../src/core/thresholds';
 import { cosine } from '../../src/core/vectorMath';
 
@@ -162,5 +168,69 @@ describe('runBatchPipeline', () => {
     const source = result.payload.sources.find((s) => result.sourceIds.includes(s.id))!;
     expect(source.status).toBe('no_memories');
     expect(result.addedMemoryIds).toHaveLength(0);
+  });
+});
+
+/**
+ * The declaration's category chips, built one way for every path — the local
+ * pipeline, the batch endpoint, a reader import, and a batch that happened
+ * outside the page entirely (the CLI), where all that remains is the graph and
+ * the ids of the sources it wrote.
+ */
+describe('summarizeCategories', () => {
+  it('counts added memories per category, biggest first, then by name', () => {
+    const added = base.memories
+      .filter((m) => m.source_id === 'src_pitch_review' || m.source_id === 'src_seed_deck_notes')
+      .map((m) => m.id);
+    const chips = summarizeCategories(base, added, new Set(base.categories.map((c) => c.id)));
+    expect(chips.map((c) => c.id)).toEqual(['cat_pitch_feedback', 'cat_investor_notes']);
+    expect(chips.map((c) => c.added)).toEqual([4, 2]);
+    expect(chips.every((c) => c.name.length > 0)).toBe(true);
+  });
+
+  it('marks a category new when it was not among the known ids', () => {
+    const added = base.memories.filter((m) => m.source_id === 'src_pitch_review').map((m) => m.id);
+    const chips = summarizeCategories(base, added, new Set());
+    expect(chips[0]!.isNew).toBe(true);
+    expect(summarizeCategories(base, added, new Set(['cat_pitch_feedback']))[0]!.isNew).toBe(false);
+  });
+
+  it('nothing added, no chips', () => {
+    expect(summarizeCategories(base, [], new Set())).toEqual([]);
+  });
+});
+
+describe('summarizeSources', () => {
+  it('rebuilds the declaration from the graph and the ids of the batch sources', () => {
+    const summary = summarizeSources(base, ['src_pitch_review', 'src_seed_deck_notes']);
+    expect(summary).not.toBeNull();
+    expect(summary!.memories).toBe(6);
+    expect(summary!.sources).toBe(2);
+    expect(summary!.skipped).toBe(0);
+    expect(summary!.sourceIds).toEqual(['src_pitch_review', 'src_seed_deck_notes']);
+    expect(summary!.categories.map((c) => c.id)).toEqual(['cat_pitch_feedback', 'cat_investor_notes']);
+    expect(summary!.period).toBeNull();
+  });
+
+  it('a category is new only when every member of it came from these sources', () => {
+    // cat_pitch_feedback holds exactly the four memories of src_pitch_review.
+    const alone = summarizeSources(base, ['src_pitch_review'])!;
+    expect(alone.categories[0]!.isNew).toBe(true);
+    // cat_investor_notes has members from other sources too.
+    const shared = summarizeSources(base, ['src_seed_deck_notes'])!;
+    expect(shared.categories[0]!.isNew).toBe(false);
+  });
+
+  it('drops ids the graph does not know, and is null when none are known', () => {
+    const summary = summarizeSources(base, ['src_pitch_review', 'src_nope'])!;
+    expect(summary.sources).toBe(1);
+    expect(summary.sourceIds).toEqual(['src_pitch_review']);
+    expect(summarizeSources(base, ['src_nope'])).toBeNull();
+    expect(summarizeSources(base, [])).toBeNull();
+  });
+
+  it('carries the period the caller knows', () => {
+    const period = { from: '2026-08-01', to: '2026-08-14' };
+    expect(summarizeSources(base, ['src_pitch_review'], period)!.period).toEqual(period);
   });
 });

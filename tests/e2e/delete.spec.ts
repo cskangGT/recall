@@ -50,6 +50,8 @@ test('one click alone does nothing', async ({ page }) => {
 /** A stray click must not leave a loaded button sitting on the screen. */
 test('it disarms when it loses focus', async ({ page }) => {
   await page.locator('.reading .item').first().click();
+  // Picking a memory also opens it as a page; close it, the selection stays.
+  await page.keyboard.press('Escape');
   const button = page.getByTestId('delete-button');
   await button.click();
   await expect(button).toContainText('click again');

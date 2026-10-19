@@ -1,5 +1,6 @@
 import type { GraphPayload, Memory } from '../../src/core/types.ts';
 import { cosine } from '../../src/core/vectorMath.ts';
+import type { EmbeddingProvider, RetrievedMemory } from '../ai/provider.ts';
 
 /**
  * Hybrid retrieval — spec §9.1.
@@ -17,6 +18,21 @@ export const RRF_K = 60;
 
 /** Spec §9.2. Below this a memory is not evidence, whatever its rank. */
 export const RELEVANCE_FLOOR = 0.35;
+
+/**
+ * The floor for a meeting's context, lower than the question floor.
+ *
+ * A question is a sentence the user wrote to be answered, and an answer
+ * that cites a weak match is a fabrication with a footnote — so Ask fails
+ * closed at 0.35. A meeting is a title, a fragment of a description and a
+ * list of names: not a question, and embedded nowhere in particular. The
+ * stakes differ too. Nothing is asserted from meeting context; it is shown
+ * beside the event as "you noted this once", and the user decides whether it
+ * helps. A near miss costs a glance; a missed memory costs the thing the
+ * feature exists for. Hence more slack — but still a floor, because a
+ * memory that merely shares a rank with the title is noise, not context.
+ */
+export const MEETING_RELEVANCE_FLOOR = 0.28;
 
 /** Spec §9.2: retrieve 20, answer from at most 8. */
 export const RETRIEVE_LIMIT = 20;
@@ -96,4 +112,57 @@ export function fuse(
  */
 export function applyFloor(ranked: Ranked[], floor = RELEVANCE_FLOOR): Ranked[] {
   return ranked.filter((r) => r.similarity >= floor);
+}
+
+/**
+ * Everything retrieval does before a floor is applied to a piece of text:
+ * embed it as a query, run the keyword half, fuse, floor, cap.
+ *
+ * Extracted from Ask so a meeting title can be run through exactly the same
+ * pipeline as a question — one implementation of "what is relevant to this
+ * text", not two that drift. The keyword search is passed as a function
+ * rather than a repository so the caller binds the workspace and this file
+ * keeps knowing nothing about storage.
+ *
+ * The floor is applied over the full `RETRIEVE_LIMIT` fused list and only
+ * then sliced to `limit`: callers that want to know how many memories
+ * survived (Ask's refusal rule) pass no limit and count; callers that want a
+ * handful pass one.
+ */
+export async function relevantTo(
+  payload: GraphPayload,
+  keywordSearch: (query: string, limit: number) => KeywordHit[],
+  embeddings: EmbeddingProvider,
+  text: string,
+  options: { limit?: number; floor?: number } = {},
+): Promise<Ranked[]> {
+  const [vector] = await embeddings.embed([text], 'query');
+  const keywordHits = keywordSearch(text, RETRIEVE_LIMIT);
+  const fused = fuse(payload, vector!, keywordHits, RETRIEVE_LIMIT);
+  return applyFloor(fused, options.floor ?? RELEVANCE_FLOOR).slice(0, options.limit ?? RETRIEVE_LIMIT);
+}
+
+/**
+ * Context expansion (spec §9.2 step 5): each memory with its category and
+ * source, so whoever reads it — a model answering, or a person glancing at a
+ * meeting — can attribute rather than guess. Lives here rather than in Ask
+ * because the shape is what every consumer of retrieval cites.
+ */
+export function expandMemories(
+  payload: GraphPayload,
+  memories: { id: string; source_id: string; text: string; category_id: string }[],
+): RetrievedMemory[] {
+  const categoryName = new Map(payload.categories.map((c) => [c.id, c.name]));
+  const sourceById = new Map(payload.sources.map((s) => [s.id, s]));
+  return memories.map((m) => {
+    const source = sourceById.get(m.source_id);
+    return {
+      memory_id: m.id,
+      source_id: m.source_id,
+      text: m.text,
+      category_name: categoryName.get(m.category_id) ?? 'Uncategorised',
+      source_title: source?.title ?? 'Unknown source',
+      source_type: source?.type ?? 'text',
+    };
+  });
 }

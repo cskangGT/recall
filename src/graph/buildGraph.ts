@@ -1,5 +1,6 @@
 import type { GraphPayload, GraphNode, GraphEdge, NodeKind } from '../core/types';
 import { radiusFor } from './nodeStyles';
+import { effectivePlan, freeCutoff, isArchivedByPlan } from '../core/plan';
 
 /**
  * `contains` and `mentions` edges are derived from foreign keys rather than
@@ -8,6 +9,9 @@ import { radiusFor } from './nodeStyles';
  * edge count for no insight, and lives in the Inspector instead. (spec 8.1)
  */
 export function buildGraph(payload: GraphPayload): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  // The free plan's sleep line, decided here so every view that draws stars
+  // agrees with the reading list about which memories are dim.
+  const cutoff = freeCutoff(payload.memories, effectivePlan(undefined, payload.workspace));
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
@@ -60,6 +64,7 @@ export function buildGraph(payload: GraphPayload): { nodes: GraphNode[]; edges: 
       radius: radiusFor('memory', 0) + Math.min(4, ((m.times_seen ?? 1) - 1) * 1.4),
       pinned: m.pinned,
       parentId: m.category_id,
+      sleeping: isArchivedByPlan(m.created_at, cutoff) || undefined,
     });
     edges.push({
       id: `e_${m.category_id}_${m.id}`,

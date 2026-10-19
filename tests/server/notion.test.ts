@@ -43,6 +43,7 @@ describe('readNotionPages', () => {
     id,
     object: 'page',
     last_edited_time: new Date(now - editedMsAgo).toISOString(),
+    url: `https://www.notion.so/${id}`,
     properties: { title: { type: 'title', title: [{ plain_text: title }] } },
   });
 
@@ -75,6 +76,8 @@ describe('readNotionPages', () => {
     expect(result.notes[0]!.content).toContain('다음 분기 목표');
     expect(result.notes[0]!.content).not.toContain('sk_live_');
     expect(result.droppedSecretLines).toBe(1);
+    // The way back to the original — "safe to clear at the source" needs it.
+    expect(result.notes[0]!.url).toBe('https://www.notion.so/p1');
   });
 
   it('says the honest thing on a bad token', async () => {
